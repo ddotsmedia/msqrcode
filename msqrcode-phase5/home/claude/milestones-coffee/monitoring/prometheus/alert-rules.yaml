@@ -1,0 +1,169 @@
+groups:
+  - name: milestones-api
+    interval: 30s
+    rules:
+      # API Availability
+      - alert: APIDown
+        expr: up{job="api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API is down"
+          description: "API service has been down for more than 2 minutes"
+
+      # API Latency
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "API p99 latency is above 1 second"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="api", status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High error rate on API"
+          description: "API error rate is above 5%"
+
+      # Pod Restarts
+      - alert: PodRestartingTooOften
+        expr: rate(kube_pod_container_status_restarts_total{namespace="milestones-coffee"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Pod {{ $labels.pod }} is restarting frequently"
+          description: "Pod has restarted {{ $value | humanize }} times in 15 minutes"
+
+  - name: milestones-database
+    interval: 30s
+    rules:
+      # Database Connectivity
+      - alert: DatabaseDown
+        expr: pg_up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "Cannot connect to PostgreSQL database"
+
+      # Database Connections
+      - alert: TooManyDatabaseConnections
+        expr: pg_stat_activity_count{state="active"} > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High number of active database connections"
+          description: "{{ $value | humanize }} active connections (threshold: 50)"
+
+      # Database Disk Usage
+      - alert: DatabaseDiskSpaceRunningOut
+        expr: (pg_database_size_bytes / (1024^3)) > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database disk space running out"
+          description: "Database is using {{ $value | humanize }}GB"
+
+  - name: milestones-cache
+    interval: 30s
+    rules:
+      # Redis Connectivity
+      - alert: RedisDown
+        expr: redis_up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Cannot connect to Redis cache"
+
+      # Redis Memory Usage
+      - alert: HighRedisMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis is using {{ $value | humanizePercentage }} of available memory"
+
+  - name: milestones-infrastructure
+    interval: 30s
+    rules:
+      # Node CPU Usage
+      - alert: HighNodeCPUUsage
+        expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (node)) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage on node {{ $labels.node }}"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      # Node Memory Usage
+      - alert: HighNodeMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High memory usage on node {{ $labels.node }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Node Disk Usage
+      - alert: HighNodeDiskUsage
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High disk usage on node {{ $labels.node }}"
+          description: "Only {{ $value | humanizePercentage }} disk space available"
+
+  - name: milestones-business
+    interval: 30s
+    rules:
+      # Low Conversion Rate
+      - alert: LowConversionRate
+        expr: rate(analytics_orders_placed_total[1h]) / rate(analytics_qr_scans_total[1h]) < 0.01
+        for: 1h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Conversion rate below 1%"
+          description: "Current conversion rate is {{ $value | humanizePercentage }}"
+
+      # No QR Scans
+      - alert: NoQRScansLastHour
+        expr: rate(analytics_qr_scans_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "No QR scans in the last hour"
+          description: "Analytics show zero QR code scans"

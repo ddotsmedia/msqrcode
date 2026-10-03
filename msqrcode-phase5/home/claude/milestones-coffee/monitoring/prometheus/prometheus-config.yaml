@@ -1,0 +1,92 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: "milestones-prod"
+    environment: "production"
+
+# Alertmanager config
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - localhost:9093
+
+rule_files:
+  - "/etc/prometheus/rules/alert-rules.yaml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # API metrics
+  - job_name: "api"
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - milestones-coffee
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: api
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+
+  # Web Admin metrics
+  - job_name: "web-admin"
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - milestones-coffee
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: web-admin
+
+  # Web Menu metrics
+  - job_name: "web-menu"
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - milestones-coffee
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: web-menu
+
+  # Node exporter
+  - job_name: "node"
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - source_labels: [__address__]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?
+        replacement: $1:9100
+
+  # kube-state-metrics
+  - job_name: "kube-state-metrics"
+    static_configs:
+      - targets: ["kube-state-metrics:8080"]
+
+  # PostgreSQL exporter
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # Redis exporter
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]

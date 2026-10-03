@@ -1,0 +1,76 @@
+# Production Dockerfile with security hardening
+# Stage 1: Builder
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    && npm install -g pnpm
+
+# Copy package files
+COPY pnpm-lock.yaml package.json ./
+
+# Install dependencies with security audit
+RUN pnpm install --frozen-lockfile --prod && \
+    pnpm audit --audit-level=low
+
+# Copy source code
+COPY packages/database ./packages/database
+COPY packages/auth ./packages/auth
+COPY packages/validation ./packages/validation
+COPY packages/api ./packages/api
+COPY turbo.json tsconfig.json ./
+
+# Build application
+RUN pnpm build --filter=@milestones/api
+
+# Stage 2: Runtime (security-hardened)
+FROM node:18-alpine
+
+LABEL maintainer="Milestones Coffee <admin@milestones.coffee>"
+LABEL description="Milestones Coffee Digital Menu Platform - API Server"
+LABEL version="1.0.0"
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Create non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
+
+WORKDIR /app
+
+# Copy built application from builder
+COPY --from=builder --chown=appuser:appuser /app/packages/api/dist ./dist
+COPY --from=builder --chown=appuser:appuser /app/node_modules ./node_modules
+
+# Copy environment template
+COPY --chown=appuser:appuser .env.production ./.env
+
+# Create required directories
+RUN mkdir -p /app/logs /app/tmp && \
+    chown -R appuser:appuser /app
+
+# Security: Remove unnecessary packages
+RUN apk del --no-cache apk-tools && \
+    rm -rf /var/cache/apk/* /tmp/*
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3001/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+
+# Expose port
+EXPOSE 3001 9090
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["/usr/sbin/dumb-init", "--"]
+
+# Run application
+CMD ["node", "dist/main.js"]

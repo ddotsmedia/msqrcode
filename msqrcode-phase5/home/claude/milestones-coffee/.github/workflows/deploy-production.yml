@@ -1,0 +1,190 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/**"
+      - "k8s/**"
+      - ".github/workflows/deploy-production.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    outputs:
+      image-tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: packages/api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/api:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/api:buildcache,mode=max
+
+      - name: Build and push web-admin image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: packages/web-admin/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/web-admin:${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/web-admin:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/web-admin:buildcache,mode=max
+
+      - name: Build and push web-menu image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: packages/web-menu/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/web-menu:${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/web-menu:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/web-menu:buildcache,mode=max
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment:
+      name: production
+      url: https://admin.milestones.coffee
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "latest"
+
+      - name: Set kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Create namespace
+        run: kubectl create namespace milestones-coffee --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create secrets
+        run: |
+          kubectl create secret generic db-secrets \
+            --from-literal=url="${{ secrets.DATABASE_URL }}" \
+            -n milestones-coffee --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic api-secrets \
+            --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
+            --from-literal=aws-access-key="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --from-literal=aws-secret-key="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            -n milestones-coffee --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy API
+        run: |
+          kubectl set image deployment/api \
+            api=ghcr.io/${{ github.repository }}/api:${{ github.sha }} \
+            -n milestones-coffee || kubectl apply -f k8s/api-deployment.yaml
+
+      - name: Deploy Web Admin
+        run: |
+          kubectl set image deployment/web-admin \
+            web-admin=ghcr.io/${{ github.repository }}/web-admin:${{ github.sha }} \
+            -n milestones-coffee || kubectl apply -f k8s/web-admin-deployment.yaml
+
+      - name: Deploy Web Menu
+        run: |
+          kubectl set image deployment/web-menu \
+            web-menu=ghcr.io/${{ github.repository }}/web-menu:${{ github.sha }} \
+            -n milestones-coffee || kubectl apply -f k8s/web-menu-deployment.yaml
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/api -n milestones-coffee --timeout=5m
+          kubectl rollout status deployment/web-admin -n milestones-coffee --timeout=5m
+          kubectl rollout status deployment/web-menu -n milestones-coffee --timeout=5m
+
+      - name: Verify deployment
+        run: |
+          echo "Checking API health..."
+          kubectl port-forward svc/api 3001:3001 -n milestones-coffee &
+          sleep 2
+          curl -f http://localhost:3001/health || exit 1
+
+      - name: Post deployment notification
+        if: always()
+        run: |
+          echo "Deployment completed at $(date)"
+          kubectl get pods -n milestones-coffee
+
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests..."
+          # Basic connectivity test
+          curl -f https://admin.milestones.coffee/health || exit 1
+          curl -f https://api.milestones.coffee/health || exit 1
+          echo "✓ All smoke tests passed"
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy, smoke-tests]
+    if: failure()
+    steps:
+      - name: Configure kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Set kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Rollback deployment
+        run: |
+          echo "Rolling back to previous version..."
+          kubectl rollout undo deployment/api -n milestones-coffee
+          kubectl rollout undo deployment/web-admin -n milestones-coffee
+          kubectl rollout undo deployment/web-menu -n milestones-coffee
+          kubectl rollout status deployment/api -n milestones-coffee --timeout=5m

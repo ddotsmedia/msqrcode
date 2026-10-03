@@ -1,0 +1,25 @@
+{
+  "name": "@milestones/root",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@8.0.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "security:audit": "pnpm audit --audit-level=moderate",
+    "security:check": "snyk test --severity-threshold=high"
+  },
+  "pnpm": {
+    "workspaces": ["packages/*"]
+  },
+  "devDependencies": {
+    "turbo": "^1.10.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.2.0",
+    "@types/node": "^20.0.0"
+  }
+}
