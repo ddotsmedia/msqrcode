@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  role              String   @default("USER") // ADMIN, BRANCH_MANAGER, CASHIER, USER
+  status            String   @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  assignedBranchId  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([email])
+  @@index([role])
+}
+
+model Branch {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  address          String
+  timezone         String   @default("Asia/Dubai")
+  operatingHours   Json     @default("{}")
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([code])
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  displayOrder Int      @default(0)
+  iconUrl      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  products Product[]
+
+  @@index([name])
+}
+
+model Product {
+  id                 String   @id @default(cuid())
+  sku                String   @unique
+  name               String
+  description        String?
+  categoryId         String
+  category           Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  basePrice          Float
+  status             String   @default("ACTIVE")
+  isPopular          Boolean  @default(false)
+  isNew              Boolean  @default(false)
+  dietaryTags        String[] @default([])
+  allergens          String[] @default([])
+  imageUrl           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  variants           ProductVariant[]
+  availability       ProductAvailability[]
+
+  @@index([categoryId])
+  @@index([sku])
+}
+
+model ProductVariant {
+  id       String   @id @default(cuid())
+  productId String
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name     String
+  options  Json     @default("[]") // Array of {name: string, priceAdjustment: number}
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model OptionGroup {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  options   Json     @default("[]") // Array of {name: string, priceAdjustment: number}
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductAvailability {
+  id          String   @id @default(cuid())
+  branchId    String
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([branchId, productId])
+  @@index([productId])
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  branchId  String
+  items     Json     @default("[]")
+  total     Float
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+}

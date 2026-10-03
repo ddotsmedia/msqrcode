@@ -1,0 +1,16 @@
+﻿{
+  "name": "milestones-coffee",
+  "version": "1.0.0",
+  "description": "Milestones Coffee Platform",
+  "author": "Ddotsmedia",
+  "license": "PROPRIETARY",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @milestones/database build && pnpm --filter @milestones/api build",
+    "lint": "pnpm --filter @milestones/api lint",
+    "test": "pnpm --filter @milestones/api test"
+  },
+  "devDependencies": {
+    "pnpm": "^8.15.0"
+  }
+}
