@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: milestones-coffee
+  labels:
+    name: milestones-coffee
+    environment: production
+    managed-by: terraform
+  annotations:
+    description: "Milestones Coffee Digital Menu Platform - Production"
