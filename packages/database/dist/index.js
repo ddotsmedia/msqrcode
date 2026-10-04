@@ -19,3 +19,4 @@ __exportStar(require("./types"), exports);
 var client_1 = require("@prisma/client");
 Object.defineProperty(exports, "PrismaClient", { enumerable: true, get: function () { return client_1.PrismaClient; } });
 __exportStar(require("@prisma/client"), exports);
+//# sourceMappingURL=index.js.map

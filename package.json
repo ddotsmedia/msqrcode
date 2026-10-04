@@ -1,16 +1,24 @@
 ﻿{
   "name": "milestones-coffee",
-  "version": "1.0.0",
-  "description": "Milestones Coffee Platform",
+  "version": "2.0.0",
+  "description": "Milestones Coffee Platform - QR Digital Menu System",
   "author": "Ddotsmedia",
   "license": "PROPRIETARY",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "scripts": {
     "build": "pnpm --filter @milestones/database build && pnpm --filter @milestones/api build",
     "lint": "pnpm --filter @milestones/api lint",
-    "test": "pnpm --filter @milestones/api test"
+    "test": "pnpm --filter @milestones/api test",
+    "db:push": "pnpm --filter @milestones/database prisma:migrate",
+    "db:seed": "pnpm --filter @milestones/database seed",
+    "db:studio": "pnpm --filter @milestones/database prisma:studio",
+    "dev": "pnpm --parallel --filter './packages/*' dev"
   },
   "devDependencies": {
-    "pnpm": "^8.15.0"
+    "pnpm": "^10.0.0"
   }
 }
