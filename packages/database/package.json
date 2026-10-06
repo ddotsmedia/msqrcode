@@ -1,25 +1,18 @@
 {
   "name": "@milestones/database",
   "version": "2.0.0",
-  "description": "Database layer and Prisma client - PostgreSQL 16",
+  "description": "Database utilities and types - PostgreSQL 16 with TypeORM",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "seed": "ts-node prisma/seed.ts",
     "build": "tsc",
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0",
     "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "prisma": "^6.0.0",
-    "ts-node": "^10.9.2",
     "typescript": "^5.7.0"
   }
 }
