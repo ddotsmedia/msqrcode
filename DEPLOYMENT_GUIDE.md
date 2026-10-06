@@ -1,114 +1,102 @@
-# Milestones Coffee Phase 2 — Final Deployment Guide
+# Milestones Coffee - Complete Local Deployment
 
-**Status**: Git commit complete (60 files). Ready for GitHub setup and local testing.
+## Prerequisites
+- Docker & Docker Compose installed (or run services natively)
+- Node.js 22+ in WSL
+- PostgreSQL 17 & Redis 8 (via Docker or native)
 
-**Generated Secrets** (save these for GitHub):
-```
-JWT_SECRET=ad27fdaa6ed47a3bfb81cc8fff71037f
-DB_PASSWORD=6188e79142aeac5b
-VPS_HOST=srv988590.servercow.de
-VPS_USER=root
-```
+## Option A: Docker Compose (Recommended - Avoids Node Path Issues)
 
----
-
-## REMAINING STEPS (Execute on Windows Machine)
-
-### Step 1: Create GitHub Repository
-
-1. Navigate to https://github.com/new
-2. Create new repository:
-   - Repository name: milestones-coffee
-   - Description: QR-based digital menu system for Milestones Coffee
-   - Visibility: Private
-   - Initialize repository: NO
-   - Click Create repository
-
-### Step 2: Push to GitHub
-
-```powershell
-cd "C:\web\MS QR Code new"
-git remote set-url origin https://github.com/YOUR_USERNAME/milestones-coffee.git
-git push -u origin main
-git branch -vv
-```
-
-### Step 3: Add GitHub Secrets
-
-Go to: Settings > Secrets and variables > Actions
-
-Add these 5 secrets:
-- VPS_HOST = srv988590.servercow.de
-- VPS_USER = root
-- VPS_SSH_KEY = (content of ~/.ssh/id_rsa)
-- DB_PASSWORD = 6188e79142aeac5b
-- JWT_SECRET = ad27fdaa6ed47a3bfb81cc8fff71037f
-
-### Step 4: Local Testing
-
-```powershell
-cd "C:\web\MS QR Code new"
-rm -r node_modules pnpm-lock.yaml
-pnpm install
-docker-compose up -d
-Start-Sleep -Seconds 15
-pnpm db:push
-pnpm db:seed
-pnpm dev
-```
-
-### Step 5: Health Checks
-
-```powershell
-curl http://localhost:3000/api/health
-curl http://localhost:5173
-curl http://localhost:5174
-```
-
-### Step 6: VPS Preparation
+Run this in PowerShell or WSL:
 
 ```bash
-ssh root@srv988590.servercow.de
-mkdir -p /opt/milestones-coffee
-cd /opt/milestones-coffee
+cd ~/msqrcode
+docker compose up -d
+```
 
-cat > .env << 'EOF'
-DB_USER=milestones
-DB_PASSWORD=6188e79142aeac5b
-DB_NAME=milestones_coffee
-JWT_SECRET=ad27fdaa6ed47a3bfb81cc8fff71037f
-NODE_ENV=production
+This starts:
+- PostgreSQL at localhost:5432
+- Redis at localhost:6379
+- API at localhost:3000
+- Adminer (DB UI) at localhost:8080
+
+## Option B: Native Setup (No Docker)
+
+### 1. Start PostgreSQL & Redis
+
+Windows (PowerShell):
+```powershell
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -v postgres_data:/var/lib/postgresql/data postgres:17-alpine
+
+docker run -d -p 6379:6379 -v redis_data:/data redis:8-alpine
+```
+
+### 2. Start API Server (WSL)
+
+```bash
+cd ~/msqrcode/packages/api
+npm install  # If needed
+npm run dev
+```
+
+This starts the API at localhost:3000 (or the port in .env)
+
+### 3. Start Menu App (Windows PowerShell - Avoids WSL Node Path Issues)
+
+Open a new PowerShell window:
+```powershell
+cd $env:USERPROFILE\msqrcode\packages\menu-app
+npm install
+npm run dev
+```
+
+Menu App will run at localhost:5173
+
+### 4. Start Admin Dashboard (WSL - Already Running)
+
+```bash
+cd ~/msqrcode/packages/admin-dashboard
+npm run dev
+```
+
+Admin Dashboard runs at localhost:5174
+
+## Port Allocation
+
+- API: 3000
+- Menu App: 5173
+- Admin Dashboard: 5174
+- PostgreSQL: 5432
+- Redis: 6379
+- Adminer: 8080
+
+## Complete Preview Access
+
+Once all services are running:
+
+- **Admin Dashboard**: http://localhost:5174
+- **Menu App**: http://localhost:5173
+- **API Health**: http://localhost:3000/health (if available)
+- **Database Manager**: http://localhost:8080
+
+## Environment Variables
+
+If API needs custom config, create `.env` in packages/api:
+
+```
+NODE_ENV=development
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/milestones
+REDIS_URL=redis://localhost:6379
 PORT=3000
-CORS_ORIGIN=https://menu.milestonescoffee.ae
-EOF
-
-exit
 ```
 
-### Step 7: Push & Deploy
+## Troubleshooting
 
-```powershell
-cd "C:\web\MS QR Code new"
-git status
-git push origin main
-```
+### "npm workspace protocol not supported"
+→ Use Docker Compose (resolves with pnpm inside container)
 
-Watch: https://github.com/YOUR_USERNAME/milestones-coffee/actions
+### "Windows Node interfering"
+→ Run each service in separate terminal/window in different environments (WSL for admin, PowerShell for menu-app)
 
-### Step 8: Verify Live Deployment
-
-```bash
-ssh root@srv988590.servercow.de
-docker ps
-curl http://localhost:3000/api/health
-curl https://menu.milestonescoffee.ae/api/health
-```
-
----
-
-## Summary
-
-✅ Phase 2 code committed to git (60 files)
-✅ Main branch ready
-⏳ Next: Create GitHub repo, add secrets, push, and deploy
-⏳ Deployment time: ~20 minutes total
+### Port already in use
+→ Change port in .env or specify `--port` flag in dev command

@@ -46,6 +46,31 @@ services:
       retries: 5
     restart: unless-stopped
 
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile.dev
+    container_name: milestones-api
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/milestones
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+    ports:
+      - "3000:3000"
+      - "9090:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - milestones-network
+    restart: unless-stopped
+
   adminer:
     image: adminer:latest
     container_name: milestones-adminer
@@ -56,8 +81,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - milestones-network
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  milestones-network:
+    driver: bridge
