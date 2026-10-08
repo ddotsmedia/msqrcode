@@ -1,8 +1,7 @@
 # ═══════════════════════════════════════════════════════════════
 # Milestones Coffee — Production Docker Compose
 # ═══════════════════════════════════════════════════════════════
-# For production deployment on VPS
-# ═══════════════════════════════════════════════════════════════
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -12,8 +11,6 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_INITDB_ARGS: "-c max_connections=200 -c shared_buffers=256MB -c effective_cache_size=1GB"
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,8 +26,6 @@ services:
     image: redis:7-alpine
     container_name: milestones-redis-prod
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -43,7 +38,9 @@ services:
       - milestones-network
 
   api:
-    image: milestones-coffee-api:${APP_VERSION:-latest}
+    build:
+      context: ./milestones-coffee
+      dockerfile: packages/api/Dockerfile.production
     container_name: milestones-api-prod
     environment:
       NODE_ENV: production
@@ -58,7 +55,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: ${CORS_ORIGIN}
     ports:
-      - "3000:3000"
+      - "3016:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,10 +65,42 @@ services:
     networks:
       - milestones-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  menu-app:
+    build:
+      context: ./milestones-coffee
+      dockerfile: packages/menu-app/Dockerfile
+    container_name: milestones-menu-prod
+    environment:
+      NODE_ENV: production
+      VITE_API_URL: ${VITE_API_URL}
+    ports:
+      - "3017:3002"
+    depends_on:
+      - api
+    restart: always
+    networks:
+      - milestones-network
+
+  admin-dashboard:
+    build:
+      context: ./milestones-coffee
+      dockerfile: packages/admin-dashboard/Dockerfile
+    container_name: milestones-admin-prod
+    environment:
+      NODE_ENV: production
+      VITE_API_URL: ${VITE_API_URL}
+    ports:
+      - "3018:3003"
+    depends_on:
+      - api
+    restart: always
+    networks:
+      - milestones-network
 
 volumes:
   postgres_data:

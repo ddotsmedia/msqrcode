@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm dev *)",
+      "Bash(npx vite *)",
+      "Bash(npm --version)",
+      "Bash(pnpm --version)",
+      "Bash(Remove-Item -Recurse -Force node_modules -ErrorAction SilentlyContinue)",
+      "Bash(Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue)",
+      "Bash(node node_modules/.bin/vite)",
+      "Bash(npm ls *)",
+      "Bash(pnpm -F @milestones/menu-app dev)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(pnpm dev *)",
+      "Bash(pnpm config *)",
+      "PowerShell(Get-Process *)"
+    ]
+  }
+}

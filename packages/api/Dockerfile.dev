@@ -1,0 +1,17 @@
+﻿FROM node:22-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++ && npm install -g pnpm@8
+
+COPY package.json pnpm-lock.yaml turbo.json tsconfig.json ./
+COPY packages ./packages
+
+RUN pnpm install --filter=@milestones/api
+
+WORKDIR /app/packages/api
+
+EXPOSE 3001
+EXPOSE 9090
+
+CMD ["pnpm", "exec", "nest", "start", "--watch"]
