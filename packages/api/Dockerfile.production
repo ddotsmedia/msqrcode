@@ -49,7 +49,6 @@ COPY --from=builder --chown=appuser:appuser /app/packages/api/dist ./dist
 COPY --from=builder --chown=appuser:appuser /app/node_modules ./node_modules
 
 # Copy environment template
-COPY --chown=appuser:appuser .env.production ./.env
 
 # Create required directories
 RUN mkdir -p /app/logs /app/tmp && \

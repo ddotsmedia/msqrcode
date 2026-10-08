@@ -3,9 +3,6 @@
 # ═══════════════════════════════════════════════════════════════
 # For production deployment on VPS
 # ═══════════════════════════════════════════════════════════════
-
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
