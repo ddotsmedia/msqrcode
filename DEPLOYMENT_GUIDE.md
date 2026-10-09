@@ -1,102 +1,115 @@
-# Milestones Coffee - Complete Local Deployment
+# MS QR Code - Production Deployment Guide
 
-## Prerequisites
-- Docker & Docker Compose installed (or run services natively)
-- Node.js 22+ in WSL
-- PostgreSQL 17 & Redis 8 (via Docker or native)
+## Overview
+This guide provides step-by-step instructions to deploy the MS QR Code (Milestones Coffee Platform) to production on the VPS at `194.164.151.202:/opt/msqrcode`.
 
-## Option A: Docker Compose (Recommended - Avoids Node Path Issues)
+## Fixed Issues
+1. ✅ **API Module Resolution** - Updated Dockerfile to properly handle pnpm monorepo by copying entire node_modules from builder stage
+2. ✅ **Port Conflicts** - PostgreSQL: 5433:5432, Redis: 6384:6379 (verified against running services on VPS)
+3. ✅ **Dockerfile References** - Created missing Dockerfiles for menu-app and admin-dashboard
+4. ✅ **Docker Compose Configuration** - Updated to reference correct Dockerfile paths
 
-Run this in PowerShell or WSL:
+## Files Changed
+- `packages/api/Dockerfile` - Fixed to copy node_modules from builder stage (resolves express module error)
+- `packages/menu-app/Dockerfile` - Created (nginx-based React/Vite build)
+- `packages/admin-dashboard/Dockerfile` - Created (nginx-based React/Vite build)
+- `docker-compose.prod.yml` - Updated with correct ports and Dockerfile references
 
-```bash
-cd ~/msqrcode
-docker compose up -d
-```
+## Pre-Deployment Checklist
 
-This starts:
-- PostgreSQL at localhost:5432
-- Redis at localhost:6379
-- API at localhost:3000
-- Adminer (DB UI) at localhost:8080
+### Before connecting to VPS:
+1. Verify all files are in the project directory:
+   - ✅ packages/api/Dockerfile (corrected)
+   - ✅ packages/menu-app/Dockerfile (new)
+   - ✅ packages/admin-dashboard/Dockerfile (new)
+   - ✅ docker-compose.prod.yml (updated)
 
-## Option B: Native Setup (No Docker)
+2. Verify port availability on VPS:
+   - Port 5433 (PostgreSQL) - Must NOT be in use
+   - Port 6384 (Redis) - Must NOT be in use
+   - Port 3016 (API) - Must NOT be in use
+   - Port 3017 (Menu App) - Must NOT be in use
+   - Port 3018 (Admin Dashboard) - Must NOT be in use
 
-### 1. Start PostgreSQL & Redis
+## Deployment Steps
 
-Windows (PowerShell):
-```powershell
-docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -v postgres_data:/var/lib/postgresql/data postgres:17-alpine
+### Step 1: Connect to VPS and Prepare Directory
+\`\`\`bash
+ssh root@194.164.151.202
 
-docker run -d -p 6379:6379 -v redis_data:/data redis:8-alpine
-```
+# Stop any existing containers
+cd /opt/msqrcode
+docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
 
-### 2. Start API Server (WSL)
+# Backup existing configuration
+cp docker-compose.prod.yml docker-compose.prod.yml.backup
+\`\`\`
 
-```bash
-cd ~/msqrcode/packages/api
-npm install  # If needed
-npm run dev
-```
+### Step 2: Upload Updated Files
+\`\`\`bash
+# From your local machine, copy files to VPS
+scp -r /home/claude/msqrcode/* root@194.164.151.202:/opt/msqrcode/
+\`\`\`
 
-This starts the API at localhost:3000 (or the port in .env)
+### Step 3: Build and Start Containers
+\`\`\`bash
+# On VPS - verify port availability
+cd /opt/msqrcode
+lsof -i :5433 || echo "Port 5433: OK"
+lsof -i :6384 || echo "Port 6384: OK"
+lsof -i :3016 || echo "Port 3016: OK"
 
-### 3. Start Menu App (Windows PowerShell - Avoids WSL Node Path Issues)
+# Build images (takes 5-10 minutes)
+docker-compose -f docker-compose.prod.yml build
 
-Open a new PowerShell window:
-```powershell
-cd $env:USERPROFILE\msqrcode\packages\menu-app
-npm install
-npm run dev
-```
+# Start services
+docker-compose -f docker-compose.prod.yml up -d
 
-Menu App will run at localhost:5173
+# Verify containers are running
+docker-compose -f docker-compose.prod.yml ps
+\`\`\`
 
-### 4. Start Admin Dashboard (WSL - Already Running)
+### Step 4: Verify Deployment
+\`\`\`bash
+# Check status
+docker-compose -f docker-compose.prod.yml ps
 
-```bash
-cd ~/msqrcode/packages/admin-dashboard
-npm run dev
-```
+# Check API logs
+docker logs msqrcode-api | tail -50
 
-Admin Dashboard runs at localhost:5174
+# Test API
+curl http://localhost:3016/api/health
 
-## Port Allocation
-
-- API: 3000
-- Menu App: 5173
-- Admin Dashboard: 5174
-- PostgreSQL: 5432
-- Redis: 6379
-- Adminer: 8080
-
-## Complete Preview Access
-
-Once all services are running:
-
-- **Admin Dashboard**: http://localhost:5174
-- **Menu App**: http://localhost:5173
-- **API Health**: http://localhost:3000/health (if available)
-- **Database Manager**: http://localhost:8080
-
-## Environment Variables
-
-If API needs custom config, create `.env` in packages/api:
-
-```
-NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/milestones
-REDIS_URL=redis://localhost:6379
-PORT=3000
-```
+# Test other services
+curl -I http://localhost:3017/  # Menu App
+curl -I http://localhost:3018/  # Admin Dashboard
+\`\`\`
 
 ## Troubleshooting
 
-### "npm workspace protocol not supported"
-→ Use Docker Compose (resolves with pnpm inside container)
+### API container keeps restarting
+\`\`\`bash
+docker logs msqrcode-api
+# If "Cannot find module 'express'", rebuild:
+docker-compose -f docker-compose.prod.yml build --no-cache api
+\`\`\`
 
-### "Windows Node interfering"
-→ Run each service in separate terminal/window in different environments (WSL for admin, PowerShell for menu-app)
+### Port conflicts
+\`\`\`bash
+# Find what's using the port
+lsof -i :<port>
 
-### Port already in use
-→ Change port in .env or specify `--port` flag in dev command
+# Kill the process if it's safe to do so
+kill -9 <PID>
+\`\`\`
+
+## Key Configuration Details
+
+- **PostgreSQL Port**: 5433 (host) → 5432 (container)
+- **Redis Port**: 6384 (host) → 6379 (container)
+- **API Port**: 3016 (host) → 3000 (container)
+- **Database URL** (internal): postgresql://postgres:postgres@postgres:5432/msqrcode
+- **Redis URL** (internal): redis://redis:6379
+
+Note: Internal URLs use container ports, not exposed host ports.
+

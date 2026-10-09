@@ -1,82 +1,92 @@
-# ═══════════════════════════════════════════════════════════════
-# Milestones Coffee — Production Docker Compose
-# ═══════════════════════════════════════════════════════════════
-# For production deployment on VPS
-# ═══════════════════════════════════════════════════════════════
+version: '3.8'
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: milestones-postgres-prod
+    container_name: msqrcode-postgres
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_INITDB_ARGS: "-c max_connections=200 -c shared_buffers=256MB -c effective_cache_size=1GB"
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: msqrcode
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - msqrcode-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: always
-    networks:
-      - milestones-network
 
   redis:
     image: redis:7-alpine
-    container_name: milestones-redis-prod
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    container_name: msqrcode-redis
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+      - "6384:6379"
+    networks:
+      - msqrcode-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: always
-    networks:
-      - milestones-network
+    volumes:
+      - redis_data:/data
 
   api:
-    image: milestones-coffee-api:${APP_VERSION:-latest}
-    container_name: milestones-api-prod
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    container_name: msqrcode-api
     environment:
       NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/msqrcode
+      REDIS_URL: redis://redis:6379
       PORT: 3000
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN}
+      LOG_LEVEL: info
     ports:
-      - "3000:3000"
+      - "3016:3000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: always
     networks:
-      - milestones-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - msqrcode-network
+    restart: unless-stopped
+
+  menu-app:
+    build:
+      context: .
+      dockerfile: packages/menu-app/Dockerfile
+    container_name: msqrcode-menu-app
+    ports:
+      - "3017:80"
+    depends_on:
+      - api
+    networks:
+      - msqrcode-network
+    restart: unless-stopped
+
+  admin-dashboard:
+    build:
+      context: .
+      dockerfile: packages/admin-dashboard/Dockerfile
+    container_name: msqrcode-admin-dashboard
+    ports:
+      - "3018:80"
+    depends_on:
+      - api
+    networks:
+      - msqrcode-network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  milestones-network:
+  msqrcode-network:
     driver: bridge

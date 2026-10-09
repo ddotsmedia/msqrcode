@@ -1,52 +1,35 @@
-# Production Dockerfile for Menu App with nginx
-# Stage 1: Builder
-FROM node:18-alpine AS builder
-
+# Build stage
+FROM node:22-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    && npm install -g pnpm
-
-# Copy package files
-COPY pnpm-lock.yaml package.json ./
+# Copy workspace config
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/menu-app/package.json ./packages/menu-app/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile
 
-# Copy source code
-COPY packages/database ./packages/database
-COPY packages/menu-app ./packages/menu-app
-COPY turbo.json tsconfig.json ./
+# Copy source
+COPY packages/menu-app/ ./packages/menu-app/
+COPY tsconfig.json ./
 
-# Build application
-RUN pnpm build --filter=@milestones/menu-app
+# Build app
+RUN pnpm --filter @milestones/menu-app build
 
-# Stage 2: Runtime with nginx
+# Production stage - use nginx to serve
 FROM nginx:alpine
+WORKDIR /usr/share/nginx/html
 
-# Copy nginx configuration
-RUN mkdir -p /etc/nginx/conf.d
+# Copy nginx config
+RUN echo 'server { listen 80; location / { root /usr/share/nginx/html; try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
 
-# Default nginx config for SPA routing
-RUN echo 'server { \
-    listen 3002; \
-    server_name _; \
-    root /usr/share/nginx/html; \
-    index index.html index.htm; \
-    location / { \
-        try_files $uri $uri/ /index.html; \
-    } \
-}' > /etc/nginx/conf.d/default.conf
+# Copy built app
+COPY --from=builder /app/packages/menu-app/dist/ .
 
-# Copy built application from builder
-COPY --from=builder /app/packages/menu-app/dist /usr/share/nginx/html
+# Health check
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost/index.html || exit 1
 
-# Expose port
-EXPOSE 3002
-
-# Start nginx
+EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
