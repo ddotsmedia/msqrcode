@@ -9,21 +9,20 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
-    && npm install -g pnpm
+    && npm install -g pnpm@8
 
-# Copy package files
+# Copy package files and workspace package.json files
 COPY pnpm-lock.yaml package.json ./
+COPY packages/database/package.json ./packages/database/
+COPY packages/api/package.json ./packages/api/
+COPY turbo.json tsconfig.json ./
 
-# Install dependencies (all deps needed to build workspace packages)
-RUN pnpm install --frozen-lockfile && \
-    pnpm audit --audit-level=low
+# Install dependencies (pnpm needs to see workspace package.json before install)
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY packages/database ./packages/database
-COPY packages/auth ./packages/auth
-COPY packages/validation ./packages/validation
 COPY packages/api ./packages/api
-COPY turbo.json tsconfig.json ./
 
 # Build application
 RUN pnpm build --filter=@milestones/api
@@ -35,12 +34,9 @@ LABEL maintainer="Milestones Coffee <admin@milestones.coffee>"
 LABEL description="Milestones Coffee Digital Menu Platform - API Server"
 LABEL version="1.0.0"
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
-
 # Create non-root user
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+RUN addgroup -g 2000 appuser && \
+    adduser -D -u 2000 -G appuser appuser
 
 WORKDIR /app
 
@@ -67,9 +63,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Expose port
 EXPOSE 3000 9090
-
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["/usr/sbin/dumb-init", "--"]
 
 # Run application
 CMD ["node", "dist/main.js"]
