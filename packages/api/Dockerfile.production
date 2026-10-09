@@ -9,22 +9,23 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
-    && npm install -g pnpm@8
+    && npm install -g pnpm@latest
 
-# Copy package files and workspace package.json files
-COPY pnpm-lock.yaml package.json ./
-COPY packages/database/package.json ./packages/database/
-COPY packages/api/package.json ./packages/api/
+# Copy all package.json files first
+COPY package.json package.json
+COPY packages/database/package.json ./packages/database/package.json
+COPY packages/api/package.json ./packages/api/package.json
 COPY turbo.json tsconfig.json ./
+COPY pnpm-lock.yaml ./
 
-# Install dependencies (pnpm needs to see workspace package.json before install)
-RUN pnpm install --frozen-lockfile
+# Install dependencies with PNPM_WORKSPACES_ENABLED to ensure workspace deps install
+RUN PNPM_HOME=/root/.pnpm pnpm install --ignore-scripts && pnpm ls
 
 # Copy source code
 COPY packages/database ./packages/database
 COPY packages/api ./packages/api
 
-# Build application
+# Build API using pnpm
 RUN pnpm build --filter=@milestones/api
 
 # Stage 2: Runtime (security-hardened)

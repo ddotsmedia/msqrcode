@@ -3,7 +3,10 @@
     "allow": [
       "Bash(pnpm peers *)",
       "Bash(pnpm list *)",
-      "Bash(pnpm --version)"
+      "Bash(pnpm --version)",
+      "Bash(bash DEPLOY_FIX_VPS.sh)",
+      "Bash(ssh *)",
+      "Bash(scp *)"
     ]
   }
 }
