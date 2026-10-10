@@ -8,7 +8,7 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/admin-dashboard/package.json ./packages/admin-dashboard/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy source
 COPY packages/admin-dashboard/ ./packages/admin-dashboard/

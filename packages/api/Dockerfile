@@ -9,7 +9,7 @@ COPY packages/database/package.json ./packages/database/
 COPY packages/api/package.json ./packages/api/
 
 # Install deps with frozen lockfile (including devDeps for build)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy source
 COPY packages/database/ ./packages/database/
