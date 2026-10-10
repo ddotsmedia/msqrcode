@@ -7,8 +7,8 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/menu-app/package.json ./packages/menu-app/
 
-# Install dependencies
-RUN pnpm install
+# Install dependencies without frozen lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source
 COPY packages/menu-app/ ./packages/menu-app/
