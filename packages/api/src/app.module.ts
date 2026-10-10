@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import configuration from './config/configuration';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import configuration from './config/configuration';
       database: process.env.DB_NAME || 'milestones',
       synchronize: process.env.NODE_ENV === 'development',
     }),
+    HealthModule,
   ],
   controllers: [],
   providers: [],
