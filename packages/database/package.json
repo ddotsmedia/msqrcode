@@ -9,10 +9,12 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@prisma/client": "^5.0.0",
     "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "prisma": "^5.0.0",
     "typescript": "^5.7.0"
   }
 }
