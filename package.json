@@ -2,7 +2,7 @@
   "name": "@milestones/root",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
