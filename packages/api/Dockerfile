@@ -40,10 +40,6 @@ COPY --from=builder /app/node_modules/ ./node_modules/
 # Copy built application
 COPY --from=builder /app/packages/api/dist/ ./packages/api/dist/
 
-# Copy database files (if built separately)
-COPY --from=builder /app/packages/database/dist/ ./packages/database/dist/ 2>/dev/null || true
-COPY --from=builder /app/packages/database/prisma/ ./packages/database/prisma/ 2>/dev/null || true
-
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
