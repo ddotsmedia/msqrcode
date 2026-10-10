@@ -37,8 +37,8 @@ COPY --from=builder /app/packages/api/package.json ./packages/api/
 # Copy the entire node_modules with all symlinks properly set up
 COPY --from=builder /app/node_modules/ ./node_modules/
 
-# Copy built application
-COPY --from=builder /app/packages/api/dist/ ./packages/api/dist/
+# Copy packages directory structure to preserve pnpm workspace symlinks and any package-level node_modules
+COPY --from=builder /app/packages/ ./packages/
 
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
