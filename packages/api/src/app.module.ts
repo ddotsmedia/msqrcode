@@ -3,6 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import configuration from './config/configuration';
 import { HealthModule } from './health/health.module';
+import * as entities from './entities';
+import { BranchesModule } from './branches/branches.module';
+import { ProductsModule } from './products/products.module';
+import { CategoriesModule } from './categories/categories.module';
+import { AvailabilityModule } from './availability/availability.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -19,8 +25,15 @@ import { HealthModule } from './health/health.module';
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_NAME || 'milestones',
       synchronize: process.env.NODE_ENV === 'development',
+      entities: Object.values(entities),
+      logging: process.env.NODE_ENV === 'development',
     }),
     HealthModule,
+    BranchesModule,
+    ProductsModule,
+    CategoriesModule,
+    AvailabilityModule,
+    AnalyticsModule,
   ],
   controllers: [],
   providers: [],

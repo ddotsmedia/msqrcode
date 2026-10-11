@@ -8,6 +8,8 @@
     "start": "node dist/main",
     "dev": "nest start --watch",
     "debug": "nest start --debug --watch",
+    "seed": "ts-node src/seed.ts",
+    "seed:prod": "node dist/seed",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "jest",
