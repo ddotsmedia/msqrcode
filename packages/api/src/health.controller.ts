@@ -21,7 +21,7 @@ interface HealthCheckResponse {
 @Controller("health")
 export class HealthController {
   private prisma = new PrismaClient();
-  private redisClient: redis.RedisClient | null = null;
+  private redisClient: redis.RedisClientType | null = null;
   private startTime = Date.now();
 
   constructor() {
@@ -40,11 +40,11 @@ export class HealthController {
         },
       });
 
-      this.redisClient.on("error", (err) => {
+      this.redisClient.on("error", (err: Error) => {
         console.error("Redis connection error:", err);
       });
 
-      this.redisClient.connect().catch((err) => {
+      this.redisClient.connect().catch((err: Error) => {
         console.error("Failed to connect to Redis:", err);
       });
     } catch (error) {
@@ -56,16 +56,16 @@ export class HealthController {
   async health(): Promise<HealthCheckResponse> {
     const startCheck = Date.now();
     const checks = {
-      database: "unhealthy" as const,
-      redis: "unhealthy" as const,
-      api: "unhealthy" as const,
+      database: "unhealthy" as "healthy" | "unhealthy",
+      redis: "unhealthy" as "healthy" | "unhealthy",
+      api: "unhealthy" as "healthy" | "unhealthy",
     };
 
     // Database check
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       checks.database = "healthy";
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Database health check failed:", error);
     }
 
@@ -75,7 +75,7 @@ export class HealthController {
         await this.redisClient.ping();
         checks.redis = "healthy";
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Redis health check failed:", error);
     }
 

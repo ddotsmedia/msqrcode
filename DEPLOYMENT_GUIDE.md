@@ -1,114 +1,115 @@
-# Milestones Coffee Phase 2 — Final Deployment Guide
+# MS QR Code - Production Deployment Guide
 
-**Status**: Git commit complete (60 files). Ready for GitHub setup and local testing.
+## Overview
+This guide provides step-by-step instructions to deploy the MS QR Code (Milestones Coffee Platform) to production on the VPS at `194.164.151.202:/opt/msqrcode`.
 
-**Generated Secrets** (save these for GitHub):
-```
-JWT_SECRET=ad27fdaa6ed47a3bfb81cc8fff71037f
-DB_PASSWORD=6188e79142aeac5b
-VPS_HOST=srv988590.servercow.de
-VPS_USER=root
-```
+## Fixed Issues
+1. ✅ **API Module Resolution** - Updated Dockerfile to properly handle pnpm monorepo by copying entire node_modules from builder stage
+2. ✅ **Port Conflicts** - PostgreSQL: 5433:5432, Redis: 6384:6379 (verified against running services on VPS)
+3. ✅ **Dockerfile References** - Created missing Dockerfiles for menu-app and admin-dashboard
+4. ✅ **Docker Compose Configuration** - Updated to reference correct Dockerfile paths
 
----
+## Files Changed
+- `packages/api/Dockerfile` - Fixed to copy node_modules from builder stage (resolves express module error)
+- `packages/menu-app/Dockerfile` - Created (nginx-based React/Vite build)
+- `packages/admin-dashboard/Dockerfile` - Created (nginx-based React/Vite build)
+- `docker-compose.prod.yml` - Updated with correct ports and Dockerfile references
 
-## REMAINING STEPS (Execute on Windows Machine)
+## Pre-Deployment Checklist
 
-### Step 1: Create GitHub Repository
+### Before connecting to VPS:
+1. Verify all files are in the project directory:
+   - ✅ packages/api/Dockerfile (corrected)
+   - ✅ packages/menu-app/Dockerfile (new)
+   - ✅ packages/admin-dashboard/Dockerfile (new)
+   - ✅ docker-compose.prod.yml (updated)
 
-1. Navigate to https://github.com/new
-2. Create new repository:
-   - Repository name: milestones-coffee
-   - Description: QR-based digital menu system for Milestones Coffee
-   - Visibility: Private
-   - Initialize repository: NO
-   - Click Create repository
+2. Verify port availability on VPS:
+   - Port 5433 (PostgreSQL) - Must NOT be in use
+   - Port 6384 (Redis) - Must NOT be in use
+   - Port 3016 (API) - Must NOT be in use
+   - Port 3017 (Menu App) - Must NOT be in use
+   - Port 3018 (Admin Dashboard) - Must NOT be in use
 
-### Step 2: Push to GitHub
+## Deployment Steps
 
-```powershell
-cd "C:\web\MS QR Code new"
-git remote set-url origin https://github.com/YOUR_USERNAME/milestones-coffee.git
-git push -u origin main
-git branch -vv
-```
+### Step 1: Connect to VPS and Prepare Directory
+\`\`\`bash
+ssh root@194.164.151.202
 
-### Step 3: Add GitHub Secrets
+# Stop any existing containers
+cd /opt/msqrcode
+docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
 
-Go to: Settings > Secrets and variables > Actions
+# Backup existing configuration
+cp docker-compose.prod.yml docker-compose.prod.yml.backup
+\`\`\`
 
-Add these 5 secrets:
-- VPS_HOST = srv988590.servercow.de
-- VPS_USER = root
-- VPS_SSH_KEY = (content of ~/.ssh/id_rsa)
-- DB_PASSWORD = 6188e79142aeac5b
-- JWT_SECRET = ad27fdaa6ed47a3bfb81cc8fff71037f
+### Step 2: Upload Updated Files
+\`\`\`bash
+# From your local machine, copy files to VPS
+scp -r /home/claude/msqrcode/* root@194.164.151.202:/opt/msqrcode/
+\`\`\`
 
-### Step 4: Local Testing
+### Step 3: Build and Start Containers
+\`\`\`bash
+# On VPS - verify port availability
+cd /opt/msqrcode
+lsof -i :5433 || echo "Port 5433: OK"
+lsof -i :6384 || echo "Port 6384: OK"
+lsof -i :3016 || echo "Port 3016: OK"
 
-```powershell
-cd "C:\web\MS QR Code new"
-rm -r node_modules pnpm-lock.yaml
-pnpm install
-docker-compose up -d
-Start-Sleep -Seconds 15
-pnpm db:push
-pnpm db:seed
-pnpm dev
-```
+# Build images (takes 5-10 minutes)
+docker-compose -f docker-compose.prod.yml build
 
-### Step 5: Health Checks
+# Start services
+docker-compose -f docker-compose.prod.yml up -d
 
-```powershell
-curl http://localhost:3000/api/health
-curl http://localhost:5173
-curl http://localhost:5174
-```
+# Verify containers are running
+docker-compose -f docker-compose.prod.yml ps
+\`\`\`
 
-### Step 6: VPS Preparation
+### Step 4: Verify Deployment
+\`\`\`bash
+# Check status
+docker-compose -f docker-compose.prod.yml ps
 
-```bash
-ssh root@srv988590.servercow.de
-mkdir -p /opt/milestones-coffee
-cd /opt/milestones-coffee
+# Check API logs
+docker logs msqrcode-api | tail -50
 
-cat > .env << 'EOF'
-DB_USER=milestones
-DB_PASSWORD=6188e79142aeac5b
-DB_NAME=milestones_coffee
-JWT_SECRET=ad27fdaa6ed47a3bfb81cc8fff71037f
-NODE_ENV=production
-PORT=3000
-CORS_ORIGIN=https://menu.milestonescoffee.ae
-EOF
+# Test API
+curl http://localhost:3016/api/health
 
-exit
-```
+# Test other services
+curl -I http://localhost:3017/  # Menu App
+curl -I http://localhost:3018/  # Admin Dashboard
+\`\`\`
 
-### Step 7: Push & Deploy
+## Troubleshooting
 
-```powershell
-cd "C:\web\MS QR Code new"
-git status
-git push origin main
-```
+### API container keeps restarting
+\`\`\`bash
+docker logs msqrcode-api
+# If "Cannot find module 'express'", rebuild:
+docker-compose -f docker-compose.prod.yml build --no-cache api
+\`\`\`
 
-Watch: https://github.com/YOUR_USERNAME/milestones-coffee/actions
+### Port conflicts
+\`\`\`bash
+# Find what's using the port
+lsof -i :<port>
 
-### Step 8: Verify Live Deployment
+# Kill the process if it's safe to do so
+kill -9 <PID>
+\`\`\`
 
-```bash
-ssh root@srv988590.servercow.de
-docker ps
-curl http://localhost:3000/api/health
-curl https://menu.milestonescoffee.ae/api/health
-```
+## Key Configuration Details
 
----
+- **PostgreSQL Port**: 5433 (host) → 5432 (container)
+- **Redis Port**: 6384 (host) → 6379 (container)
+- **API Port**: 3016 (host) → 3000 (container)
+- **Database URL** (internal): postgresql://postgres:postgres@postgres:5432/msqrcode
+- **Redis URL** (internal): redis://redis:6379
 
-## Summary
+Note: Internal URLs use container ports, not exposed host ports.
 
-✅ Phase 2 code committed to git (60 files)
-✅ Main branch ready
-⏳ Next: Create GitHub repo, add secrets, push, and deploy
-⏳ Deployment time: ~20 minutes total
