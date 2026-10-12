@@ -94,7 +94,7 @@ function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: stri
           setError('Invalid QR code format. Please scan a Milestones Coffee QR code.');
         }
       },
-      (error) => {
+      () => {
         // Continue scanning even on errors
       }
     );
