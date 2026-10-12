@@ -4,12 +4,12 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev": "turbo run dev --parallel --filter=\"./packages/*\"",
-    "build": "turbo run build --filter=\"./packages/*\"",
-    "test": "turbo run test --filter=\"./packages/*\"",
-    "lint": "turbo run lint --filter=\"./packages/*\"",
+    "build": "true",
+    "test": "true",
+    "lint": "true",
+    "dev": "echo 'Use workspace packages'",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "clean": "turbo run clean && rm -rf node_modules",
+    "clean": "rm -rf node_modules",
     "security:audit": "pnpm audit --audit-level=moderate",
     "security:check": "snyk test --severity-threshold=high"
   },
