@@ -30,13 +30,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run linters
-        run: pnpm exec turbo lint --filter='@milestones/*'
+        run: pnpm exec turbo lint
 
       - name: Build packages
-        run: pnpm exec turbo build --filter='@milestones/*'
+        run: pnpm exec turbo build
 
       - name: Run tests
-        run: pnpm exec turbo test --filter='@milestones/*'
+        run: pnpm exec turbo test
 
   build-docker:
     needs: lint-and-test
