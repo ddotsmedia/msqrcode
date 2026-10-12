@@ -78,13 +78,16 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -e
             cd ${{ secrets.VPS_DEPLOY_PATH }}
             git fetch --all
             git reset --hard origin/main
             umask 077
             printf 'JWT_SECRET=%s\nADMIN_EMAIL=%s\nADMIN_PASSWORD=%s\n' "${{ secrets.JWT_SECRET }}" "${{ secrets.ADMIN_EMAIL }}" "${{ secrets.ADMIN_PASSWORD }}" > .env
             docker compose -f docker-compose.prod.yml pull postgres redis || true
-            docker compose -f docker-compose.prod.yml build api menu-app admin-dashboard
+            echo "--- disk ---"; df -h / | tail -1
+            docker compose -f docker-compose.prod.yml build --no-cache api menu-app admin-dashboard
+            echo "--- api image built at ---"; docker image inspect -f '{{.Created}}' msqrcode-api || true
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             sleep 15
             docker compose -f docker-compose.prod.yml ps -a
