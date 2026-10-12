@@ -10,8 +10,6 @@ services:
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - msqrcode-network
     healthcheck:
@@ -23,8 +21,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: msqrcode-redis
-    ports:
-      - "6384:6379"
     networks:
       - msqrcode-network
     healthcheck:
