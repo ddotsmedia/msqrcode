@@ -25,7 +25,8 @@ import { AuthModule } from './auth/auth.module';
       username: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_NAME || 'milestones',
-      synchronize: process.env.NODE_ENV === 'development',
+      // DB_SYNC=true creates tables from entities on first boot; turn it off afterwards.
+      synchronize: process.env.NODE_ENV === 'development' || process.env.DB_SYNC === 'true',
       entities: Object.values(entities),
       logging: process.env.NODE_ENV === 'development',
     }),

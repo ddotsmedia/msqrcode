@@ -44,6 +44,7 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: msqrcode
+      DB_SYNC: "true"
       REDIS_URL: redis://redis:6379
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
