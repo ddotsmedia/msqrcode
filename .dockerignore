@@ -5,3 +5,7 @@ dist
 !.env.example
 *.log
 .git
+
+# build output must be produced fresh inside the image
+**/dist
+**/*.tsbuildinfo
