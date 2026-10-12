@@ -35,7 +35,7 @@ export class ProductAvailability {
   is_available: boolean;
 
   @Column({ type: 'varchar', nullable: true })
-  updated_by_user_id: string;
+  updated_by_user_id: string | null;
 
   @UpdateDateColumn()
   last_updated_at: Date;

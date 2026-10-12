@@ -23,6 +23,9 @@ RUN pnpm --filter @milestones/database exec prisma generate 2>/dev/null || \
     PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 pnpm --filter @milestones/database exec prisma generate 2>/dev/null || \
     echo "Prisma generation encountered issues, attempting build anyway"
 
+# Build database package first: the API resolves @milestones/database via its dist/ entry
+RUN pnpm --filter @milestones/database build
+
 # Build API
 RUN pnpm --filter @milestones/api build
 

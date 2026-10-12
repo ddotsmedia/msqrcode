@@ -53,7 +53,7 @@ export class AvailabilityService {
     }
 
     availability.is_available = isAvailable;
-    availability.updated_by_user_id = userId;
+    availability.updated_by_user_id = userId ?? null;
     return this.availabilityRepository.save(availability);
   }
 

@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   Branch,
@@ -228,13 +228,17 @@ async function seed() {
 
       if (!product) {
         const category = categories[prodData.category];
-        product = await productRepo.save({
-          ...prodData,
+        // `category` in seed data is a name used to look up category_id; drop it so it doesn't clash with the relation
+        const { category: _categoryName, ...prodFields } = prodData;
+        const productFields: DeepPartial<Product> = {
+          ...prodFields,
           category_id: category.id,
           display_order: productData.indexOf(prodData) + 1,
           image_url: `https://via.placeholder.com/300x300.png?text=${prodData.name}`,
           status: 'active',
-        });
+        };
+        const newProduct: Product = productRepo.create(productFields);
+        product = await productRepo.save(newProduct);
         console.log('✓ Product created:', product.name);
 
         // Create availability record for this branch
