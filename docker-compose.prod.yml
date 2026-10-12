@@ -34,13 +34,16 @@ services:
   api:
     build:
       context: .
-      dockerfile: packages/api/Dockerfile.production
+      dockerfile: packages/api/Dockerfile
     container_name: msqrcode-api
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/msqrcode
       REDIS_URL: redis://redis:6379
       PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     ports:
       - "3016:3000"
     depends_on:

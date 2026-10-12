@@ -1,3 +1,5 @@
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Controller, Get, Put, Param, Body } from '@nestjs/common';
 import { AvailabilityService } from './availability.service';
 import { ProductAvailability } from '../entities/product-availability.entity';
@@ -11,6 +13,7 @@ export class AvailabilityController {
     return this.availabilityService.getByBranch(branchId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Put(':productId/availability')
   async updateAvailability(
     @Param('branchId') branchId: string,

@@ -9,6 +9,7 @@ import { ProductsModule } from './products/products.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     CategoriesModule,
     AvailabilityModule,
     AnalyticsModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [],
