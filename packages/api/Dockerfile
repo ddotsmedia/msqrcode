@@ -1,6 +1,6 @@
 # Build stage
 FROM node:22-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9.0 --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 
 # Copy workspace config and all package.json files
@@ -28,7 +28,7 @@ RUN pnpm --filter @milestones/api build
 
 # Production stage
 FROM node:22-alpine AS production
-RUN corepack enable && corepack prepare pnpm@9.0 --activate
+RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 
 # Copy workspace files from builder - this has all resolved dependencies
