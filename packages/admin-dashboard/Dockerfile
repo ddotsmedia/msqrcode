@@ -3,9 +3,12 @@ FROM node:22-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9.0 --activate
 WORKDIR /app
 
-# Copy workspace config
+# Copy workspace config and all package.json files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/admin-dashboard/package.json ./packages/admin-dashboard/
+COPY packages/api/package.json ./packages/api/
+COPY packages/database/package.json ./packages/database/
+COPY packages/menu-app/package.json ./packages/menu-app/
 
 # Install dependencies without frozen lockfile
 RUN pnpm install --no-frozen-lockfile
