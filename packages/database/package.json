@@ -9,12 +9,12 @@
                     "build":  "tsc"
                 },
     "dependencies":  {
-                         "bcryptjs":  "^2.4.3"
+                         "bcryptjs":  "^2.4.3",
+                         "@prisma/client":  "^5.15.0"
                      },
     "devDependencies":  {
                             "@types/node":  "^22.0.0",
                             "typescript":  "^5.7.0",
-                            "prisma":  "^5.15.0",
-                            "@prisma/client":  "^5.15.0"
+                            "prisma":  "^5.15.0"
                         }
 }
