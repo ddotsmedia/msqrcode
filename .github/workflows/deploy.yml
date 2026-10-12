@@ -64,6 +64,13 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ADMIN }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_ADMIN }}:buildcache,mode=max
 
+      - name: Check VPS_HOST value (fingerprint only)
+        env:
+          VPS_HOST_VALUE: ${{ secrets.VPS_HOST }}
+        run: |
+          echo "saved length=${#VPS_HOST_VALUE} sha256=$(printf '%s' "$VPS_HOST_VALUE" | sha256sum | cut -c1-16)"
+          echo "expected length=15 sha256=$(printf '%s' '194.164.151.202' | sha256sum | cut -c1-16)"
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master
         with:
