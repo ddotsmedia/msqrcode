@@ -87,7 +87,15 @@ jobs:
             docker compose -f docker-compose.prod.yml build api menu-app admin-dashboard
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             sleep 15
-            docker compose -f docker-compose.prod.yml ps
+            docker compose -f docker-compose.prod.yml ps -a
+            echo "--- api logs (last 60) ---"
+            docker compose -f docker-compose.prod.yml logs --tail=60 api || true
+            echo "--- local health ---"
+            curl -s -m 5 -w " HTTP:%{http_code}\n" http://localhost:3016/api/health || echo "local health: no response"
+            echo "--- listening ports 3016-3018 ---"
+            (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -E ':(3016|3017|3018) ' || echo "nothing listening on 3016-3018"
+            echo "--- firewall ---"
+            (ufw status 2>/dev/null | head -20) || echo "ufw not available"
 
       - name: Verify deployment health
         run: |
