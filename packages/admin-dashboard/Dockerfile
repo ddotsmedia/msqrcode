@@ -10,8 +10,8 @@ COPY packages/api/package.json ./packages/api/
 COPY packages/database/package.json ./packages/database/
 COPY packages/menu-app/package.json ./packages/menu-app/
 
-# Install dependencies without frozen lockfile
-RUN pnpm install --no-frozen-lockfile
+# Install dependencies using the committed lockfile (same as CI and the API image)
+RUN pnpm install --frozen-lockfile
 
 # Copy source
 COPY packages/admin-dashboard/ ./packages/admin-dashboard/

@@ -11,7 +11,7 @@ COPY packages/database/package.json ./packages/database/
 COPY packages/admin-dashboard/package.json ./packages/admin-dashboard/
 
 # Install dependencies without frozen lockfile
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Copy source
 COPY packages/menu-app/ ./packages/menu-app/
