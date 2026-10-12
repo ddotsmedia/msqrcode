@@ -4,19 +4,24 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "scripts": {
+    "build": "true",
+    "test": "true",
     "lint": "true",
+    "dev": "echo 'Use workspace packages'",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "clean": "rm -rf node_modules",
     "security:audit": "pnpm audit --audit-level=moderate",
     "security:check": "snyk test --severity-threshold=high"
   },
   "pnpm": {
-    "workspaces": ["packages/*"]
+    "workspaces": [
+      "packages/*"
+    ]
   },
   "devDependencies": {
-    "turbo": "^1.10.0",
+    "@types/node": "^20.0.0",
     "prettier": "^3.0.0",
-    "typescript": "^5.2.0",
-    "@types/node": "^20.0.0"
+    "turbo": "^2.11.7",
+    "typescript": "^5.2.0"
   }
 }
