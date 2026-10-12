@@ -10,8 +10,8 @@ COPY packages/api/package.json ./packages/api/
 COPY packages/menu-app/package.json ./packages/menu-app/
 COPY packages/admin-dashboard/package.json ./packages/admin-dashboard/
 
-# Install deps without frozen lockfile to allow npm package resolution
-RUN pnpm install --no-frozen-lockfile
+# Install deps using frozen lockfile for reproducible builds
+RUN pnpm install --frozen-lockfile
 
 # Copy source
 COPY packages/database/ ./packages/database/
