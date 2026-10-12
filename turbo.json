@@ -15,7 +15,8 @@
       "cache": false
     },
     "lint": {
-      "cache": false
+      "cache": false,
+      "outputs": []
     }
   }
 }
