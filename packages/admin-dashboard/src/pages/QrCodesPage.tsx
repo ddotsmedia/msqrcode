@@ -587,7 +587,11 @@ export default function QrCodesPage({ token }: { token: string }) {
                   <select
                     required
                     value={form.branch_id}
-                    onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const hasMenu = rows.some((r) => r.branch_id === id && r.kind === 'branch');
+                      setForm({ ...form, branch_id: id, kind: hasMenu ? 'table' : form.kind });
+                    }}
                     className={inputClass}
                   >
                     <option value="" disabled>
@@ -600,20 +604,36 @@ export default function QrCodesPage({ token }: { token: string }) {
                     ))}
                   </select>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['branch', 'table'] as const).map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setForm({ ...form, kind: k })}
-                      className={`rounded border py-2 text-sm font-semibold ${
-                        form.kind === k ? 'border-brand-600 text-brand-700 bg-brand-50' : 'border-gray-300 text-gray-600'
-                      }`}
-                    >
-                      {k === 'branch' ? 'Branch menu' : 'Table'}
-                    </button>
-                  ))}
-                </div>
+                {(() => {
+                  const hasMenu = rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch');
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['branch', 'table'] as const).map((k) => {
+                          const blocked = k === 'branch' && hasMenu;
+                          return (
+                            <button
+                              key={k}
+                              type="button"
+                              disabled={blocked}
+                              onClick={() => setForm({ ...form, kind: k })}
+                              className={`rounded border py-2 text-sm font-semibold ${
+                                form.kind === k ? 'border-brand-600 text-brand-700 bg-brand-50' : 'border-gray-300 text-gray-600'
+                              } ${blocked ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            >
+                              {k === 'branch' ? 'Branch menu' : 'Table'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {hasMenu && (
+                        <p className="text-xs text-gray-500">
+                          This branch already has its branch menu code. Choose Table to add a table code.
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
                 {form.kind === 'table' && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1">Table number</label>
