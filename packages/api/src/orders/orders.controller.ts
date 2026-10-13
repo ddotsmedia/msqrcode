@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, Query, UseGuards, RawBodyRequest, Req, Sse, Res } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, Query, UseGuards, RawBodyRequest, Req, Sse, Res, ServiceUnavailableException } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { map } from 'rxjs';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -11,8 +11,16 @@ import { OrdersStreamService } from './orders-stream.service';
 export class OrdersController {
   constructor(private orders: OrdersService, private ordersStream: OrdersStreamService) {}
 
+  // Ordering stays off until a real payment provider is configured (ORDERS_ENABLED=true).
+  private ensureEnabled() {
+    if (process.env.ORDERS_ENABLED !== 'true') {
+      throw new ServiceUnavailableException('Online ordering is not available yet');
+    }
+  }
+
   @Post()
   async create(@Query('branch') branchId: string, @Body() body: Record<string, unknown>) {
+    this.ensureEnabled();
     return this.orders.create(branchId, body);
   }
 
@@ -37,6 +45,7 @@ export class OrdersController {
 
   @Sse('stream')
   getOrderStream(@Query('token') token: string): any {
+    this.ensureEnabled();
     // For SSE, EventSource can't send custom headers, so we accept token as query param
     // For security, validate token if provided
     return this.ordersStream.getOrderStream().pipe(
