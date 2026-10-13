@@ -181,11 +181,16 @@ async function composePoster(artUrl: string, row: QrRow, pos: Placement, maxWidt
   return canvas.toDataURL('image/png');
 }
 
-type Target = 'A4' | 'A3' | 'screen';
+type Target = 'original' | 'A4' | 'A3' | 'screen';
 
 // Longest side in pixels: 300 dpi for A4 / A3 print, 2000 px for screens.
-const TARGET_LONG_SIDE: Record<Target, number> = { A4: 3508, A3: 4961, screen: 2000 };
-const TARGET_LABEL: Record<Target, string> = { A4: 'A4 print (300 dpi)', A3: 'A3 print (300 dpi)', screen: 'Screen / web' };
+const TARGET_LONG_SIDE: Record<Target, number> = { original: Infinity, A4: 3508, A3: 4961, screen: 2000 };
+const TARGET_LABEL: Record<Target, string> = {
+  original: 'Keep original size',
+  A4: 'A4 print (300 dpi)',
+  A3: 'A3 print (300 dpi)',
+  screen: 'Screen / web',
+};
 
 interface ArtInfo {
   origW: number;
@@ -215,8 +220,9 @@ async function optimizeArtwork(file: File, target: Target, optimize: boolean): P
     const outW = Math.round(img.naturalWidth * scale);
     const outH = Math.round(img.naturalHeight * scale);
 
+    // Re-encode only when it helps: resizing, or converting a PNG to a smaller JPEG.
     let blob: Blob = file;
-    if (optimize) {
+    if (optimize && (shouldResize || file.type !== 'image/jpeg')) {
       const canvas = document.createElement('canvas');
       canvas.width = outW;
       canvas.height = outH;
@@ -225,7 +231,7 @@ async function optimizeArtwork(file: File, target: Target, optimize: boolean): P
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, outW, outH);
       ctx.drawImage(img, 0, 0, outW, outH);
-      blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+      blob = await canvasToBlob(canvas, 'image/jpeg', 0.88);
     }
 
     return {
@@ -255,7 +261,7 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
   const [artFile, setArtFile] = useState<File | null>(null);
   const [artInfo, setArtInfo] = useState<ArtInfo | null>(null);
   const [autoOptimize, setAutoOptimize] = useState(true);
-  const [target, setTarget] = useState<Target>('A4');
+  const [target, setTarget] = useState<Target>('original');
   const [optimising, setOptimising] = useState(false);
 
   useEffect(() => {
@@ -399,7 +405,7 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
                 )}
               </p>
             )}
-            {artInfo && target !== 'screen' && Math.max(artInfo.origW, artInfo.origH) < TARGET_LONG_SIDE[target] && (
+            {artInfo && (target === 'A4' || target === 'A3') && Math.max(artInfo.origW, artInfo.origH) < TARGET_LONG_SIDE[target] && (
               <p className="text-xs text-amber-700">
                 This image is smaller than the {target} print size, so it may look soft when printed. A larger file prints better.
               </p>
