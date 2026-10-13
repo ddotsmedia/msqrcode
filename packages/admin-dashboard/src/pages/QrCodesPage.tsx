@@ -853,7 +853,14 @@ export default function QrCodesPage({ token }: { token: string }) {
               {r.branch.name} · {r.branch.code}
             </p>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => setDesignFor(r)}
+              className="mt-4 w-full bg-brand-600 text-white rounded-lg py-2 text-sm font-semibold"
+            >
+              Design poster (upload menu image)
+            </button>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
               <button type="button" onClick={() => openEdit(r)} className="border rounded py-1.5 font-semibold text-gray-700">
                 Edit
               </button>
@@ -861,10 +868,7 @@ export default function QrCodesPage({ token }: { token: string }) {
                 {r.is_active ? 'Pause' : 'Activate'}
               </button>
               <button type="button" onClick={() => printPosters([r], posterSize)} className="border rounded py-1.5 font-semibold text-gray-700">
-                Poster
-              </button>
-              <button type="button" onClick={() => setDesignFor(r)} className="border rounded py-1.5 font-semibold text-gray-700">
-                Design
+                Print QR only
               </button>
               <button type="button" onClick={() => downloadPng(r)} className="border rounded py-1.5 font-semibold text-gray-700">
                 PNG
