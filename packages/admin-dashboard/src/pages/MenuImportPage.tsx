@@ -1,5 +1,4 @@
-import { useState, FormEvent, ChangeEvent } from 'react';
-import { api } from '../api';
+import { useState, ChangeEvent } from 'react';
 
 interface ImportResult {
   created: number;

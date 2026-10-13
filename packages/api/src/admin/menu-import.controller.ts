@@ -15,16 +15,16 @@ export class MenuImportController {
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   async importMenu(
-    @UploadedFile() file: Express.Multer.File | undefined,
+    @UploadedFile() file: any,
     @Query('dry_run') dryRun: string = 'true',
-  ) {
+  ): Promise<any> {
     if (!file) throw new BadRequestException('File is required');
     if (file.size > 5_000_000) throw new BadRequestException('File must be less than 5 MB');
     return this.import_.import(file.buffer, file.originalname, dryRun !== 'false');
   }
 
   @Get('template.xlsx')
-  async getTemplate(@Res() res: Response) {
+  async getTemplate(@Res() res: Response): Promise<void> {
     const buffer = await this.import_.template();
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -34,7 +34,7 @@ export class MenuImportController {
   }
 
   @Get('export.xlsx')
-  async exportMenu(@Res() res: Response) {
+  async exportMenu(@Res() res: Response): Promise<void> {
     const buffer = await this.import_.export();
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
