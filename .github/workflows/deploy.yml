@@ -89,6 +89,44 @@ jobs:
             docker compose -f docker-compose.prod.yml build --no-cache api menu-app admin-dashboard
             echo "--- api image built at ---"; docker image inspect -f '{{.Created}}' msqrcode-api || true
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            echo "--- nginx for coffeesales.ae ---"
+            CERT=/etc/letsencrypt/live/coffeesales.ae/fullchain.pem
+            if [ ! -f "$CERT" ]; then
+              cat > /etc/nginx/sites-available/coffeesales.ae <<'NGINX'
+            server {
+                listen 80;
+                server_name coffeesales.ae www.coffeesales.ae;
+                client_max_body_size 10m;
+
+                location /api/ {
+                    proxy_pass http://127.0.0.1:3016/;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+
+                location / {
+                    proxy_pass http://127.0.0.1:3017;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+            }
+            NGINX
+              ln -sf /etc/nginx/sites-available/coffeesales.ae /etc/nginx/sites-enabled/coffeesales.ae
+              if ! nginx -t; then
+                echo "nginx config invalid: removing coffeesales.ae config"
+                rm -f /etc/nginx/sites-enabled/coffeesales.ae /etc/nginx/sites-available/coffeesales.ae
+                nginx -t
+                exit 1
+              fi
+              systemctl reload nginx
+              if [ -n "${{ secrets.CERTBOT_EMAIL }}" ]; then
+                certbot --nginx -n --agree-tos -m "${{ secrets.CERTBOT_EMAIL }}" -d coffeesales.ae -d www.coffeesales.ae --redirect || echo "WARNING: certificate not issued (check DNS for www.coffeesales.ae); site stays on HTTP"
+              fi
+            fi
             sleep 15
             docker compose -f docker-compose.prod.yml ps -a
             echo "--- api logs (last 60) ---"
@@ -103,7 +141,7 @@ jobs:
       - name: Verify deployment health
         run: |
           for i in {1..30}; do
-            HTTP_CODE=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://${{ secrets.VPS_HOST }}:3016/api/health || echo "000")
+            HTTP_CODE=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://coffeesales.ae/api/health || echo "000")
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ API Health Check: HTTP 200 - DEPLOYMENT SUCCESSFUL"
               exit 0
@@ -121,7 +159,6 @@ jobs:
           echo "📍 Services available at:"
           echo "  - Menu App: http://coffeesales.ae"
           echo "  - API: http://coffeesales.ae/api"
-          echo "  - Admin: http://coffeesales.ae/admin"
 
       - name: Deployment Failed
         if: failure()
