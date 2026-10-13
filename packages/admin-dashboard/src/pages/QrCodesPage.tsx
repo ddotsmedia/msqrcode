@@ -181,6 +181,70 @@ async function composePoster(artUrl: string, row: QrRow, pos: Placement, maxWidt
   return canvas.toDataURL('image/png');
 }
 
+type Target = 'A4' | 'A3' | 'screen';
+
+// Longest side in pixels: 300 dpi for A4 / A3 print, 2000 px for screens.
+const TARGET_LONG_SIDE: Record<Target, number> = { A4: 3508, A3: 4961, screen: 2000 };
+const TARGET_LABEL: Record<Target, string> = { A4: 'A4 print (300 dpi)', A3: 'A3 print (300 dpi)', screen: 'Screen / web' };
+
+interface ArtInfo {
+  origW: number;
+  origH: number;
+  origKb: number;
+  outW: number;
+  outH: number;
+  outKb: number;
+  optimised: boolean;
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the image'))), type, quality),
+  );
+}
+
+// Resizes to the target size and compresses to JPEG. Returns the file unchanged when optimising is off.
+async function optimizeArtwork(file: File, target: Target, optimize: boolean): Promise<{ blob: Blob; info: ArtInfo }> {
+  const srcUrl = URL.createObjectURL(file);
+  try {
+    const img = await loadImage(srcUrl);
+    const longSide = Math.max(img.naturalWidth, img.naturalHeight);
+    const max = TARGET_LONG_SIDE[target];
+    const shouldResize = optimize && longSide > max;
+    const scale = shouldResize ? max / longSide : 1;
+    const outW = Math.round(img.naturalWidth * scale);
+    const outH = Math.round(img.naturalHeight * scale);
+
+    let blob: Blob = file;
+    if (optimize) {
+      const canvas = document.createElement('canvas');
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas is not available in this browser');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+    }
+
+    return {
+      blob,
+      info: {
+        origW: img.naturalWidth,
+        origH: img.naturalHeight,
+        origKb: Math.round(file.size / 1024),
+        outW,
+        outH,
+        outKb: Math.round(blob.size / 1024),
+        optimised: optimize,
+      },
+    };
+  } finally {
+    URL.revokeObjectURL(srcUrl);
+  }
+}
+
 function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
   const [artUrl, setArtUrl] = useState<string | null>(null);
   const [artName, setArtName] = useState('');
@@ -188,6 +252,11 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [printSize, setPrintSize] = useState<PosterSize>('A4');
+  const [artFile, setArtFile] = useState<File | null>(null);
+  const [artInfo, setArtInfo] = useState<ArtInfo | null>(null);
+  const [autoOptimize, setAutoOptimize] = useState(true);
+  const [target, setTarget] = useState<Target>('A4');
+  const [optimising, setOptimising] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -213,6 +282,28 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
     };
   }, [artUrl, row, pos]);
 
+  // Re-optimise whenever the file, the target size or the auto-optimise setting changes.
+  useEffect(() => {
+    if (!artFile) return;
+    let live = true;
+    setOptimising(true);
+    optimizeArtwork(artFile, target, autoOptimize)
+      .then(({ blob, info }) => {
+        if (!live) return;
+        setArtUrl(URL.createObjectURL(blob));
+        setArtInfo(info);
+      })
+      .catch((e: Error) => {
+        if (live) setError(e.message);
+      })
+      .finally(() => {
+        if (live) setOptimising(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [artFile, target, autoOptimize]);
+
   function pickFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -222,7 +313,7 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
     }
     setError(null);
     setArtName(file.name);
-    setArtUrl(URL.createObjectURL(file));
+    setArtFile(file);
   }
 
   async function download() {
@@ -277,6 +368,44 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
           <input type="file" accept="image/png,image/jpeg" onChange={pickFile} className="text-sm" />
           {artName && <p className="text-xs text-gray-500 mt-1">{artName}</p>}
         </div>
+
+        {artFile && (
+          <div className="rounded-lg border bg-gray-50 p-3 space-y-2 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 font-semibold text-gray-700">
+                <input type="checkbox" checked={autoOptimize} onChange={(e) => setAutoOptimize(e.target.checked)} />
+                Auto-resize and optimise
+              </label>
+              <select
+                value={target}
+                onChange={(e) => setTarget(e.target.value as Target)}
+                disabled={!autoOptimize}
+                className="border border-gray-300 rounded px-2 py-1 text-sm bg-white disabled:opacity-50"
+                aria-label="Output size"
+              >
+                {(Object.keys(TARGET_LABEL) as Target[]).map((t) => (
+                  <option key={t} value={t}>
+                    {TARGET_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {optimising && <p className="text-xs text-gray-500">Optimising…</p>}
+            {artInfo && !optimising && (
+              <p className="text-xs text-gray-600">
+                {artInfo.optimised ? 'Optimised' : 'Original'}: {artInfo.outW}×{artInfo.outH} px, {artInfo.outKb} KB
+                {artInfo.optimised && artInfo.origKb !== artInfo.outKb && (
+                  <> (was {artInfo.origW}×{artInfo.origH} px, {artInfo.origKb} KB)</>
+                )}
+              </p>
+            )}
+            {artInfo && target !== 'screen' && Math.max(artInfo.origW, artInfo.origH) < TARGET_LONG_SIDE[target] && (
+              <p className="text-xs text-amber-700">
+                This image is smaller than the {target} print size, so it may look soft when printed. A larger file prints better.
+              </p>
+            )}
+          </div>
+        )}
 
         {preview ? (
           <img src={preview} alt="Poster preview" className="w-full rounded border bg-gray-50" />
