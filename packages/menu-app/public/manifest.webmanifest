@@ -1,0 +1,33 @@
+{
+  "name": "Milestones Coffee",
+  "short_name": "Milestones",
+  "description": "Digital menu and ordering for Milestones Coffee",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f3f0",
+  "theme_color": "#7c4a3a",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%237c4a3a' width='192' height='192'/><text x='50%' y='50%' font-size='100' fill='white' text-anchor='middle' dominant-baseline='middle' font-family='Arial'>☕</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%237c4a3a' width='512' height='512'/><text x='50%' y='50%' font-size='280' fill='white' text-anchor='middle' dominant-baseline='middle' font-family='Arial'>☕</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["food", "shopping"],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%23f5f3f0' width='540' height='720'/><rect fill='%237c4a3a' width='540' height='100'/><text x='270' y='50' font-size='40' fill='white' text-anchor='middle' dominant-baseline='middle'>Milestones Coffee</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ]
+}
