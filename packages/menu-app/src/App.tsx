@@ -301,6 +301,8 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [showDietary, setShowDietary] = useState<string | null>(null);
+  const [menuImage, setMenuImage] = useState<string | null>(null);
+  const [showText, setShowText] = useState(false);
 
   useEffect(() => {
     const loadMenuData = async () => {
@@ -311,6 +313,14 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
         // Load branch details
         const branchRes = await axios.get(`${API_BASE_URL}/branches/${branchId}`);
         setBranch(branchRes.data);
+
+        // Poster/menu image saved for this branch (optional)
+        try {
+          const imgRes = await axios.get(`${API_BASE_URL}/branches/${branchId}/menu-image`);
+          setMenuImage(imgRes.data?.data_url ?? null);
+        } catch {
+          setMenuImage(null);
+        }
 
         // Load categories
         const categoriesRes = await axios.get(`${API_BASE_URL}/categories`);
@@ -399,6 +409,26 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
             className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
           >
             Try Another Branch
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (menuImage && !showText) {
+    return (
+      <div className="min-h-screen bg-brand-50">
+        <div className="max-w-md mx-auto p-3">
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-xl font-bold text-gray-900">☕ {branch?.name || 'Menu'}</h1>
+            <button onClick={onBack} className="text-sm text-brand-700 font-semibold">← Branches</button>
+          </div>
+          <img src={menuImage} alt={`${branch?.name ?? 'Branch'} menu`} className="w-full rounded-lg shadow bg-white" />
+          <button
+            onClick={() => setShowText(true)}
+            className="mt-4 w-full py-3 bg-brand-600 text-white rounded-lg font-semibold hover:bg-brand-700"
+          >
+            View text menu
           </button>
         </div>
       </div>

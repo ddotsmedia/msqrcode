@@ -15,6 +15,11 @@ export class BranchesController {
     return this.branchesService.findAll();
   }
 
+  @Get(':id/menu-image')
+  async menuImage(@Param('id') id: string) {
+    return this.branchesService.getMenuImage(id);
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string): Promise<Branch> {
     return this.branchesService.findById(id);
