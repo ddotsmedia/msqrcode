@@ -1,0 +1,25 @@
+name: Create Admin User (one-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or reset admin on VPS
+        uses: appleboy/ssh-action@master
+        env:
+          NEW_ADMIN_EMAIL: ${{ secrets.NEW_ADMIN_EMAIL }}
+          NEW_ADMIN_PASSWORD: ${{ secrets.NEW_ADMIN_PASSWORD }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: NEW_ADMIN_EMAIL,NEW_ADMIN_PASSWORD
+          script: |
+            set -e
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+            docker compose -f docker-compose.prod.yml exec -T \
+              -e NEW_ADMIN_EMAIL -e NEW_ADMIN_PASSWORD \
+              api node packages/api/dist/create-admin.js
