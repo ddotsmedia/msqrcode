@@ -146,7 +146,7 @@ jobs:
       - name: Verify deployment health
         run: |
           for i in {1..30}; do
-            HTTP_CODE=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://coffeesales.ae/api/health || echo "000")
+            HTTP_CODE=$(curl -s -m 5 -o /dev/null -w "%{http_code}" https://coffeesales.ae/api/health || echo "000")
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ API Health Check: HTTP 200 - DEPLOYMENT SUCCESSFUL"
               exit 0
