@@ -55,6 +55,18 @@ export class Branch {
   @Column({ type: 'varchar', length: 20, default: 'active' })
   status: string;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  google_maps_url: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  google_review_url: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  delivery_links: Record<string, string> | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  whatsapp_number: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 

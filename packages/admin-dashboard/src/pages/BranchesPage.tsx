@@ -18,12 +18,15 @@ interface BranchForm {
   phone: string;
   timezone: string;
   status: 'active' | 'inactive';
+  google_maps_url: string;
+  google_review_url: string;
+  whatsapp_number: string;
 }
 
 const TIMEZONES = ['Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Kuwait', 'Asia/Bahrain', 'Asia/Muscat'];
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
-const EMPTY: BranchForm = { id: null, name: '', address: '', phone: '', timezone: 'Asia/Dubai', status: 'active' };
+const EMPTY: BranchForm = { id: null, name: '', address: '', phone: '', timezone: 'Asia/Dubai', status: 'active', google_maps_url: '', google_review_url: '', whatsapp_number: '' };
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
@@ -85,6 +88,9 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
       phone: b.phone ?? '',
       timezone: b.timezone || 'Asia/Dubai',
       status: b.status === 'inactive' ? 'inactive' : 'active',
+      google_maps_url: (b as any).google_maps_url ?? '',
+      google_review_url: (b as any).google_review_url ?? '',
+      whatsapp_number: (b as any).whatsapp_number ?? '',
     });
   }
 
@@ -99,6 +105,9 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
       phone: form.phone,
       timezone: form.timezone,
       status: form.status,
+      google_maps_url: form.google_maps_url || null,
+      google_review_url: form.google_review_url || null,
+      whatsapp_number: form.whatsapp_number || null,
     });
     try {
       if (form.id) {
@@ -266,6 +275,36 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
                 <option value="active">Open (shown to customers)</option>
                 <option value="inactive">Closed (hidden from customers)</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Google Maps URL</label>
+              <input
+                type="url"
+                value={form.google_maps_url}
+                onChange={(e) => setForm({ ...form, google_maps_url: e.target.value })}
+                className={inputClass}
+                placeholder="https://maps.google.com/..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Google Review URL</label>
+              <input
+                type="url"
+                value={form.google_review_url}
+                onChange={(e) => setForm({ ...form, google_review_url: e.target.value })}
+                className={inputClass}
+                placeholder="https://www.google.com/maps/place/..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">WhatsApp Number</label>
+              <input
+                type="tel"
+                value={form.whatsapp_number}
+                onChange={(e) => setForm({ ...form, whatsapp_number: e.target.value })}
+                className={inputClass}
+                placeholder="e.g., +971501234567"
+              />
             </div>
             {!form.id && <p className="text-xs text-gray-500">Opening hours default to 08:00–22:00 every day. You can change these later.</p>}
 
