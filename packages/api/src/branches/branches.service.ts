@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Branch } from '../entities/branch.entity';
+import { QrCode } from '../entities/qr-code.entity';
 
 @Injectable()
 export class BranchesService {
   constructor(
     @InjectRepository(Branch)
     private branchesRepository: Repository<Branch>,
+    @InjectRepository(QrCode)
+    private qrRepository: Repository<QrCode>,
   ) {}
 
   async findAll(): Promise<Branch[]> {
@@ -53,5 +56,18 @@ export class BranchesService {
 
   async delete(id: string): Promise<void> {
     await this.branchesRepository.delete(id);
+  }
+
+  // Public: the menu image saved on this branch's active menu QR code (null if none).
+  async getMenuImage(branchId: string): Promise<{ data_url: string | null; name: string | null }> {
+    const row = await this.qrRepository
+      .createQueryBuilder('q')
+      .addSelect('q.artwork_data')
+      .where('q.branch_id = :branchId', { branchId })
+      .andWhere("q.kind = 'branch'")
+      .andWhere('q.is_active = true')
+      .andWhere('q.artwork_data IS NOT NULL')
+      .getOne();
+    return { data_url: row?.artwork_data ?? null, name: row?.artwork_name ?? null };
   }
 }
