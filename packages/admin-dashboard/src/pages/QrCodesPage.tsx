@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api';
 
@@ -144,6 +144,173 @@ async function printPosters(rows: QrRow[], size: PosterSize): Promise<void> {
   win.document.close();
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not read this image'));
+    img.src = src;
+  });
+}
+
+interface Placement {
+  x: number; // centre of the QR, % of poster width
+  y: number; // centre of the QR, % of poster height
+  size: number; // QR width, % of poster width
+}
+
+// Draws the poster artwork with the branch QR placed on it. Returns a PNG data URL.
+async function composePoster(artUrl: string, row: QrRow, pos: Placement, maxWidth?: number): Promise<string> {
+  const art = await loadImage(artUrl);
+  const scale = maxWidth && art.naturalWidth > maxWidth ? maxWidth / art.naturalWidth : 1;
+  const w = Math.round(art.naturalWidth * scale);
+  const h = Math.round(art.naturalHeight * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas is not available in this browser');
+  ctx.drawImage(art, 0, 0, w, h);
+
+  const qrUrl = await QRCode.toDataURL(row.payload, { width: 1024, ...qrOptions(row.foreground, row.background) });
+  const qr = await loadImage(qrUrl);
+  const qrW = (w * pos.size) / 100;
+  const x = (w * pos.x) / 100 - qrW / 2;
+  const y = (h * pos.y) / 100 - qrW / 2;
+  ctx.drawImage(qr, x, y, qrW, qrW);
+  return canvas.toDataURL('image/png');
+}
+
+function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
+  const [artUrl, setArtUrl] = useState<string | null>(null);
+  const [artName, setArtName] = useState('');
+  const [pos, setPos] = useState<Placement>({ x: 80, y: 85, size: 22 });
+  const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [printSize, setPrintSize] = useState<PosterSize>('A4');
+
+  useEffect(() => {
+    return () => {
+      if (artUrl) URL.revokeObjectURL(artUrl);
+    };
+  }, [artUrl]);
+
+  useEffect(() => {
+    if (!artUrl) {
+      setPreview(null);
+      return;
+    }
+    let live = true;
+    composePoster(artUrl, row, pos, 900)
+      .then((url) => {
+        if (live) setPreview(url);
+      })
+      .catch((e: Error) => {
+        if (live) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [artUrl, row, pos]);
+
+  function pickFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) {
+      setError('Use a PNG or JPG image. For a PDF poster, export it as an image first.');
+      return;
+    }
+    setError(null);
+    setArtName(file.name);
+    setArtUrl(URL.createObjectURL(file));
+  }
+
+  async function download() {
+    if (!artUrl) return;
+    setError(null);
+    try {
+      const url = await composePoster(artUrl, row, pos);
+      triggerDownload(url, `poster-${fileBase(row)}.png`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function print() {
+    if (!artUrl) return;
+    setError(null);
+    try {
+      const url = await composePoster(artUrl, row, pos);
+      const win = window.open('', '_blank');
+      if (!win) return;
+      win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Poster</title><style>
+        @page { size: ${printSize}; margin: 0; }
+        html, body { margin: 0; padding: 0; }
+        img { display: block; width: 100%; height: 100vh; object-fit: contain; }
+      </style></head><body><img src="${url}" alt="Poster">
+      <script>window.onload = function () { window.print(); };<\/script></body></html>`);
+      win.document.close();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const slider = (label: string, key: keyof Placement, min: number, max: number) => (
+    <label className="block text-xs font-semibold text-gray-700">
+      {label}: {pos[key]}%
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={pos[key]}
+        onChange={(e) => setPos({ ...pos, [key]: Number(e.target.value) })}
+        className="w-full"
+      />
+    </label>
+  );
+
+  return (
+    <Modal title={`Poster · ${row.label}`} onClose={onClose}>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Poster artwork (PNG or JPG)</label>
+          <input type="file" accept="image/png,image/jpeg" onChange={pickFile} className="text-sm" />
+          {artName && <p className="text-xs text-gray-500 mt-1">{artName}</p>}
+        </div>
+
+        {preview ? (
+          <img src={preview} alt="Poster preview" className="w-full rounded border bg-gray-50" />
+        ) : (
+          <p className="text-sm text-gray-500 bg-gray-50 rounded p-6 text-center">Choose your branch poster to see the preview.</p>
+        )}
+
+        {artUrl && (
+          <div className="grid grid-cols-3 gap-3">
+            {slider('Left / right', 'x', 0, 100)}
+            {slider('Up / down', 'y', 0, 100)}
+            {slider('QR size', 'size', 8, 50)}
+          </div>
+        )}
+
+        {error && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{error}</p>}
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <select value={printSize} onChange={(e) => setPrintSize(e.target.value as PosterSize)} className="border border-gray-300 rounded px-2 py-2 text-sm">
+            <option value="A4">A4</option>
+            <option value="A3">A3</option>
+          </select>
+          <button type="button" disabled={!artUrl} onClick={print} className="bg-gray-900 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            Print
+          </button>
+          <button type="button" disabled={!artUrl} onClick={download} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-50">
+            Download PNG
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // Renders a QR preview as a PNG data URL for the given colours.
 function QrImage({ payload, fg, bg, alt, className }: { payload: string; fg: string; bg: string; alt: string; className?: string }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -212,6 +379,7 @@ export default function QrCodesPage({ token }: { token: string }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [posterSize, setPosterSize] = useState<PosterSize>('A4');
+  const [designFor, setDesignFor] = useState<QrRow | null>(null);
 
   const [form, setForm] = useState<QrForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -566,6 +734,9 @@ export default function QrCodesPage({ token }: { token: string }) {
               <button type="button" onClick={() => printPosters([r], posterSize)} className="border rounded py-1.5 font-semibold text-gray-700">
                 Poster
               </button>
+              <button type="button" onClick={() => setDesignFor(r)} className="border rounded py-1.5 font-semibold text-gray-700">
+                Design
+              </button>
               <button type="button" onClick={() => downloadPng(r)} className="border rounded py-1.5 font-semibold text-gray-700">
                 PNG
               </button>
@@ -576,6 +747,8 @@ export default function QrCodesPage({ token }: { token: string }) {
           </article>
         ))}
       </div>
+
+      {designFor && <PosterDesigner row={designFor} onClose={() => setDesignFor(null)} />}
 
       {form && (
         <Modal title={form.id ? 'Edit QR code' : 'New QR code'} onClose={() => setForm(null)}>
