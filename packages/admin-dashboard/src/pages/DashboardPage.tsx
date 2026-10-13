@@ -54,7 +54,7 @@ export default function DashboardPage({ token }: { token: string }) {
 
   useEffect(() => {
     setLoading(true);
-    api<AnalyticsResponse>('/admin/analytics/branches', token)
+    api<AnalyticsResponse>('/analytics/branches', token)
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
