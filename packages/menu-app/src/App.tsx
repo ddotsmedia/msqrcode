@@ -458,6 +458,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
             </button>
           </div>
 
+          <LoyaltyCard />
           <FeedbackForm branchId={branchId} />
 
           {/* Search Bar */}
@@ -646,6 +647,114 @@ function FeedbackForm({ branchId }: { branchId: string }) {
           {status === 'sending' ? 'Sending…' : 'Send'}
         </button>
       </div>
+    </div>
+  );
+}
+
+const LOYALTY_KEY = 'milestones_loyalty_token';
+
+function LoyaltyCard() {
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LOYALTY_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [card, setCard] = useState<{ name: string | null; stamps: number; target: number; redeemed_count: number } | null>(null);
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    axios
+      .get(`${API_BASE_URL}/loyalty/card/${token}`)
+      .then((r) => setCard(r.data))
+      .catch(() => {
+        try {
+          localStorage.removeItem(LOYALTY_KEY);
+        } catch {
+          /* storage unavailable */
+        }
+        setToken(null);
+      });
+  }, [token]);
+
+  async function enroll() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/loyalty/enroll`, { phone, name });
+      if (res.data.ok) {
+        try {
+          localStorage.setItem(LOYALTY_KEY, res.data.token);
+        } catch {
+          /* storage unavailable */
+        }
+        setToken(res.data.token);
+      } else {
+        setMessage(res.data.message);
+      }
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message || 'Could not create your card. Check the number.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (token && card) {
+    const dots = Array.from({ length: card.target }, (_, i) => i < card.stamps);
+    return (
+      <div className="mb-4 rounded-lg bg-white border p-3">
+        <p className="text-sm font-semibold text-gray-800 mb-2">
+          Loyalty card{card.name ? ` · ${card.name}` : ''}
+        </p>
+        <div className="grid grid-cols-5 gap-2 mb-2">
+          {dots.map((filled, i) => (
+            <div
+              key={i}
+              className={`aspect-square rounded-full flex items-center justify-center text-sm ${
+                filled ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
+              }`}
+            >
+              {filled ? '☕' : i + 1}
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-600">
+          {card.stamps}/{card.target} stamps. Show this to staff to add a stamp.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4 rounded-lg bg-white border p-3 space-y-2">
+      <p className="text-sm font-semibold text-gray-800">Join our loyalty card</p>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name (optional)"
+        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+      />
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="Phone number"
+        inputMode="tel"
+        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+      />
+      {message && <p className="text-xs text-amber-700">{message}</p>}
+      <button
+        type="button"
+        onClick={enroll}
+        disabled={busy || phone.trim().length < 7}
+        className="w-full py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+      >
+        {busy ? 'Creating…' : 'Create my card'}
+      </button>
     </div>
   );
 }
