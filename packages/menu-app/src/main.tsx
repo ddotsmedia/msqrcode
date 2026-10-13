@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import { BrowserRouter } from 'react-router-dom';
+import { SiteRoutes } from './Site';
 import ErrorBoundary from './ErrorBoundary';
 import { LangProvider } from './i18n';
 import './index.css';
@@ -14,10 +15,12 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <LangProvider>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </LangProvider>
+    <BrowserRouter>
+      <LangProvider>
+        <ErrorBoundary>
+          <SiteRoutes />
+        </ErrorBoundary>
+      </LangProvider>
+    </BrowserRouter>
   </React.StrictMode>,
 );
