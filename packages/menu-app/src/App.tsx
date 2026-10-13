@@ -244,7 +244,7 @@ function ProductDetailsModal({
             <div className="mb-4">
               <p className="text-sm font-semibold text-gray-700 mb-2">Dietary Info:</p>
               <div className="flex flex-wrap gap-2">
-                {product.dietary_tags.map((tag) => (
+                {(product.dietary_tags ?? []).map((tag) => (
                   <span key={tag} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
                     {tag}
                   </span>
@@ -261,7 +261,7 @@ function ProductDetailsModal({
           )}
 
           <div className="mb-6">
-            <p className="text-3xl font-bold text-brand-600">{product.base_price.toFixed(2)} AED</p>
+            <p className="text-3xl font-bold text-brand-600">{Number(product.base_price).toFixed(2)} AED</p>
           </div>
 
           <div className="space-y-3">
@@ -523,7 +523,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-lg font-bold text-brand-600">
-                        {product.base_price.toFixed(2)} AED
+                        {Number(product.base_price).toFixed(2)} AED
                       </span>
                       <span
                         className={`text-xs font-semibold px-2 py-1 rounded ${
