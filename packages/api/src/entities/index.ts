@@ -7,3 +7,4 @@ export { ProductAvailability } from './product-availability.entity';
 export { BranchPricingOverride } from './branch-pricing-override.entity';
 export { User } from './user.entity';
 export { AnalyticsEvent } from './analytics-event.entity';
+export { QrCode } from './qr-code.entity';
