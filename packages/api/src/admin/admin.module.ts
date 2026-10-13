@@ -12,10 +12,12 @@ import { QrCodesController } from './qr-codes.controller';
 import { QrCodesService } from './qr-codes.service';
 import { AdminBranchesController } from './admin-branches.controller';
 import { AdminBranchesService } from './admin-branches.service';
+import { MenuImportController } from './menu-import.controller';
+import { MenuImportService } from './menu-import.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Product, Category, ProductVariant, OptionGroup, Branch, QrCode])],
-  controllers: [AdminController, QrCodesController, AdminBranchesController],
-  providers: [AdminService, QrCodesService, AdminBranchesService],
+  controllers: [AdminController, QrCodesController, AdminBranchesController, MenuImportController],
+  providers: [AdminService, QrCodesService, AdminBranchesService, MenuImportService],
 })
 export class AdminModule {}

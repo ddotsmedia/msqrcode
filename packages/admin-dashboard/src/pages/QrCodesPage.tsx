@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import QRCode from 'qrcode';
+import JSZip from 'jszip';
 import { api } from '../api';
 
 interface Branch {
@@ -824,6 +825,67 @@ export default function QrCodesPage({ token }: { token: string }) {
 
   const previewPayload = form ? payloadFor(form.branch_id, form.kind, form.table_number) : '';
 
+  async function exportAllPostersAsZip() {
+    setError(null);
+    try {
+      const zip = new JSZip();
+
+      for (const row of visible) {
+        // Generate QR code canvas
+        const canvas = document.createElement('canvas');
+        await QRCode.toCanvas(canvas, row.payload, {
+          width: 300,
+          margin: 2,
+          color: { dark: row.foreground, light: row.background },
+          errorCorrectionLevel: 'H',
+        });
+        const qrDataUrl = canvas.toDataURL('image/png');
+
+        // Create a simple poster image with QR and label
+        const posterCanvas = document.createElement('canvas');
+        posterCanvas.width = 1200;
+        posterCanvas.height = 1600;
+        const ctx = posterCanvas.getContext('2d');
+        if (!ctx) continue;
+
+        // Draw background
+        ctx.fillStyle = row.background;
+        ctx.fillRect(0, 0, posterCanvas.width, posterCanvas.height);
+
+        // Draw QR code in center
+        const qrImg = new Image();
+        qrImg.src = qrDataUrl;
+        await new Promise((resolve) => {
+          qrImg.onload = resolve;
+        });
+        const qrSize = 600;
+        ctx.drawImage(qrImg, (posterCanvas.width - qrSize) / 2, 200, qrSize, qrSize);
+
+        // Draw label and caption
+        ctx.fillStyle = row.foreground;
+        ctx.font = 'bold 60px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(row.label, posterCanvas.width / 2, 1000);
+
+        ctx.font = '40px sans-serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText(row.caption, posterCanvas.width / 2, 1100);
+
+        // Add to ZIP
+        const posterDataUrl = posterCanvas.toDataURL('image/png');
+        const base64 = posterDataUrl.split(',')[1];
+        zip.file(`poster-${fileBase(row)}.png`, base64, { base64: true });
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, 'posters.zip');
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -840,6 +902,13 @@ export default function QrCodesPage({ token }: { token: string }) {
             className="bg-brand-600 text-white rounded px-3 py-2 text-sm font-semibold"
           >
             New QR code
+          </button>
+          <button
+            type="button"
+            onClick={exportAllPostersAsZip}
+            className="bg-gray-600 text-white rounded px-3 py-2 text-sm font-semibold hover:bg-gray-700"
+          >
+            Export all posters (ZIP)
           </button>
         </div>
       </div>

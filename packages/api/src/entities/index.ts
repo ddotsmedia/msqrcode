@@ -8,3 +8,7 @@ export { BranchPricingOverride } from './branch-pricing-override.entity';
 export { User } from './user.entity';
 export { AnalyticsEvent } from './analytics-event.entity';
 export { QrCode } from './qr-code.entity';
+export { BranchProductPrice } from './branch-product-price.entity';
+export { MenuSchedule } from './menu-schedule.entity';
+export { Order } from './order.entity';
+export { OrderItem } from './order-item.entity';
