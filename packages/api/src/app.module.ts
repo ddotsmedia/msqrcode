@@ -11,6 +11,7 @@ import { AvailabilityModule } from './availability/availability.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
+import { FeedbackModule } from './feedback/feedback.module';
 import { OrdersModule } from './orders/orders.module';
 
 @Module({
@@ -40,6 +41,7 @@ import { OrdersModule } from './orders/orders.module';
     AnalyticsModule,
     AuthModule,
     AdminModule,
+    FeedbackModule,
     OrdersModule,
   ],
   controllers: [],

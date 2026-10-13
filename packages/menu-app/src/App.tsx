@@ -458,6 +458,8 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
             </button>
           </div>
 
+          <FeedbackForm branchId={branchId} />
+
           {/* Search Bar */}
           <div className="mb-4">
             <input
@@ -585,6 +587,65 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
           availability={availability[selectedProduct.id] !== false}
         />
       )}
+    </div>
+  );
+}
+
+function FeedbackForm({ branchId }: { branchId: string }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+
+  async function submit() {
+    if (rating < 1) return;
+    setStatus('sending');
+    try {
+      await axios.post(`${API_BASE_URL}/branches/${branchId}/feedback`, { rating, comment });
+      setStatus('done');
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  if (status === 'done') {
+    return <p className="text-sm text-green-700 mb-4">Thank you for your feedback!</p>;
+  }
+
+  return (
+    <div className="mb-4 rounded-lg bg-white border p-3">
+      <p className="text-sm font-semibold text-gray-800 mb-2">How was your visit?</p>
+      <div className="flex gap-1 mb-2">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n} star${n > 1 ? 's' : ''}`}
+            onClick={() => setRating(n)}
+            className={`text-2xl ${n <= rating ? 'text-amber-500' : 'text-gray-300'}`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={comment}
+        maxLength={500}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Tell us more (optional)"
+        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+        rows={2}
+      />
+      <div className="flex items-center justify-between mt-2">
+        {status === 'error' ? <span className="text-xs text-red-600">Could not send. Try again.</span> : <span />}
+        <button
+          type="button"
+          onClick={submit}
+          disabled={rating < 1 || status === 'sending'}
+          className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+        >
+          {status === 'sending' ? 'Sending…' : 'Send'}
+        </button>
+      </div>
     </div>
   );
 }
