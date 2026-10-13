@@ -132,6 +132,43 @@ jobs:
                 certbot --nginx -n --agree-tos -m "${{ secrets.CERTBOT_EMAIL }}" -d coffeesales.ae -d www.coffeesales.ae --redirect || echo "WARNING: certificate not issued (check DNS for www.coffeesales.ae); site stays on HTTP"
               fi
             fi
+            ADMIN_CERT=/etc/letsencrypt/live/admin.coffeesales.ae/fullchain.pem
+            if [ ! -f "$ADMIN_CERT" ]; then
+              cat > /etc/nginx/sites-available/admin.coffeesales.ae <<'NGINX'
+            server {
+                listen 80;
+                server_name admin.coffeesales.ae;
+                client_max_body_size 10m;
+
+                location /api/ {
+                    proxy_pass http://127.0.0.1:3016/;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+
+                location / {
+                    proxy_pass http://127.0.0.1:3018;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                }
+            }
+            NGINX
+              ln -sf /etc/nginx/sites-available/admin.coffeesales.ae /etc/nginx/sites-enabled/admin.coffeesales.ae
+              if ! nginx -t; then
+                echo "nginx config invalid: removing admin.coffeesales.ae config"
+                rm -f /etc/nginx/sites-enabled/admin.coffeesales.ae /etc/nginx/sites-available/admin.coffeesales.ae
+                nginx -t
+                exit 1
+              fi
+              systemctl reload nginx
+              if [ -n "${{ secrets.CERTBOT_EMAIL }}" ]; then
+                certbot --nginx -n --agree-tos -m "${{ secrets.CERTBOT_EMAIL }}" -d admin.coffeesales.ae --redirect || echo "WARNING: admin certificate not issued; admin stays on HTTP"
+              fi
+            fi
             sleep 15
             docker compose -f docker-compose.prod.yml ps -a
             echo "--- seed (skips existing rows) ---"

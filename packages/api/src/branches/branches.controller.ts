@@ -1,4 +1,6 @@
 import { UseGuards } from '@nestjs/common';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
 import { BranchesService } from './branches.service';
@@ -23,13 +25,15 @@ export class BranchesController {
     return this.branchesService.findByCode(code);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @Post()
   async create(@Body() branchData: Partial<Branch>): Promise<Branch> {
     return this.branchesService.create(branchData);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -38,7 +42,8 @@ export class BranchesController {
     return this.branchesService.update(id, branchData);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @Delete(':id')
   async delete(@Param('id') id: string): Promise<void> {
     return this.branchesService.delete(id);

@@ -45,6 +45,7 @@ export class AuthService implements OnApplicationBootstrap {
       sub: user.id,
       email: user.email,
       role: user.role,
+      assigned_branch_id: user.assigned_branch_id ?? null,
     });
     return { access_token };
   }
