@@ -314,18 +314,18 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
 
         // Load categories
         const categoriesRes = await axios.get(`${API_BASE_URL}/categories`);
-        setCategories(categoriesRes.data);
+        setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : []);
 
         // Load products
         const productsRes = await axios.get(`${API_BASE_URL}/products`);
-        setProducts(productsRes.data);
+        setProducts(Array.isArray(productsRes.data) ? productsRes.data : []);
 
         // Load availability for this branch
         const availRes = await axios.get(
           `${API_BASE_URL}/branches/${branchId}/products/availability`
         );
         const availMap: Record<string, boolean> = {};
-        availRes.data.forEach((item: ProductAvailability) => {
+        (Array.isArray(availRes.data) ? availRes.data : []).forEach((item: ProductAvailability) => {
           availMap[item.product_id] = item.is_available;
         });
         setAvailability(availMap);
