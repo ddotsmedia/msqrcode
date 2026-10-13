@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { useLang } from '../i18n';
 
 interface Branch {
   phone?: string;
@@ -9,6 +9,7 @@ interface Branch {
 }
 
 export function ContactButtons({ branch }: { branch: Branch | null }) {
+  const { t } = useLang();
   if (!branch) return null;
 
   const buttons = [];
