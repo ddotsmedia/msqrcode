@@ -134,6 +134,8 @@ jobs:
             fi
             sleep 15
             docker compose -f docker-compose.prod.yml ps -a
+            echo "--- seed (skips existing rows) ---"
+            docker compose -f docker-compose.prod.yml exec -T api node packages/api/dist/seed.js || echo "seed step failed"
             echo "--- api logs (last 60) ---"
             docker compose -f docker-compose.prod.yml logs --tail=60 api || true
             echo "--- local health ---"
