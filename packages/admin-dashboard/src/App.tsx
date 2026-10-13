@@ -1,14 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { api, readToken, saveToken, type Me } from './api';
+import CategoriesPage from './pages/CategoriesPage';
+import ProductsPage from './pages/ProductsPage';
 
-const TOKEN_KEY = 'msq_admin_token';
-const API = '/api';
-
-interface Me {
-  id: string;
-  email: string;
-  role: string;
-  assigned_branch_id: string | null;
-}
+type Tab = 'availability' | 'products' | 'categories';
 
 interface Branch {
   id: string;
@@ -28,40 +23,6 @@ interface Availability {
   product_id: string;
   is_available: boolean;
   last_updated_at: string;
-}
-
-function readToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function saveToken(token: string | null): void {
-  try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // storage unavailable: the session lasts until reload
-  }
-}
-
-async function api<T>(path: string, token: string | null, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${API}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
-  if (!res.ok) {
-    let message = `Request failed (${res.status})`;
-    try {
-      const body = await res.json();
-      if (body && typeof body.message === 'string') message = body.message;
-    } catch {
-      // keep default message
-    }
-    throw new Error(message);
-  }
-  return (await res.json()) as T;
 }
 
 function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
@@ -130,6 +91,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<Tab>('availability');
 
   const canEdit = me.role === 'admin' || me.role === 'branch_manager';
 
@@ -192,6 +154,30 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
         </div>
       </header>
 
+      <nav className="bg-white border-b">
+        <div className="max-w-3xl mx-auto flex gap-1 px-4 overflow-x-auto">
+          {(['availability', ...(me.role === 'admin' ? ['products', 'categories'] : [])] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`py-3 px-3 text-sm font-semibold border-b-2 capitalize ${
+                tab === t ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {tab === 'products' && me.role === 'admin' && (
+        <main className="max-w-3xl mx-auto p-4"><ProductsPage token={token} /></main>
+      )}
+      {tab === 'categories' && me.role === 'admin' && (
+        <main className="max-w-3xl mx-auto p-4"><CategoriesPage token={token} /></main>
+      )}
+
+      {tab === 'availability' && (
       <main className="max-w-3xl mx-auto p-4 space-y-4">
         <section className="bg-white rounded-lg shadow-sm p-4">
           <label className="block text-sm font-semibold text-gray-700 mb-2" htmlFor="branch">
@@ -244,6 +230,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
           })}
         </section>
       </main>
+      )}
     </div>
   );
 }
