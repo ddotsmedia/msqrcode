@@ -7,6 +7,7 @@ import { OrderItem } from '../entities/order-item.entity';
 import { Product } from '../entities/product.entity';
 import { BranchProductPrice } from '../entities/branch-product-price.entity';
 import { IPaymentProvider } from '../payments/payment-provider.interface';
+import { OrdersStreamService } from './orders-stream.service';
 
 @Injectable()
 export class OrdersService {
@@ -16,6 +17,7 @@ export class OrdersService {
     @InjectRepository(Product) private products: Repository<Product>,
     @InjectRepository(BranchProductPrice) private prices: Repository<BranchProductPrice>,
     @Inject('PaymentProvider') private paymentProvider: IPaymentProvider,
+    private stream: OrdersStreamService,
   ) {}
 
   async create(branchId: string, body: Record<string, unknown>): Promise<any> {
@@ -74,6 +76,17 @@ export class OrdersService {
     orderItems.forEach((item) => (item.order_id = savedOrder.id));
     await this.items.save(orderItems);
 
+    // Emit stream update
+    this.stream.emitOrderUpdate({
+      id: savedOrder.id,
+      status: savedOrder.status,
+      customer_name: savedOrder.customer_name,
+      order_no: savedOrder.order_no,
+      branch_id: branchId,
+      type: savedOrder.type,
+      table_number: savedOrder.table_number || undefined,
+    });
+
     // Create checkout
     const checkout = await this.paymentProvider.createCheckout({
       id: savedOrder.id,
@@ -107,7 +120,20 @@ export class OrdersService {
     const order = await this.orders.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
     order.status = status as any;
-    return this.orders.save(order);
+    const saved = await this.orders.save(order);
+
+    // Emit stream update
+    this.stream.emitOrderUpdate({
+      id: saved.id,
+      status: saved.status,
+      customer_name: saved.customer_name,
+      order_no: saved.order_no,
+      branch_id: saved.branch_id,
+      type: saved.type,
+      table_number: saved.table_number || undefined,
+    });
+
+    return saved;
   }
 
   async listByBranch(branchId: string, limit = 50): Promise<any[]> {

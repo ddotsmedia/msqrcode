@@ -6,11 +6,13 @@ import { Product } from '../entities/product.entity';
 import { BranchProductPrice } from '../entities/branch-product-price.entity';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
+import { OrdersStreamService } from './orders-stream.service';
 import { MockPaymentProvider } from '../payments/mock-payment.provider';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Order, OrderItem, Product, BranchProductPrice])],
-  providers: [OrdersService, { provide: 'PaymentProvider', useClass: MockPaymentProvider }],
+  providers: [OrdersService, OrdersStreamService, { provide: 'PaymentProvider', useClass: MockPaymentProvider }],
   controllers: [OrdersController],
+  exports: [OrdersStreamService],
 })
 export class OrdersModule {}
