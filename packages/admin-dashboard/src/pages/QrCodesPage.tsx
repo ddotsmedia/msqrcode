@@ -503,7 +503,7 @@ export default function QrCodesPage({ token }: { token: string }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const [branchFilter, setBranchFilter] = useState('');
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [kindFilter] = useState<KindFilter>('all');
   const [showPaused, setShowPaused] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -569,7 +569,12 @@ export default function QrCodesPage({ token }: { token: string }) {
     setFormError(null);
     setForm({
       id: null,
-      branch_id: branchId || branchFilter || branches[0]?.id || '',
+      branch_id:
+        branchId ||
+        branches.find((b) => !rows.some((r) => r.branch_id === b.id && r.kind === 'branch'))?.id ||
+        branchFilter ||
+        branches[0]?.id ||
+        '',
       kind,
       table_number: '',
       label: '',
@@ -681,17 +686,6 @@ export default function QrCodesPage({ token }: { token: string }) {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => {
-              setTableError(null);
-              setTableRange({ branch_id: branchFilter || branches[0]?.id || '', from: '1', to: '10' });
-              setTablesOpen(true);
-            }}
-            className="border border-gray-300 bg-white rounded px-3 py-2 text-sm font-semibold text-gray-700"
-          >
-            Generate table codes
-          </button>
-          <button
-            type="button"
             onClick={() => openNew('branch')}
             className="bg-brand-600 text-white rounded px-3 py-2 text-sm font-semibold"
           >
@@ -751,18 +745,6 @@ export default function QrCodesPage({ token }: { token: string }) {
             </option>
           ))}
         </select>
-        <div className="inline-flex rounded border border-gray-300 overflow-hidden text-sm">
-          {(['all', 'branch', 'table'] as KindFilter[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKindFilter(k)}
-              className={`px-3 py-2 capitalize ${kindFilter === k ? 'bg-brand-600 text-white' : 'bg-white text-gray-700'}`}
-            >
-              {k === 'all' ? 'All' : k === 'branch' ? 'Branch' : 'Tables'}
-            </button>
-          ))}
-        </div>
         <label className="text-sm text-gray-600 flex items-center gap-1">
           <input type="checkbox" checked={showPaused} onChange={(e) => setShowPaused(e.target.checked)} />
           Show paused
@@ -894,9 +876,7 @@ export default function QrCodesPage({ token }: { token: string }) {
                     required
                     value={form.branch_id}
                     onChange={(e) => {
-                      const id = e.target.value;
-                      const hasMenu = rows.some((r) => r.branch_id === id && r.kind === 'branch');
-                      setForm({ ...form, branch_id: id, kind: hasMenu ? 'table' : form.kind });
+                      setForm({ ...form, branch_id: e.target.value, kind: 'branch' });
                     }}
                     className={inputClass}
                   >
@@ -910,47 +890,10 @@ export default function QrCodesPage({ token }: { token: string }) {
                     ))}
                   </select>
                 </div>
-                {(() => {
-                  const hasMenu = rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch');
-                  return (
-                    <>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(['branch', 'table'] as const).map((k) => {
-                          const blocked = k === 'branch' && hasMenu;
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              disabled={blocked}
-                              onClick={() => setForm({ ...form, kind: k })}
-                              className={`rounded border py-2 text-sm font-semibold ${
-                                form.kind === k ? 'border-brand-600 text-brand-700 bg-brand-50' : 'border-gray-300 text-gray-600'
-                              } ${blocked ? 'opacity-40 cursor-not-allowed' : ''}`}
-                            >
-                              {k === 'branch' ? 'Branch menu' : 'Table'}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {hasMenu && (
-                        <p className="text-xs text-gray-500">
-                          This branch already has its branch menu code. Choose Table to add a table code.
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
-                {form.kind === 'table' && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Table number</label>
-                    <input
-                      required
-                      value={form.table_number}
-                      onChange={(e) => setForm({ ...form, table_number: e.target.value })}
-                      className={inputClass}
-                      placeholder="e.g. 12"
-                    />
-                  </div>
+                {rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch') && (
+                  <p className="bg-amber-50 text-amber-900 rounded p-3 text-sm">
+                    This branch already has its menu QR code. Pick another branch, or use Design poster on its card.
+                  </p>
                 )}
               </>
             )}
@@ -1020,7 +963,7 @@ export default function QrCodesPage({ token }: { token: string }) {
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || (!form.id && rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch'))}
                 className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-60"
               >
                 {saving ? 'Saving…' : 'Save'}
