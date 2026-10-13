@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useLang } from './i18n';
 import axios from 'axios';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
@@ -290,6 +291,7 @@ function ProductDetailsModal({
 }
 
 function MenuPage({ branchId, table, onBack }: { branchId: string; table: string | null; onBack: () => void }) {
+  const { t, lang, setLang } = useLang();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -393,7 +395,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
       <div className="min-h-screen bg-brand-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin text-4xl mb-4">⚙️</div>
-          <p className="text-brand-600">Loading menu...</p>
+          <p className="text-brand-600">{t('loadingMenu')}</p>
         </div>
       </div>
     );
@@ -450,12 +452,21 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
                 {branch?.address}
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+                className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold"
+              >
+                {lang === 'en' ? 'العربية' : 'English'}
+              </button>
             <button
               onClick={onBack}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
             >
-              ← Change Branch
+              {t('changeBranch')}
             </button>
+            </div>
           </div>
 
           <LoyaltyCard />
@@ -465,7 +476,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
           <div className="mb-4">
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder={t('searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
@@ -480,7 +491,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
                 checked={showOnlyAvailable}
                 onChange={(e) => setShowOnlyAvailable(e.target.checked)}
               />
-              <span className="text-sm font-medium text-gray-700">Available Only</span>
+              <span className="text-sm font-medium text-gray-700">{t('availableOnly')}</span>
             </label>
 
             {['Vegan', 'Gluten-Free', 'Dairy-Free'].map((dietary) => (
@@ -575,7 +586,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">No products found matching your filters.</p>
+            <p className="text-gray-600 text-lg">{t('noProducts')}</p>
           </div>
         )}
       </div>
@@ -593,6 +604,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
 }
 
 function FeedbackForm({ branchId }: { branchId: string }) {
+  const { t } = useLang();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
@@ -609,12 +621,12 @@ function FeedbackForm({ branchId }: { branchId: string }) {
   }
 
   if (status === 'done') {
-    return <p className="text-sm text-green-700 mb-4">Thank you for your feedback!</p>;
+    return <p className="text-sm text-green-700 mb-4">{t('feedbackThanks')}</p>;
   }
 
   return (
     <div className="mb-4 rounded-lg bg-white border p-3">
-      <p className="text-sm font-semibold text-gray-800 mb-2">How was your visit?</p>
+      <p className="text-sm font-semibold text-gray-800 mb-2">{t('feedbackQuestion')}</p>
       <div className="flex gap-1 mb-2">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -632,19 +644,19 @@ function FeedbackForm({ branchId }: { branchId: string }) {
         value={comment}
         maxLength={500}
         onChange={(e) => setComment(e.target.value)}
-        placeholder="Tell us more (optional)"
+        placeholder={t('feedbackPlaceholder')}
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
         rows={2}
       />
       <div className="flex items-center justify-between mt-2">
-        {status === 'error' ? <span className="text-xs text-red-600">Could not send. Try again.</span> : <span />}
+        {status === 'error' ? <span className="text-xs text-red-600">{t('feedbackError')}</span> : <span />}
         <button
           type="button"
           onClick={submit}
           disabled={rating < 1 || status === 'sending'}
           className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
         >
-          {status === 'sending' ? 'Sending…' : 'Send'}
+          {status === 'sending' ? t('sending') : t('send')}
         </button>
       </div>
     </div>
@@ -654,6 +666,7 @@ function FeedbackForm({ branchId }: { branchId: string }) {
 const LOYALTY_KEY = 'milestones_loyalty_token';
 
 function LoyaltyCard() {
+  const { t } = useLang();
   const [token, setToken] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LOYALTY_KEY);
@@ -709,7 +722,7 @@ function LoyaltyCard() {
     return (
       <div className="mb-4 rounded-lg bg-white border p-3">
         <p className="text-sm font-semibold text-gray-800 mb-2">
-          Loyalty card{card.name ? ` · ${card.name}` : ''}
+          {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
         <div className="grid grid-cols-5 gap-2 mb-2">
           {dots.map((filled, i) => (
@@ -724,7 +737,7 @@ function LoyaltyCard() {
           ))}
         </div>
         <p className="text-xs text-gray-600">
-          {card.stamps}/{card.target} stamps. Show this to staff to add a stamp.
+          {card.stamps}/{card.target} {t('loyaltyStamps')}
         </p>
       </div>
     );
@@ -732,17 +745,17 @@ function LoyaltyCard() {
 
   return (
     <div className="mb-4 rounded-lg bg-white border p-3 space-y-2">
-      <p className="text-sm font-semibold text-gray-800">Join our loyalty card</p>
+      <p className="text-sm font-semibold text-gray-800">{t('loyaltyTitle')}</p>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Name (optional)"
+        placeholder={t('loyaltyName')}
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
       />
       <input
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
-        placeholder="Phone number"
+        placeholder={t('loyaltyPhone')}
         inputMode="tel"
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
       />
@@ -753,7 +766,7 @@ function LoyaltyCard() {
         disabled={busy || phone.trim().length < 7}
         className="w-full py-2 bg-brand-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
       >
-        {busy ? 'Creating…' : 'Create my card'}
+        {busy ? t('loyaltyCreating') : t('loyaltyCreate')}
       </button>
     </div>
   );
