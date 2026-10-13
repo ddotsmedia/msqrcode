@@ -51,7 +51,7 @@ export default function KitchenPage({ token, branchId }: { token: string; branch
 
   async function updateStatus(orderId: string, newStatus: string) {
     try {
-      await api(`/admin/orders/${orderId}/status`, token, {
+      await api(`/orders/${orderId}/status`, token, {
         method: 'PUT',
         body: JSON.stringify({ status: newStatus }),
       });
