@@ -42,6 +42,22 @@ export class QrCode {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  artwork_name: string | null;
+
+  // Base64 data URL of the saved menu poster. Excluded from normal queries so lists stay small.
+  @Column({ type: 'text', nullable: true, select: false })
+  artwork_data: string | null;
+
+  @Column({ type: 'float', nullable: true })
+  artwork_x: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  artwork_y: number | null;
+
+  @Column({ type: 'float', nullable: true })
+  artwork_size: number | null;
+
   @CreateDateColumn()
   created_at: Date;
 

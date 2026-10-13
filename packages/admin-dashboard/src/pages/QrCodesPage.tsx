@@ -18,6 +18,7 @@ export interface QrRow {
   foreground: string;
   background: string;
   is_active: boolean;
+  has_artwork: boolean;
   payload: string;
   branch: { id: string; name: string; code: string };
 }
@@ -251,25 +252,105 @@ async function optimizeArtwork(file: File, target: Target, optimize: boolean): P
   }
 }
 
-function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
-  const [artUrl, setArtUrl] = useState<string | null>(null);
+async function toDataUrl(url: string): Promise<string> {
+  if (url.startsWith('data:')) return url;
+  const blob = await (await fetch(url)).blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read the image'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+interface SavedArtwork {
+  name: string | null;
+  data_url: string | null;
+  x: number | null;
+  y: number | null;
+  size: number | null;
+}
+
+function PosterDesigner({
+  row,
+  token,
+  onClose,
+  onChanged,
+}: {
+  row: QrRow;
+  token: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [artUrl, setArtUrl] = useState<string | null>(null); // artwork currently shown
   const [artName, setArtName] = useState('');
-  const [pos, setPos] = useState<Placement>({ x: 80, y: 85, size: 22 });
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [printSize, setPrintSize] = useState<PosterSize>('A4');
-  const [artFile, setArtFile] = useState<File | null>(null);
+  const [artFile, setArtFile] = useState<File | null>(null); // a newly uploaded file, not yet optimised
   const [artInfo, setArtInfo] = useState<ArtInfo | null>(null);
   const [autoOptimize, setAutoOptimize] = useState(true);
   const [target, setTarget] = useState<Target>('original');
   const [optimising, setOptimising] = useState(false);
+  const [loadingSaved, setLoadingSaved] = useState(row.has_artwork);
+  const [dirty, setDirty] = useState(false); // changes not saved to the branch yet
+  const [pos, setPos] = useState<Placement>({ x: 80, y: 85, size: 22 });
+  const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [printSize, setPrintSize] = useState<PosterSize>('A4');
+  const [saving, setSaving] = useState(false);
 
+  // Load the menu image already saved for this branch code.
+  useEffect(() => {
+    if (!row.has_artwork) return;
+    let live = true;
+    api<SavedArtwork>(`/admin/qr-codes/${row.id}/artwork`, token)
+      .then((a) => {
+        if (!live || !a.data_url) return;
+        setArtUrl(a.data_url);
+        setArtName(a.name ?? 'menu-image');
+        if (a.x != null && a.y != null && a.size != null) setPos({ x: a.x, y: a.y, size: a.size });
+      })
+      .catch((e: Error) => {
+        if (live) setError(e.message);
+      })
+      .finally(() => {
+        if (live) setLoadingSaved(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [row.id, row.has_artwork, token]);
+
+  // Free temporary object URLs when they are replaced.
   useEffect(() => {
     return () => {
-      if (artUrl) URL.revokeObjectURL(artUrl);
+      if (artUrl?.startsWith('blob:')) URL.revokeObjectURL(artUrl);
     };
   }, [artUrl]);
 
+  // Optimise a newly uploaded file whenever its settings change.
+  useEffect(() => {
+    if (!artFile) return;
+    let live = true;
+    setOptimising(true);
+    optimizeArtwork(artFile, target, autoOptimize)
+      .then(({ blob, info }) => {
+        if (!live) return;
+        setArtUrl(URL.createObjectURL(blob));
+        setArtInfo(info);
+        setDirty(true);
+      })
+      .catch((e: Error) => {
+        if (live) setError(e.message);
+      })
+      .finally(() => {
+        if (live) setOptimising(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [artFile, target, autoOptimize]);
+
+  // Live preview: artwork with the QR placed on it.
   useEffect(() => {
     if (!artUrl) {
       setPreview(null);
@@ -288,28 +369,6 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
     };
   }, [artUrl, row, pos]);
 
-  // Re-optimise whenever the file, the target size or the auto-optimise setting changes.
-  useEffect(() => {
-    if (!artFile) return;
-    let live = true;
-    setOptimising(true);
-    optimizeArtwork(artFile, target, autoOptimize)
-      .then(({ blob, info }) => {
-        if (!live) return;
-        setArtUrl(URL.createObjectURL(blob));
-        setArtInfo(info);
-      })
-      .catch((e: Error) => {
-        if (live) setError(e.message);
-      })
-      .finally(() => {
-        if (live) setOptimising(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, [artFile, target, autoOptimize]);
-
   function pickFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -318,22 +377,66 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
       return;
     }
     setError(null);
+    setNotice(null);
     setArtName(file.name);
     setArtFile(file);
   }
 
-  async function download() {
+  function moveQr(key: keyof Placement, value: number) {
+    setPos((p) => ({ ...p, [key]: value }));
+    setDirty(true);
+  }
+
+  async function saveToBranch() {
+    if (!artUrl) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const dataUrl = await toDataUrl(artUrl);
+      await api(`/admin/qr-codes/${row.id}/artwork`, token, {
+        method: 'PUT',
+        body: JSON.stringify({ data_url: dataUrl, name: artName || 'menu-image', x: pos.x, y: pos.y, size: pos.size }),
+      });
+      setDirty(false);
+      setNotice('Saved. This menu image is now stored for this branch code.');
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeSaved() {
+    if (!window.confirm('Remove the saved menu image for this code?')) return;
+    setError(null);
+    try {
+      await api(`/admin/qr-codes/${row.id}/artwork`, token, { method: 'DELETE' });
+      setArtUrl(null);
+      setArtFile(null);
+      setArtInfo(null);
+      setArtName('');
+      setDirty(false);
+      setNotice('Saved menu image removed.');
+      onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function downloadPoster() {
     if (!artUrl) return;
     setError(null);
     try {
       const url = await composePoster(artUrl, row, pos);
       triggerDownload(url, `poster-${fileBase(row)}.png`);
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
-  async function print() {
+  async function printPoster() {
     if (!artUrl) return;
     setError(null);
     try {
@@ -347,8 +450,8 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
       </style></head><body><img src="${url}" alt="Poster">
       <script>window.onload = function () { window.print(); };<\/script></body></html>`);
       win.document.close();
-    } catch (e) {
-      setError((e as Error).message);
+    } catch (err) {
+      setError((err as Error).message);
     }
   }
 
@@ -360,7 +463,7 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
         min={min}
         max={max}
         value={pos[key]}
-        onChange={(e) => setPos({ ...pos, [key]: Number(e.target.value) })}
+        onChange={(e) => moveQr(key, Number(e.target.value))}
         className="w-full"
       />
     </label>
@@ -369,10 +472,59 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
   return (
     <Modal title={`Poster · ${row.label}`} onClose={onClose}>
       <div className="space-y-4">
+        {/* Actions first, so they are always visible */}
+        <div className="rounded-lg border bg-gray-50 p-3 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!artUrl || !dirty || saving || optimising}
+              onClick={saveToBranch}
+              className="bg-green-600 text-white rounded px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save to this branch'}
+            </button>
+            <button
+              type="button"
+              disabled={!artUrl || optimising}
+              onClick={downloadPoster}
+              className="bg-brand-600 text-white rounded px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Download poster (PNG)
+            </button>
+            <select
+              value={printSize}
+              onChange={(e) => setPrintSize(e.target.value as PosterSize)}
+              className="border border-gray-300 rounded px-2 py-2 text-sm bg-white"
+              aria-label="Print size"
+            >
+              <option value="A4">A4</option>
+              <option value="A3">A3</option>
+            </select>
+            <button
+              type="button"
+              disabled={!artUrl || optimising}
+              onClick={printPoster}
+              className="bg-gray-900 text-white rounded px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            >
+              Print poster
+            </button>
+          </div>
+          {row.has_artwork && !artFile && !loadingSaved && (
+            <button type="button" onClick={removeSaved} className="text-xs text-red-600 font-semibold">
+              Remove saved menu image
+            </button>
+          )}
+          {dirty && <p className="text-xs text-amber-700">Changes not saved yet. Click "Save to this branch" to keep them.</p>}
+          {notice && <p className="text-xs text-green-700">{notice}</p>}
+        </div>
+
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Poster artwork (PNG or JPG)</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            {artUrl ? 'Replace menu image (PNG or JPG)' : 'Upload menu image (PNG or JPG)'}
+          </label>
           <input type="file" accept="image/png,image/jpeg" onChange={pickFile} className="text-sm" />
           {artName && <p className="text-xs text-gray-500 mt-1">{artName}</p>}
+          {loadingSaved && <p className="text-xs text-gray-500 mt-1">Loading saved menu image…</p>}
         </div>
 
         {artFile && (
@@ -407,16 +559,23 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
             )}
             {artInfo && (target === 'A4' || target === 'A3') && Math.max(artInfo.origW, artInfo.origH) < TARGET_LONG_SIDE[target] && (
               <p className="text-xs text-amber-700">
-                This image is smaller than the {target} print size, so it may look soft when printed. A larger file prints better.
+                This image is smaller than the {target} print size, so it may look soft when printed.
               </p>
             )}
           </div>
         )}
 
+        {error && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{error}</p>}
+
         {preview ? (
-          <img src={preview} alt="Poster preview" className="w-full rounded border bg-gray-50" />
+          <>
+            <img src={preview} alt="Poster preview" className="w-full rounded border bg-gray-50" />
+            <p className="text-xs text-gray-500 text-center">This is what gets downloaded and printed.</p>
+          </>
         ) : (
-          <p className="text-sm text-gray-500 bg-gray-50 rounded p-6 text-center">Choose your branch poster to see the preview.</p>
+          <p className="text-sm text-gray-500 bg-gray-50 rounded p-6 text-center">
+            {loadingSaved ? 'Loading…' : 'Upload a menu image to see the poster preview.'}
+          </p>
         )}
 
         {artUrl && (
@@ -426,21 +585,6 @@ function PosterDesigner({ row, onClose }: { row: QrRow; onClose: () => void }) {
             {slider('QR size', 'size', 8, 50)}
           </div>
         )}
-
-        {error && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{error}</p>}
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <select value={printSize} onChange={(e) => setPrintSize(e.target.value as PosterSize)} className="border border-gray-300 rounded px-2 py-2 text-sm">
-            <option value="A4">A4</option>
-            <option value="A3">A3</option>
-          </select>
-          <button type="button" disabled={!artUrl} onClick={print} className="bg-gray-900 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-50">
-            Print
-          </button>
-          <button type="button" disabled={!artUrl} onClick={download} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-50">
-            Download PNG
-          </button>
-        </div>
       </div>
     </Modal>
   );
@@ -859,17 +1003,19 @@ export default function QrCodesPage({ token }: { token: string }) {
                 Print QR only
               </button>
               <button type="button" onClick={() => downloadPng(r)} className="border rounded py-1.5 font-semibold text-gray-700">
-                PNG
+                QR PNG
               </button>
               <button type="button" onClick={() => downloadSvg(r)} className="border rounded py-1.5 font-semibold text-gray-700">
-                SVG
+                QR SVG
               </button>
             </div>
           </article>
         ))}
       </div>
 
-      {designFor && <PosterDesigner row={designFor} onClose={() => setDesignFor(null)} />}
+      {designFor && (
+        <PosterDesigner row={designFor} token={token} onClose={() => setDesignFor(null)} onChanged={load} />
+      )}
 
       {form && (
         <Modal title={form.id ? 'Edit QR code' : 'New QR code'} onClose={() => setForm(null)}>

@@ -1,10 +1,14 @@
 import { NestFactory } from '@nestjs/core';
+import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  // Poster artwork is sent as base64 JSON, so allow up to 10 MB per request.
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   // Security middleware
   app.use(helmet());

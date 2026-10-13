@@ -34,4 +34,19 @@ export class QrCodesController {
   deactivate(@Param('id') id: string) {
     return this.qr.deactivate(id);
   }
+
+  @Get(':id/artwork')
+  getArtwork(@Param('id') id: string) {
+    return this.qr.getArtwork(id);
+  }
+
+  @Put(':id/artwork')
+  saveArtwork(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.qr.saveArtwork(id, body);
+  }
+
+  @Delete(':id/artwork')
+  removeArtwork(@Param('id') id: string) {
+    return this.qr.removeArtwork(id);
+  }
 }

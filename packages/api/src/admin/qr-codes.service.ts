@@ -46,7 +46,62 @@ export class QrCodesService {
       relations: ['branch'],
       order: { created_at: 'ASC' },
     });
-    return rows.map((r) => ({ ...r, payload: qrPayload(r.branch_id, r.kind, r.table_number) }));
+    return rows.map((r) => ({
+      ...r,
+      payload: qrPayload(r.branch_id, r.kind, r.table_number),
+      has_artwork: !!r.artwork_name,
+    }));
+  }
+
+  async getArtwork(id: string) {
+    const row = await this.qr
+      .createQueryBuilder('q')
+      .addSelect('q.artwork_data')
+      .where('q.id = :id', { id })
+      .getOne();
+    if (!row) throw new NotFoundException('QR code not found');
+    return {
+      name: row.artwork_name,
+      data_url: row.artwork_data,
+      x: row.artwork_x,
+      y: row.artwork_y,
+      size: row.artwork_size,
+    };
+  }
+
+  async saveArtwork(id: string, body: Dict) {
+    const row = await this.qr.findOne({ where: { id } });
+    if (!row) throw new NotFoundException('QR code not found');
+    const dataUrl = typeof body.data_url === 'string' ? body.data_url : '';
+    if (!/^data:image\/(jpeg|png);base64,/.test(dataUrl)) {
+      throw new BadRequestException('Menu image must be a PNG or JPG file');
+    }
+    if (dataUrl.length > 9_000_000) {
+      throw new BadRequestException('Menu image is too large (max about 6 MB). Use a smaller image or choose Screen size.');
+    }
+    const num = (v: unknown, min: number, max: number): number | null => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null;
+    };
+    await this.qr.update(id, {
+      artwork_data: dataUrl,
+      artwork_name: text(body.name, 'name', 255) ?? 'menu-image',
+      artwork_x: num(body.x, 0, 100),
+      artwork_y: num(body.y, 0, 100),
+      artwork_size: num(body.size, 1, 100),
+    });
+    return { ok: true };
+  }
+
+  async removeArtwork(id: string) {
+    await this.qr.update(id, {
+      artwork_data: null,
+      artwork_name: null,
+      artwork_x: null,
+      artwork_y: null,
+      artwork_size: null,
+    });
+    return { ok: true };
   }
 
   async create(body: Dict) {
