@@ -65,7 +65,22 @@ interface ProductAvailability {
   last_updated_at: string;
 }
 
-function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: string) => void }) {
+// Poster and phone-camera links look like /?branch=<id>&table=<n>; open the menu directly.
+function readLaunchParams(): { branchId: string; table: string | null } | null {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const branchId = params.get('branch');
+    if (branchId && /^[a-f0-9-]{8,}$/i.test(branchId)) {
+      const table = params.get('table');
+      return { branchId, table: table && /^[\w-]{1,20}$/.test(table) ? table : null };
+    }
+  } catch {
+    // URL parsing unavailable: fall back to the scanner
+  }
+  return null;
+}
+
+function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: string, table: string | null) => void }) {
   const [scanning, setScanning] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manualBranchId, setManualBranchId] = useState('');
@@ -84,12 +99,15 @@ function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: stri
 
     scanner.render(
       (decodedText) => {
-        // Expected format: branch:{branchId}
-        const match = decodedText.match(/branch:([a-f0-9-]+)/i);
-        if (match) {
+        // Accepts the menu link (?branch=<id>&table=<n>) and the older branch:<id> text format
+        const link = decodedText.match(/[?&]branch=([a-f0-9-]+)/i);
+        const legacy = decodedText.match(/branch:([a-f0-9-]+)/i);
+        const branchMatch = link ?? legacy;
+        if (branchMatch) {
+          const tableMatch = decodedText.match(/[?&;]table[=:]([\w-]{1,20})/i);
           scanner.clear().catch(() => {});
           setScanning(false);
-          onBranchDetected(match[1]);
+          onBranchDetected(branchMatch[1], tableMatch ? tableMatch[1] : null);
         } else {
           setError('Invalid QR code format. Please scan a Milestones Coffee QR code.');
         }
@@ -108,7 +126,7 @@ function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: stri
 
   const handleManualEntry = () => {
     if (manualBranchId.trim()) {
-      onBranchDetected(manualBranchId.trim());
+      onBranchDetected(manualBranchId.trim(), null);
     }
   };
 
@@ -271,7 +289,7 @@ function ProductDetailsModal({
   );
 }
 
-function MenuPage({ branchId, onBack }: { branchId: string; onBack: () => void }) {
+function MenuPage({ branchId, table, onBack }: { branchId: string; table: string | null; onBack: () => void }) {
   const [branch, setBranch] = useState<Branch | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -397,7 +415,10 @@ function MenuPage({ branchId, onBack }: { branchId: string; onBack: () => void }
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">☕ {branch?.name || 'Menu'}</h1>
-              <p className="text-sm text-gray-600">{branch?.address}</p>
+              <p className="text-sm text-gray-600">
+                {table && <span className="mr-2 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-brand-800 font-semibold">Table {table}</span>}
+                {branch?.address}
+              </p>
             </div>
             <button
               onClick={onBack}
@@ -539,11 +560,29 @@ function MenuPage({ branchId, onBack }: { branchId: string; onBack: () => void }
 }
 
 export default function App() {
-  const [currentBranchId, setCurrentBranchId] = useState<string | null>(null);
+  const [launch] = useState(() => readLaunchParams());
+  const [currentBranchId, setCurrentBranchId] = useState<string | null>(launch?.branchId ?? null);
+  const [table, setTable] = useState<string | null>(launch?.table ?? null);
 
   if (!currentBranchId) {
-    return <QRScannerPage onBranchDetected={setCurrentBranchId} />;
+    return (
+      <QRScannerPage
+        onBranchDetected={(id, t) => {
+          setTable(t);
+          setCurrentBranchId(id);
+        }}
+      />
+    );
   }
 
-  return <MenuPage branchId={currentBranchId} onBack={() => setCurrentBranchId(null)} />;
+  return (
+    <MenuPage
+      branchId={currentBranchId}
+      table={table}
+      onBack={() => {
+        setTable(null);
+        setCurrentBranchId(null);
+      }}
+    />
+  );
 }

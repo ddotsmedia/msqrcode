@@ -8,9 +8,12 @@ type Dict = Record<string, unknown>;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const DEFAULT_CAPTION = 'Scan to view the menu';
 
-// The menu scanner reads the branch id from "branch:<id>"; table codes add ";table:<n>" after it.
+// Posters and phone cameras need a web link: opening it lands on the branch menu.
+const MENU_URL = (process.env.MENU_PUBLIC_URL || 'https://coffeesales.ae').replace(/\/$/, '');
+
 export function qrPayload(branchId: string, kind: string, tableNumber: string | null): string {
-  return kind === 'table' && tableNumber ? `branch:${branchId};table:${tableNumber}` : `branch:${branchId}`;
+  const base = `${MENU_URL}/?branch=${branchId}`;
+  return kind === 'table' && tableNumber ? `${base}&table=${encodeURIComponent(tableNumber)}` : base;
 }
 
 function text(v: unknown, field: string, max: number, required = false): string | null {

@@ -37,9 +37,15 @@ type KindFilter = 'all' | 'branch' | 'table';
 
 const DEFAULT_CAPTION = 'Scan to view the menu';
 
-// Same format the menu scanner reads: branch:<id>, plus ;table:<n> for table codes.
+const MENU_URL = (
+  (import.meta.env.VITE_MENU_URL as string | undefined) ?? 'https://coffeesales.ae'
+).replace(/\/$/, '');
+const MENU_HOST = MENU_URL.replace(/^https?:\/\//, '');
+
+// Must match the API: a web link that opens the branch menu (and the table, if given).
 export function payloadFor(branchId: string, kind: 'branch' | 'table', table: string): string {
-  return kind === 'table' && table ? `branch:${branchId};table:${table}` : `branch:${branchId}`;
+  const base = `${MENU_URL}/?branch=${branchId}`;
+  return kind === 'table' && table ? `${base}&table=${encodeURIComponent(table)}` : base;
 }
 
 function qrOptions(fg: string, bg: string) {
@@ -93,6 +99,47 @@ async function printSheet(rows: QrRow[]): Promise<void> {
   p { font-size: 11px; color: #444; margin: 0; }
   small { font-size: 10px; color: #888; }
   </style></head><body><div class="grid">${cards.join('')}</div>
+  <script>window.onload = function () { window.print(); };<\/script></body></html>`);
+  win.document.close();
+}
+
+type PosterSize = 'A4' | 'A3';
+
+async function printPosters(rows: QrRow[], size: PosterSize): Promise<void> {
+  const win = window.open('', '_blank');
+  if (!win) return;
+  const posters = await Promise.all(
+    rows.map(async (r) => {
+      const svg = await QRCode.toString(r.payload, { type: 'svg', ...qrOptions(r.foreground, r.background) });
+      const table = r.kind === 'table' ? `<p class="table">Table ${esc(r.table_number ?? '')}</p>` : '';
+      return `<section class="poster">
+        <p class="brand">Milestones Coffee</p>
+        <h1>${esc(r.branch.name)}</h1>
+        ${table}
+        <h2>Scan for our menu</h2>
+        <div class="qr">${svg}</div>
+        <p class="caption">${esc(r.caption)}</p>
+        <p class="host">${esc(MENU_HOST)}</p>
+      </section>`;
+    }),
+  );
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Menu posters</title><style>
+  @page { size: ${size}; margin: 0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; color: #111; background: #fff; }
+  .poster { height: var(--h); width: 100%; padding: 18mm; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center; page-break-after: always; }
+  .poster:last-child { page-break-after: auto; }
+  .brand { font-size: calc(var(--t) * 0.45); letter-spacing: 0.2em; text-transform: uppercase; color: #666; margin: 0; }
+  h1 { font-size: var(--t); margin: 3mm 0 2mm; }
+  .table { font-size: calc(var(--t) * 0.8); font-weight: 700; margin: 0 0 2mm; }
+  h2 { font-size: calc(var(--t) * 0.6); margin: 4mm 0 6mm; font-weight: 600; }
+  .qr svg { width: var(--qr); height: auto; display: block; }
+  .caption { font-size: calc(var(--t) * 0.4); color: #333; margin: 6mm 0 1mm; }
+  .host { font-size: calc(var(--t) * 0.35); color: #888; margin: 0; }
+  .A4 { --h: 297mm; --qr: 115mm; --t: 36px; }
+  .A3 { --h: 420mm; --qr: 170mm; --t: 56px; }
+  </style></head><body class="${size}">${posters.join('')}
   <script>window.onload = function () { window.print(); };<\/script></body></html>`);
   win.document.close();
 }
@@ -164,6 +211,7 @@ export default function QrCodesPage({ token }: { token: string }) {
   const [showPaused, setShowPaused] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [posterSize, setPosterSize] = useState<PosterSize>('A4');
 
   const [form, setForm] = useState<QrForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -436,14 +484,33 @@ export default function QrCodesPage({ token }: { token: string }) {
             </button>
           )}
         </div>
-        <button
-          type="button"
-          disabled={visible.length === 0}
-          onClick={() => printSheet(chosen.length > 0 ? chosen : visible)}
-          className="bg-gray-900 text-white rounded px-3 py-2 font-semibold disabled:opacity-50"
-        >
-          {chosen.length > 0 ? `Print sheet (${chosen.length})` : 'Print all shown'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={posterSize}
+            onChange={(e) => setPosterSize(e.target.value as PosterSize)}
+            className="border border-gray-300 rounded px-2 py-2 text-sm bg-white"
+            aria-label="Poster size"
+          >
+            <option value="A4">Poster A4</option>
+            <option value="A3">Poster A3</option>
+          </select>
+          <button
+            type="button"
+            disabled={visible.length === 0}
+            onClick={() => printPosters(chosen.length > 0 ? chosen : visible, posterSize)}
+            className="bg-brand-600 text-white rounded px-3 py-2 font-semibold disabled:opacity-50"
+          >
+            {chosen.length > 0 ? `Print posters (${chosen.length})` : 'Print posters (all shown)'}
+          </button>
+          <button
+            type="button"
+            disabled={visible.length === 0}
+            onClick={() => printSheet(chosen.length > 0 ? chosen : visible)}
+            className="bg-gray-900 text-white rounded px-3 py-2 font-semibold disabled:opacity-50"
+          >
+            {chosen.length > 0 ? `Print sheet (${chosen.length})` : 'Print sheet'}
+          </button>
+        </div>
       </div>
 
       {loading && <p className="text-gray-500 text-sm">Loading QR codes…</p>}
@@ -490,12 +557,15 @@ export default function QrCodesPage({ token }: { token: string }) {
             </p>
             <p className="text-center text-[11px] text-gray-400 break-all mt-1">{r.payload}</p>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
               <button type="button" onClick={() => openEdit(r)} className="border rounded py-1.5 font-semibold text-gray-700">
                 Edit
               </button>
               <button type="button" onClick={() => togglePaused(r)} className="border rounded py-1.5 font-semibold text-gray-700">
                 {r.is_active ? 'Pause' : 'Activate'}
+              </button>
+              <button type="button" onClick={() => printPosters([r], posterSize)} className="border rounded py-1.5 font-semibold text-gray-700">
+                Poster
               </button>
               <button type="button" onClick={() => downloadPng(r)} className="border rounded py-1.5 font-semibold text-gray-700">
                 PNG
