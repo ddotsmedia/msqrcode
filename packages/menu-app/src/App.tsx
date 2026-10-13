@@ -73,22 +73,7 @@ interface ProductAvailability {
   last_updated_at: string;
 }
 
-// Poster and phone-camera links look like /?branch=<id>&table=<n>; open the menu directly.
-function readLaunchParams(): { branchId: string; table: string | null } | null {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const branchId = params.get('branch');
-    if (branchId && /^[a-f0-9-]{8,}$/i.test(branchId)) {
-      const table = params.get('table');
-      return { branchId, table: table && /^[\w-]{1,20}$/.test(table) ? table : null };
-    }
-  } catch {
-    // URL parsing unavailable: fall back to the scanner
-  }
-  return null;
-}
-
-function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: string, table: string | null) => void }) {
+export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: string, table: string | null) => void }) {
   const [scanning, setScanning] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [manualBranchId, setManualBranchId] = useState('');
@@ -297,7 +282,7 @@ function ProductDetailsModal({
   );
 }
 
-function MenuPage({ branchId, table, onBack }: { branchId: string; table: string | null; onBack: () => void }) {
+export function MenuPage({ branchId, table, onBack }: { branchId: string | null; table: string | null; onBack: () => void }) {
   const { t, lang, setLang } = useLang();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -319,17 +304,27 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
         setLoading(true);
         setError(null);
 
+        if (branchId) {
         // Load branch details
         const branchRes = await axios.get(`${API_BASE_URL}/branches/${branchId}`);
         setBranch(branchRes.data);
         setPageTitle(branchRes.data.name);
         setMetaDescription(`Menu for ${branchRes.data.name}, ${branchRes.data.address}`);
+        } else {
+          setBranch(null);
+          setPageTitle('All branches');
+          setMetaDescription('Full Milestones Coffee menu for all branches');
+        }
 
         // Poster/menu image saved for this branch (optional)
-        try {
-          const imgRes = await axios.get(`${API_BASE_URL}/branches/${branchId}/menu-image`);
-          setMenuImage(imgRes.data?.data_url ?? null);
-        } catch {
+        if (branchId) {
+          try {
+            const imgRes = await axios.get(`${API_BASE_URL}/branches/${branchId}/menu-image`);
+            setMenuImage(imgRes.data?.data_url ?? null);
+          } catch {
+            setMenuImage(null);
+          }
+        } else {
           setMenuImage(null);
         }
 
@@ -341,21 +336,25 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
         const productsRes = await axios.get(`${API_BASE_URL}/products`);
         setProducts(Array.isArray(productsRes.data) ? productsRes.data : []);
 
-        // Load availability for this branch
-        const availRes = await axios.get(
-          `${API_BASE_URL}/branches/${branchId}/products/availability`
-        );
-        const availMap: Record<string, boolean> = {};
-        (Array.isArray(availRes.data) ? availRes.data : []).forEach((item: ProductAvailability) => {
-          availMap[item.product_id] = item.is_available;
-        });
-        setAvailability(availMap);
+        if (branchId) {
+          // Load availability for this branch
+          const availRes = await axios.get(
+            `${API_BASE_URL}/branches/${branchId}/products/availability`
+          );
+          const availMap: Record<string, boolean> = {};
+          (Array.isArray(availRes.data) ? availRes.data : []).forEach((item: ProductAvailability) => {
+            availMap[item.product_id] = item.is_available;
+          });
+          setAvailability(availMap);
 
-        // Track analytics - page view
-        await axios.post(`${API_BASE_URL}/analytics/events`, {
-          event_type: 'page_view',
-          branch_id: branchId,
-        }).catch(() => {});
+          // Track analytics - page view
+          await axios.post(`${API_BASE_URL}/analytics/events`, {
+            event_type: 'page_view',
+            branch_id: branchId,
+          }).catch(() => {});
+        } else {
+          setAvailability({});
+        }
       } catch (err) {
         console.error('Error loading menu data:', err);
         setError('Failed to load menu. Please try again.');
@@ -511,7 +510,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
           </div>
 
           <LoyaltyCard />
-          <FeedbackForm branchId={branchId} />
+          {branchId && <FeedbackForm branchId={branchId} />}
 
           {/* Search Bar */}
           <div className="mb-4">
@@ -644,7 +643,7 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
   );
 }
 
-function FeedbackForm({ branchId }: { branchId: string }) {
+export function FeedbackForm({ branchId }: { branchId: string }) {
   const { t } = useLang();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -706,7 +705,7 @@ function FeedbackForm({ branchId }: { branchId: string }) {
 
 const LOYALTY_KEY = 'milestones_loyalty_token';
 
-function LoyaltyCard() {
+export function LoyaltyCard() {
   const { t } = useLang();
   const [token, setToken] = useState<string | null>(() => {
     try {
@@ -810,33 +809,5 @@ function LoyaltyCard() {
         {busy ? t('loyaltyCreating') : t('loyaltyCreate')}
       </button>
     </div>
-  );
-}
-
-export default function App() {
-  const [launch] = useState(() => readLaunchParams());
-  const [currentBranchId, setCurrentBranchId] = useState<string | null>(launch?.branchId ?? null);
-  const [table, setTable] = useState<string | null>(launch?.table ?? null);
-
-  if (!currentBranchId) {
-    return (
-      <QRScannerPage
-        onBranchDetected={(id, t) => {
-          setTable(t);
-          setCurrentBranchId(id);
-        }}
-      />
-    );
-  }
-
-  return (
-    <MenuPage
-      branchId={currentBranchId}
-      table={table}
-      onBack={() => {
-        setTable(null);
-        setCurrentBranchId(null);
-      }}
-    />
   );
 }
