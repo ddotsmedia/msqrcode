@@ -55,6 +55,8 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
   const [form, setForm] = useState<BranchForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   function load() {
     setLoading(true);
@@ -116,6 +118,30 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
     }
   }
 
+  async function bulkImport() {
+    if (!bulkText.trim()) return;
+    setBulkLoading(true);
+    setError(null);
+    try {
+      const lines = bulkText.trim().split('\n');
+      const branches = lines.map((line) => {
+        const [name, address, phone, timezone] = line.split(',').map((s) => s.trim());
+        return { name, address, phone, timezone };
+      });
+      const result = await api<any>('/admin/branches/bulk', token, {
+        method: 'POST',
+        body: JSON.stringify({ branches }),
+      });
+      setNotice(`${result.created} branch(es) added.`);
+      setBulkText('');
+      load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBulkLoading(false);
+    }
+  }
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -125,6 +151,24 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
         </div>
         <button type="button" onClick={openNew} className="bg-brand-600 text-white rounded px-3 py-2 text-sm font-semibold">
           Add branch
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-sm p-4">
+        <h3 className="font-semibold text-gray-800 mb-2">Bulk import</h3>
+        <p className="text-sm text-gray-600 mb-2">Paste CSV data: name, address, phone, timezone (one per line)</p>
+        <textarea
+          value={bulkText}
+          onChange={(e) => setBulkText(e.target.value)}
+          placeholder="Milestones Marina, Dubai Marina, 04-123-4567, Asia/Dubai&#10;Milestones Beach, Jumeirah Beach, 04-765-4321, Asia/Dubai"
+          className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono h-24"
+        />
+        <button
+          onClick={bulkImport}
+          disabled={!bulkText.trim() || bulkLoading}
+          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded font-semibold disabled:opacity-60"
+        >
+          {bulkLoading ? 'Importing...' : 'Import'}
         </button>
       </div>
 

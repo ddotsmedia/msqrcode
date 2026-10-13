@@ -93,4 +93,28 @@ export class AdminBranchesService {
     if (body.status === 'active' || body.status === 'inactive') branch.status = body.status;
     return this.branches.save(branch);
   }
+
+  async bulk(bodies: Dict[]) {
+    const results = [];
+    const existing = new Set();
+    const branches = await this.branches.find();
+    branches.forEach((b) => existing.add(b.name));
+
+    for (const body of bodies) {
+      const name = text(body.name, 'name', 120, true);
+      if (!name) continue;
+      if (existing.has(name)) {
+        results.push({ name, status: 'skipped', reason: 'duplicate' });
+        continue;
+      }
+      try {
+        const branch = await this.create(body);
+        results.push({ name: branch.name, status: 'created', id: branch.id });
+        existing.add(name);
+      } catch (err) {
+        results.push({ name, status: 'error', reason: String(err).slice(0, 100) });
+      }
+    }
+    return { created: results.filter((r) => r.status === 'created').length, results };
+  }
 }

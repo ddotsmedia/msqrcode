@@ -24,4 +24,9 @@ export class AdminBranchesController {
   update(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.branches.update(id, body);
   }
+
+  @Post('bulk')
+  bulk(@Body() body: Record<string, unknown>) {
+    return this.branches.bulk(body.branches as Record<string, unknown>[]);
+  }
 }

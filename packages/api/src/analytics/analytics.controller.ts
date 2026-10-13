@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { AnalyticsEvent } from '../entities/analytics-event.entity';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('analytics')
 export class AnalyticsController {
@@ -37,5 +40,18 @@ export class AnalyticsController {
   @Get('feedback')
   async getFeedbackStats(@Query('branch_id') branchId?: string): Promise<any[]> {
     return this.analyticsService.getFeedbackStats(branchId);
+  }
+
+  @Get('branches')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async getBranchAnalytics(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<any> {
+    return this.analyticsService.getBranchAnalytics(
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    );
   }
 }
