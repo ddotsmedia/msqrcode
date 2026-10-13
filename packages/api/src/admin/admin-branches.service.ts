@@ -1,0 +1,96 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Branch } from '../entities/branch.entity';
+import { QrCode } from '../entities/qr-code.entity';
+
+type Dict = Record<string, unknown>;
+
+const DEFAULT_TIMEZONE = 'Asia/Dubai';
+const DEFAULT_HOURS = { open: '08:00', close: '22:00' };
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function text(v: unknown, field: string, max: number, required = false): string | null {
+  const s = v === undefined || v === null ? '' : String(v).trim();
+  if (!s) {
+    if (required) throw new BadRequestException(`${field} is required`);
+    return null;
+  }
+  if (s.length > max) throw new BadRequestException(`${field} must be at most ${max} characters`);
+  return s;
+}
+
+// "Milestones Marina Walk" -> "MILESTONES-MARINA-WALK"
+function baseCode(name: string): string {
+  const slug = name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return slug || 'BRANCH';
+}
+
+@Injectable()
+export class AdminBranchesService {
+  constructor(
+    @InjectRepository(Branch) private branches: Repository<Branch>,
+    @InjectRepository(QrCode) private qr: Repository<QrCode>,
+  ) {}
+
+  list() {
+    return this.branches.find({ order: { name: 'ASC' } });
+  }
+
+  private async uniqueCode(name: string): Promise<string> {
+    const base = baseCode(name);
+    let code = base;
+    let n = 2;
+    while (await this.branches.findOne({ where: { code } })) {
+      code = `${base}-${n++}`;
+    }
+    return code;
+  }
+
+  // Creates the branch and its branch QR code, so it can be printed straight away.
+  async create(body: Dict) {
+    const name = text(body.name, 'name', 120, true)!;
+    const defaultHours = Object.fromEntries(DAYS.map((d) => [d, { ...DEFAULT_HOURS }]));
+    const branch = await this.branches.save(
+      this.branches.create({
+        code: await this.uniqueCode(name),
+        name,
+        description: text(body.description, 'description', 1000) ?? '',
+        address: text(body.address, 'address', 255) ?? '',
+        phone: text(body.phone, 'phone', 20) ?? '',
+        timezone: text(body.timezone, 'timezone', 50) ?? DEFAULT_TIMEZONE,
+        operating_hours: defaultHours,
+        status: body.status === 'inactive' ? 'inactive' : 'active',
+      }),
+    );
+    await this.qr.save(
+      this.qr.create({
+        branch_id: branch.id,
+        kind: 'branch',
+        table_number: null,
+        label: branch.name,
+        caption: 'Scan to view the menu',
+        foreground: '#111111',
+        background: '#ffffff',
+        is_active: true,
+      }),
+    );
+    return branch;
+  }
+
+  // The code is fixed once created, since QR codes and links depend on the branch id, not the code.
+  async update(id: string, body: Dict) {
+    const branch = await this.branches.findOne({ where: { id } });
+    if (!branch) throw new NotFoundException('Branch not found');
+    if (body.name !== undefined) branch.name = text(body.name, 'name', 120, true)!;
+    if (body.address !== undefined) branch.address = text(body.address, 'address', 255) ?? '';
+    if (body.phone !== undefined) branch.phone = text(body.phone, 'phone', 20) ?? '';
+    if (body.timezone !== undefined) branch.timezone = text(body.timezone, 'timezone', 50) ?? DEFAULT_TIMEZONE;
+    if (body.status === 'active' || body.status === 'inactive') branch.status = body.status;
+    return this.branches.save(branch);
+  }
+}

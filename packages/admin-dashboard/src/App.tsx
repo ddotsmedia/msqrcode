@@ -3,14 +3,16 @@ import { api, readToken, saveToken, type Me } from './api';
 import CategoriesPage from './pages/CategoriesPage';
 import ProductsPage from './pages/ProductsPage';
 import QrCodesPage from './pages/QrCodesPage';
+import BranchesPage from './pages/BranchesPage';
 
-type Tab = 'availability' | 'products' | 'categories' | 'qr';
+type Tab = 'availability' | 'products' | 'categories' | 'qr' | 'branches';
 
 const TAB_LABELS: Record<Tab, string> = {
   availability: 'Availability',
   products: 'Products',
   categories: 'Categories',
   qr: 'QR codes',
+  branches: 'Branches',
 };
 
 interface Branch {
@@ -164,7 +166,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
 
       <nav className="bg-white border-b">
         <div className="max-w-3xl mx-auto flex gap-1 px-4 overflow-x-auto">
-          {(['availability', ...(me.role === 'admin' ? ['products', 'categories', 'qr'] : [])] as Tab[]).map((t) => (
+          {(['availability', ...(me.role === 'admin' ? ['products', 'categories', 'qr', 'branches'] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -186,6 +188,11 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
       )}
       {tab === 'qr' && me.role === 'admin' && (
         <main className="max-w-3xl mx-auto p-4"><QrCodesPage token={token} /></main>
+      )}
+      {tab === 'branches' && me.role === 'admin' && (
+        <main className="max-w-3xl mx-auto p-4">
+          <BranchesPage token={token} onQrCreated={() => undefined} />
+        </main>
       )}
 
       {tab === 'availability' && (

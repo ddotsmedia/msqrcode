@@ -555,7 +555,6 @@ export default function QrCodesPage({ token }: { token: string }) {
             <p className="text-center text-xs text-gray-500">
               {r.branch.name} · {r.branch.code}
             </p>
-            <p className="text-center text-[11px] text-gray-400 break-all mt-1">{r.payload}</p>
 
             <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
               <button type="button" onClick={() => openEdit(r)} className="border rounded py-1.5 font-semibold text-gray-700">
