@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLang } from './i18n';
 import axios from 'axios';
+import { ContactButtons } from './lib/ContactButtons';
+import { getTodayHours, isOpenNow } from './lib/hours';
+import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
 // API Base URL - will work through nginx reverse proxy
@@ -17,6 +20,10 @@ interface Branch {
   latitude?: number;
   longitude?: number;
   operating_hours?: Record<string, any>;
+  whatsapp_number?: string;
+  google_maps_url?: string;
+  google_review_url?: string;
+  delivery_links?: Record<string, string>;
   cover_image_url?: string;
   logo_image_url?: string;
   status: string;
@@ -315,6 +322,8 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
         // Load branch details
         const branchRes = await axios.get(`${API_BASE_URL}/branches/${branchId}`);
         setBranch(branchRes.data);
+        setPageTitle(branchRes.data.name);
+        setMetaDescription(`Menu for ${branchRes.data.name}, ${branchRes.data.address}`);
 
         // Poster/menu image saved for this branch (optional)
         try {
@@ -357,6 +366,18 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
 
     loadMenuData();
   }, [branchId]);
+
+  // Structured data for search engines (schema.org), added once the branch loads.
+  useEffect(() => {
+    if (!branch) return;
+    const tag = document.createElement('script');
+    tag.type = 'application/ld+json';
+    tag.id = 'branch-jsonld';
+    tag.textContent = JSON.stringify(buildJsonLd(branch as any));
+    document.getElementById('branch-jsonld')?.remove();
+    document.head.appendChild(tag);
+    return () => tag.remove();
+  }, [branch]);
 
   const getFilteredProducts = () => {
     let filtered = products;
@@ -451,6 +472,26 @@ function MenuPage({ branchId, table, onBack }: { branchId: string; table: string
                 {table && <span className="mr-2 inline-block rounded-full bg-brand-100 px-2 py-0.5 text-brand-800 font-semibold">Table {table}</span>}
                 {branch?.address}
               </p>
+              {branch && (
+                <p className="text-sm mt-1">
+                  {(() => {
+                    const open = isOpenNow(branch.operating_hours, branch.timezone || 'Asia/Dubai', new Date());
+                    const today = getTodayHours(branch.operating_hours, branch.timezone || 'Asia/Dubai', new Date());
+                    if (open === null) return <span className="text-gray-500">Hours unavailable</span>;
+                    return (
+                      <>
+                        <span className={open ? 'font-semibold text-green-700' : 'font-semibold text-gray-600'}>
+                          {open ? 'Open now' : 'Closed'}
+                        </span>
+                        {today && <span className="text-gray-600"> · Today {today.open}–{today.close}</span>}
+                      </>
+                    );
+                  })()}
+                </p>
+              )}
+              <div className="mt-3">
+                <ContactButtons branch={branch} />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button

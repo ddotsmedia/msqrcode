@@ -20,6 +20,21 @@ function text(v: unknown, field: string, max: number, required = false): string 
   return s;
 }
 
+function validateUrl(v: unknown, field: string): string | null {
+  const s = text(v, field, 500);
+  if (!s) return null;
+  if (!s.startsWith('https://')) throw new BadRequestException(`${field} must start with https://`);
+  return s;
+}
+
+function validateWhatsApp(v: unknown): string | null {
+  const s = text(v, 'whatsapp_number', 20);
+  if (!s) return null;
+  const digits = s.replace(/\D/g, '');
+  if (digits.length < 7 || digits.length > 15) throw new BadRequestException('WhatsApp number must be 7-15 digits');
+  return digits;
+}
+
 // "Milestones Marina Walk" -> "MILESTONES-MARINA-WALK"
 function baseCode(name: string): string {
   const slug = name
@@ -91,6 +106,10 @@ export class AdminBranchesService {
     if (body.phone !== undefined) branch.phone = text(body.phone, 'phone', 20) ?? '';
     if (body.timezone !== undefined) branch.timezone = text(body.timezone, 'timezone', 50) ?? DEFAULT_TIMEZONE;
     if (body.status === 'active' || body.status === 'inactive') branch.status = body.status;
+    if (body.google_maps_url !== undefined) branch.google_maps_url = validateUrl(body.google_maps_url, 'google_maps_url');
+    if (body.google_review_url !== undefined) branch.google_review_url = validateUrl(body.google_review_url, 'google_review_url');
+    if (body.whatsapp_number !== undefined) branch.whatsapp_number = validateWhatsApp(body.whatsapp_number);
+    if (body.delivery_links !== undefined) branch.delivery_links = typeof body.delivery_links === 'object' && body.delivery_links !== null ? body.delivery_links as Record<string, string> : null;
     return this.branches.save(branch);
   }
 

@@ -23,6 +23,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     send: 'Send',
     sending: 'Sending…',
     language: 'العربية',
+    call: 'Call',
+    whatsapp: 'WhatsApp',
+    directions: 'Directions',
+    review: 'Review',
+    delivery: 'Delivery',
   },
   ar: {
     loadingMenu: 'جارٍ تحميل القائمة...',
@@ -44,6 +49,11 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     send: 'إرسال',
     sending: 'جارٍ الإرسال…',
     language: 'English',
+    call: 'اتصل',
+    whatsapp: 'واتساب',
+    directions: 'الاتجاهات',
+    review: 'تقييم',
+    delivery: 'توصيل',
   },
 };
 
