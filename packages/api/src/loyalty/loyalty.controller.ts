@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -16,6 +16,13 @@ export class LoyaltyController {
   @Get('loyalty/card/:token')
   card(@Param('token') token: string) {
     return this.loyalty.getByToken(token);
+  }
+
+  @Get('admin/loyalty/cards')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'branch_manager')
+  search(@Query('q') q?: string) {
+    return this.loyalty.search(q);
   }
 
   @Post('admin/loyalty/stamp')
