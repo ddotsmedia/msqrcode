@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
+import { PromotionsModule } from './promotions/promotions.module';
 import { OrdersModule } from './orders/orders.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { OrdersModule } from './orders/orders.module';
     AdminModule,
     FeedbackModule,
     LoyaltyModule,
+    PromotionsModule,
     OrdersModule,
   ],
   controllers: [],

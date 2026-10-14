@@ -6,6 +6,7 @@ import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, getWeekHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import BranchMapPage from './BranchMapPage';
+import OffersPage from './OffersPage';
 import GalleryPage from './GalleryPage';
 import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
@@ -70,6 +71,7 @@ function Layout() {
     ['/', 'Home'],
     ['/branches', 'Branches'],
     ['/map', 'Map'],
+    ['/offers', 'Offers'],
     ['/gallery', 'Gallery'],
     ['/blog', 'News'],
     ['/faq', 'FAQ'],
@@ -374,6 +376,7 @@ export function SiteRoutes() {
         <Route path="branches" element={<BranchesPage />} />
         <Route path="branches/:id" element={<BranchDetailPage />} />
         <Route path="map" element={<MapRoute />} />
+        <Route path="offers" element={<OffersPage />} />
         <Route path="gallery" element={<GalleryPage />} />
         <Route path="blog" element={<BlogListPage />} />
         <Route path="faq" element={<FaqPage />} />
