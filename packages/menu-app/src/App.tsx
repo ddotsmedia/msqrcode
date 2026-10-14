@@ -5,6 +5,7 @@ import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { readFavs, toggleFav } from './lib/favorites';
 import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
@@ -125,13 +126,8 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-brand-800 mb-2">☕ Milestones</h1>
-          <p className="text-brand-600">Digital Menu</p>
-        </div>
-
+    <div className="flex justify-center">
+      <div className="w-full bg-white rounded-2xl shadow-sm p-5">
         <div id="qr-reader" className="mb-6 rounded-lg overflow-hidden border-2 border-brand-200"></div>
 
         {error && (
@@ -155,12 +151,12 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
             value={manualBranchId}
             onChange={(e) => setManualBranchId(e.target.value)}
             placeholder="Branch ID"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             onKeyPress={(e) => e.key === 'Enter' && handleManualEntry()}
           />
           <button
             onClick={handleManualEntry}
-            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+            className="shrink-0 px-5 py-2 bg-brand-700 text-white rounded-lg hover:bg-brand-600 font-medium"
           >
             Go
           </button>
@@ -297,6 +293,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [showDietary, setShowDietary] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'menu' | 'price_asc' | 'price_desc'>('menu');
+  const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
   const [showText, setShowText] = useState(false);
 
@@ -411,7 +408,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
     if (sortBy === 'price_asc') return filtered.sort((a, b) => Number(a.base_price) - Number(b.base_price));
     if (sortBy === 'price_desc') return filtered.sort((a, b) => Number(b.base_price) - Number(a.base_price));
-    return filtered.sort((a, b) => a.display_order - b.display_order);
+    // Hearted drinks first, then the menu order.
+    const favRank = (id: string) => (favs.includes(id) ? 0 : 1);
+    return [...filtered].sort((a, b) => favRank(a.id) - favRank(b.id) || a.display_order - b.display_order);
   };
 
   if (loading) {
@@ -618,7 +617,21 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                     />
                   )}
                   <div className="p-4">
-                    <h3 className="font-bold text-gray-900 mb-1">{product.name}</h3>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="font-bold text-gray-900">{product.name}</h3>
+                      <button
+                        type="button"
+                        aria-label={favs.includes(product.id) ? 'Remove from favourites' : 'Add to favourites'}
+                        aria-pressed={favs.includes(product.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFavs(toggleFav(product.id));
+                        }}
+                        className="text-xl leading-none text-copper-700 px-1"
+                      >
+                        {favs.includes(product.id) ? '♥' : '♡'}
+                      </button>
+                    </div>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-lg font-bold text-brand-600">
