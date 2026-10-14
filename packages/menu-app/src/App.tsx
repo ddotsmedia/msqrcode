@@ -793,6 +793,14 @@ export function LoyaltyCard() {
         <p className="text-xs text-gray-600">
           {card.stamps}/{card.target} {t('loyaltyStamps')}
         </p>
+        {card.stamps >= card.target ? (
+          <p className="mt-2 rounded bg-amber-50 p-2 text-sm font-semibold text-amber-800">{t('loyaltyReady')}</p>
+        ) : (
+          <p className="mt-2 text-xs text-gray-600">{t('loyaltyToGo').replace('{n}', String(card.target - card.stamps))}</p>
+        )}
+        {card.redeemed_count > 0 && (
+          <p className="mt-1 text-xs text-gray-500">{t('loyaltyRedeemed').replace('{n}', String(card.redeemed_count))}</p>
+        )}
       </div>
     );
   }
