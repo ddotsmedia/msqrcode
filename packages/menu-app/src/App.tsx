@@ -126,13 +126,8 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-brand-800 mb-2">☕ Milestones</h1>
-          <p className="text-brand-600">Digital Menu</p>
-        </div>
-
+    <div className="flex justify-center">
+      <div className="w-full bg-white rounded-2xl shadow-sm p-5">
         <div id="qr-reader" className="mb-6 rounded-lg overflow-hidden border-2 border-brand-200"></div>
 
         {error && (
@@ -156,12 +151,12 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
             value={manualBranchId}
             onChange={(e) => setManualBranchId(e.target.value)}
             placeholder="Branch ID"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             onKeyPress={(e) => e.key === 'Enter' && handleManualEntry()}
           />
           <button
             onClick={handleManualEntry}
-            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+            className="shrink-0 px-5 py-2 bg-brand-700 text-white rounded-lg hover:bg-brand-600 font-medium"
           >
             Go
           </button>
