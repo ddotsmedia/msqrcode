@@ -43,6 +43,20 @@ function useBranches() {
   return { branches, error };
 }
 
+// Programme rules set by admins; falls back to the defaults if the API is unreachable.
+function useLoyaltyRules() {
+  const [rules, setRules] = useState({ stamps_target: 10, reward_name: 'Free drink' });
+  useEffect(() => {
+    axios
+      .get(`${API}/loyalty/settings`)
+      .then((r) => {
+        if (r.data && typeof r.data.stamps_target === 'number' && typeof r.data.reward_name === 'string') setRules(r.data);
+      })
+      .catch(() => {});
+  }, []);
+  return rules;
+}
+
 function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -350,13 +364,14 @@ function OfferBand() {
 }
 
 function LoyaltyBand() {
+  const { stamps_target, reward_name } = useLoyaltyRules();
   return (
     <section className="rounded-3xl bg-white p-8 shadow-sm md:flex md:items-center md:justify-between gap-6">
       <div>
-        <h2 className="text-2xl md:text-3xl text-brand-800">10 stamps, 1 free drink</h2>
-        <p className="mt-2 text-slate-600">Join free with your phone number. Staff add stamps at the counter.</p>
-        <div className="mt-4 flex gap-1.5" aria-hidden="true">
-          {Array.from({ length: 10 }, (_, i) => (
+        <h2 className="text-2xl md:text-3xl text-brand-800">Collect {stamps_target} stamps, earn a reward</h2>
+        <p className="mt-2 text-slate-600">Reward: {reward_name}. Join free with your phone number. Staff add stamps at the counter.</p>
+        <div className="mt-4 flex flex-wrap gap-1.5" aria-hidden="true">
+          {Array.from({ length: Math.min(stamps_target, 15) }, (_, i) => (
             <span key={i} className={`h-6 w-6 rounded-full ${i < 3 ? 'bg-copper-500' : 'border-2 border-copper-300'}`} />
           ))}
         </div>
@@ -376,6 +391,7 @@ function HomePage() {
   const { branches } = useBranches();
   const reduceMotion = useReducedMotion();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const rules = useLoyaltyRules();
 
   const openCount = useMemo(
     () => (branches ?? []).filter((b) => isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) === true).length,
@@ -422,7 +438,7 @@ function HomePage() {
     ['/menu', 'Menu', 'Browse drinks and food'],
     ['/branches', 'Find a branch', 'Open now near you'],
     ['/scan', 'Scan QR', 'Open your table menu'],
-    ['/loyalty', 'Rewards', '10 stamps, 1 free drink'],
+    ['/loyalty', 'Rewards', `${rules.stamps_target} stamps: ${rules.reward_name}`],
   ];
 
   return (
@@ -677,11 +693,14 @@ function FeedbackPage() {
 }
 
 function LoyaltyPage() {
+  const { stamps_target, reward_name } = useLoyaltyRules();
   setPageTitle('Rewards');
   return (
     <div className="space-y-4 max-w-md">
       <h1 className="text-3xl md:text-4xl font-semibold text-brand-800">Rewards</h1>
-      <p className="text-sm text-gray-600">Collect 10 stamps and your next drink is on us. Staff add a stamp when you order.</p>
+      <p className="text-sm text-gray-600">
+        Collect {stamps_target} stamps to earn: {reward_name}. Staff add a stamp when you order.
+      </p>
       <LoyaltyCard />
     </div>
   );

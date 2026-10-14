@@ -197,7 +197,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
         <PromotionsPage token={token} />
       )}
       {tab === 'loyalty' && (
-        <LoyaltyPage token={token} />
+        <LoyaltyPage token={token} role={me.role} />
       )}
       {tab === 'menu-import' && me.role === 'admin' && (
         <main className="max-w-3xl mx-auto p-4"><MenuImportPage token={token} /></main>
