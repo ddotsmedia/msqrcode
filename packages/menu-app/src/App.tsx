@@ -512,7 +512,6 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
             </div>
           </div>
 
-          <LoyaltyCard />
           {branchId && <FeedbackForm branchId={branchId} />}
 
           {/* Search Bar */}
@@ -793,12 +792,12 @@ export function LoyaltyCard() {
         <p className="text-sm font-semibold text-gray-800 mb-2">
           {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
-        <div className="grid grid-cols-5 gap-2 mb-2">
+        <div className="grid grid-cols-5 gap-2 mb-2 max-w-xs">
           {dots.map((filled, i) => (
             <motion.div
               key={i}
               className={`aspect-square rounded-full flex items-center justify-center text-sm ${
-                filled ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
+                filled ? 'bg-copper-500 text-white' : 'bg-gray-100 text-gray-400'
               }`}
               initial={reduceMotion || !filled ? false : { scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
