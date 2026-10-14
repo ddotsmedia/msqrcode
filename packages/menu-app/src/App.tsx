@@ -295,6 +295,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [showDietary, setShowDietary] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'menu' | 'price_asc' | 'price_desc'>('menu');
   const [menuImage, setMenuImage] = useState<string | null>(null);
   const [showText, setShowText] = useState(false);
 
@@ -407,6 +408,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
       );
     }
 
+    if (sortBy === 'price_asc') return filtered.sort((a, b) => Number(a.base_price) - Number(b.base_price));
+    if (sortBy === 'price_desc') return filtered.sort((a, b) => Number(b.base_price) - Number(a.base_price));
     return filtered.sort((a, b) => a.display_order - b.display_order);
   };
 
@@ -547,6 +550,17 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                 {dietary}
               </button>
             ))}
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700"
+              aria-label="Sort products"
+            >
+              <option value="menu">Menu order</option>
+              <option value="price_asc">Price: low to high</option>
+              <option value="price_desc">Price: high to low</option>
+            </select>
           </div>
         </div>
       </div>
