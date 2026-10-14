@@ -733,7 +733,7 @@ export function FeedbackForm({ branchId }: { branchId: string }) {
 const LOYALTY_KEY = 'milestones_loyalty_token';
 
 export function LoyaltyCard() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const reduceMotion = useReducedMotion();
   const [token, setToken] = useState<string | null>(() => {
     try {
@@ -742,7 +742,14 @@ export function LoyaltyCard() {
       return null;
     }
   });
-  const [card, setCard] = useState<{ name: string | null; stamps: number; target: number; redeemed_count: number } | null>(null);
+  const [card, setCard] = useState<{
+    name: string | null;
+    stamps: number;
+    target: number;
+    redeemed_count: number;
+    reward_name?: string;
+    history?: { type: 'enroll' | 'stamp' | 'redeem' | 'adjust'; delta: number; created_at: string }[];
+  } | null>(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -817,6 +824,37 @@ export function LoyaltyCard() {
         )}
         {card.redeemed_count > 0 && (
           <p className="mt-1 text-xs text-gray-500">{t('loyaltyRedeemed').replace('{n}', String(card.redeemed_count))}</p>
+        )}
+        {card.reward_name && <p className="mt-1 text-xs text-gray-500">{t('loyaltyReward').replace('{r}', card.reward_name)}</p>}
+        {card.history && card.history.length > 0 && (
+          <div className="mt-3 border-t pt-2">
+            <p className="text-xs font-semibold text-gray-700 mb-1">{t('loyaltyActivity')}</p>
+            <ul className="space-y-1">
+              {card.history.slice(0, 5).map((h, i) => (
+                <li key={i} className="flex justify-between gap-3 text-xs text-gray-600">
+                  <span>
+                    {t(
+                      h.type === 'stamp'
+                        ? 'loyaltyEvStamp'
+                        : h.type === 'redeem'
+                          ? 'loyaltyEvRedeem'
+                          : h.type === 'adjust'
+                            ? 'loyaltyEvAdjust'
+                            : 'loyaltyEvEnroll',
+                    )}
+                    {h.type === 'adjust' && ` (${h.delta > 0 ? '+' : ''}${h.delta})`}
+                  </span>
+                  <span className="text-gray-400">
+                    {new Date(h.created_at).toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      timeZone: 'Asia/Dubai',
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     );
