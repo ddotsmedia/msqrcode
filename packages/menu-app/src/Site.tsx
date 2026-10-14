@@ -9,6 +9,7 @@ import BranchMapPage from './BranchMapPage';
 import GalleryPage from './GalleryPage';
 import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
+import InstallButton from './InstallButton';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -84,6 +85,7 @@ function Layout() {
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link to="/" className="font-bold text-brand-800 text-lg">☕ Milestones Coffee</Link>
+          <InstallButton />
           <button
             type="button"
             className="md:hidden px-3 py-1 border rounded text-sm"
