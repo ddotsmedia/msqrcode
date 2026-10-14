@@ -290,21 +290,21 @@ function FeaturedMenu() {
 
   return (
     <motion.section
-      className="bg-white rounded-xl p-6 shadow-sm"
+      className=""
       initial={reduceMotion ? false : { opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
     >
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-brand-800">Our favourites</h2>
+        <h2 className="text-2xl md:text-3xl text-brand-800">Our favourites</h2>
         <Link to="/menu" className="text-sm font-semibold text-brand-700">View full menu →</Link>
       </div>
       <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         {items.map((p, i) => (
           <motion.li
             key={p.id}
-            className="rounded-lg border p-4"
+            className="rounded-2xl bg-white p-5 shadow-sm"
             initial={reduceMotion ? false : { opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.3 }}
@@ -312,7 +312,7 @@ function FeaturedMenu() {
           >
             <p className="font-semibold text-gray-800">{p.name}</p>
             {p.description && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{p.description}</p>}
-            <p className="mt-2 font-bold text-brand-600">{Number(p.base_price).toFixed(2)} AED</p>
+            <p className="mt-2 font-bold text-copper-700">{Number(p.base_price).toFixed(2)} AED</p>
           </motion.li>
         ))}
       </ul>
@@ -320,12 +320,83 @@ function FeaturedMenu() {
   );
 }
 
+// Set to '/hero/hero.webp' once the owner's photo is added to packages/menu-app/public/hero/.
+const HERO_IMAGE = '';
+
+function OfferBand() {
+  const [offer, setOffer] = useState<{ id: string; title: string; body: string | null; ends_on: string | null } | null>(null);
+  useEffect(() => {
+    axios
+      .get(`${API}/promotions`)
+      .then((r) => {
+        if (Array.isArray(r.data) && r.data.length) setOffer(r.data[0]);
+      })
+      .catch(() => {});
+  }, []);
+  if (!offer) return null;
+  return (
+    <section className="rounded-3xl bg-brand-800 text-white p-8 md:flex md:items-center md:justify-between gap-6">
+      <div>
+        <p className="text-copper-300 text-sm font-semibold uppercase tracking-wide">Offer</p>
+        <h2 className="text-2xl md:text-3xl mt-1">{offer.title}</h2>
+        {offer.body && <p className="mt-2 text-white/80">{offer.body}</p>}
+        {offer.ends_on && <p className="mt-2 text-sm text-white/60">Until {offer.ends_on}</p>}
+      </div>
+      <Link to="/news" className="mt-4 md:mt-0 inline-block px-5 py-3 rounded-xl bg-copper-700 hover:bg-copper-500 font-semibold">
+        All offers
+      </Link>
+    </section>
+  );
+}
+
+function LoyaltyBand() {
+  return (
+    <section className="rounded-3xl bg-white p-8 shadow-sm md:flex md:items-center md:justify-between gap-6">
+      <div>
+        <h2 className="text-2xl md:text-3xl text-brand-800">10 stamps, 1 free drink</h2>
+        <p className="mt-2 text-slate-600">Join free with your phone number. Staff add stamps at the counter.</p>
+        <div className="mt-4 flex gap-1.5" aria-hidden="true">
+          {Array.from({ length: 10 }, (_, i) => (
+            <span key={i} className={`h-6 w-6 rounded-full ${i < 3 ? 'bg-copper-500' : 'border-2 border-copper-300'}`} />
+          ))}
+        </div>
+      </div>
+      <Link
+        to="/loyalty"
+        className="mt-6 md:mt-0 inline-block px-5 py-3 rounded-xl bg-brand-700 hover:bg-brand-600 text-white font-semibold"
+      >
+        Join free
+      </Link>
+    </section>
+  );
+}
+
 function HomePage() {
   const [params] = useSearchParams();
-  const navigate = useNavigate();
   const { branches } = useBranches();
-  const [nearest, setNearest] = useState<{ branch: SiteBranch; km: number }[] | null>(null);
-  const [showScanner, setShowScanner] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  const openCount = useMemo(
+    () => (branches ?? []).filter((b) => isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) === true).length,
+    [branches],
+  );
+  const nearest = useMemo(() => {
+    const list = branches ?? [];
+    if (coords) {
+      return list
+        .filter((b) => typeof b.latitude === 'number' && typeof b.longitude === 'number')
+        .map((b) => ({ b, km: distanceKm(coords.lat, coords.lng, b.latitude as number, b.longitude as number) as number | null }))
+        .sort((a, c) => (a.km ?? 0) - (c.km ?? 0))
+        .slice(0, 3);
+    }
+    return list.slice(0, 3).map((b) => ({ b, km: null as number | null }));
+  }, [branches, coords]);
+
+  useEffect(() => {
+    setPageTitle('Milestones Coffee');
+    setMetaDescription('Milestones Coffee menus, branches, opening hours, offers and rewards.');
+  }, []);
 
   // Old QR codes point to /?branch=<id>&table=<n>: send them to the branch menu.
   const legacyBranch = params.get('branch');
@@ -335,96 +406,116 @@ function HomePage() {
     return <Navigate to={`/menu/${legacyBranch}${safeTable}`} replace />;
   }
 
-  const openCount = useMemo(
-    () => (branches ?? []).filter((b) => isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) === true).length,
-    [branches],
-  );
-
-  function findNearest() {
+  function locate() {
     navigator.geolocation?.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const list = (branches ?? [])
-          .filter((b) => typeof b.latitude === 'number' && typeof b.longitude === 'number')
-          .map((b) => ({ branch: b, km: distanceKm(latitude, longitude, b.latitude as number, b.longitude as number) }))
-          .sort((a, b) => a.km - b.km)
-          .slice(0, 3);
-        setNearest(list);
-      },
-      () => setNearest([]),
-      { enableHighAccuracy: false, timeout: 8000 },
+      (p) => setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => {},
+      { timeout: 8000 },
     );
   }
 
-  useEffect(() => {
-    setPageTitle('Milestones Coffee');
-    setMetaDescription('Milestones Coffee menus, branches, opening hours and loyalty card.');
-  }, []);
-
-  const reduceMotion = useReducedMotion();
-  const fadeUp = (delay: number) =>
+  const fade = (delay: number) =>
     reduceMotion
       ? {}
-      : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.5, delay, ease: 'easeOut' as const } };
+      : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: 'easeOut' as const } };
+  const quick: [string, string, string][] = [
+    ['/menu', 'Menu', 'Browse drinks and food'],
+    ['/branches', 'Find a branch', 'Open now near you'],
+    ['/scan', 'Scan QR', 'Open your table menu'],
+    ['/loyalty', 'Rewards', '10 stamps, 1 free drink'],
+  ];
 
   return (
-    <div className="space-y-6">
-      <motion.section className="bg-white rounded-xl p-6 shadow-sm" {...fadeUp(0)}>
-        <motion.img
-          src="/logo/logo-512.png"
-          alt=""
-          width={96}
-          height={96}
-          className="h-24 w-24 rounded-full mb-3"
-          initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.6, ease: 'backOut' }}
-        />
-        <motion.h1 className="text-3xl font-bold text-brand-800" {...fadeUp(0.1)}>Milestones Coffee</motion.h1>
-        <motion.p className="text-gray-600 mt-2" {...fadeUp(0.17)}>
-          {branches ? (
-            <>
-              <CountUp to={openCount} /> of {branches.length} branches open now
-            </>
-          ) : (
-            'Loading branches…'
-          )}
-        </motion.p>
-        <motion.div className="flex flex-wrap gap-2 mt-4" {...fadeUp(0.2)}>
-          <Link to="/menu" className="px-4 py-2 bg-brand-600 text-white rounded-lg font-semibold">View menu</Link>
-          <Link to="/branches" className="px-4 py-2 bg-gray-100 rounded-lg font-semibold">Find a branch</Link>
-          <button type="button" onClick={findNearest} className="px-4 py-2 bg-gray-100 rounded-lg font-semibold">Nearest branch</button>
-          <button type="button" onClick={() => setShowScanner((s) => !s)} className="px-4 py-2 bg-gray-100 rounded-lg font-semibold">
-            {showScanner ? 'Close scanner' : 'Scan a branch QR'}
-          </button>
-        </motion.div>
-        {nearest && (
-          <ul className="mt-4 space-y-2">
-            {nearest.length === 0 && <li className="text-sm text-gray-600">Location not available.</li>}
-            {nearest.map(({ branch, km }) => (
-              <li key={branch.id} className="flex items-center justify-between bg-gray-50 rounded p-3">
-                <span>
-                  <strong>{branch.name}</strong> · {km.toFixed(1)} km
-                </span>
-                <Link to={`/branches/${branch.id}`} className="text-brand-700 font-semibold text-sm">Details</Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        {showScanner && (
-          <div className="mt-4">
-            <QRScannerPage
-              onBranchDetected={(id, table) => navigate(`/menu/${id}${table ? `?table=${table}` : ''}`)}
-            />
-          </div>
-        )}
-      </motion.section>
-      <FeaturedMenu />
-      <section className="grid md:grid-cols-3 gap-4">
-        <Link to="/loyalty" className="bg-white rounded-xl p-4 shadow-sm font-semibold">Loyalty card →</Link>
-        <Link to="/feedback" className="bg-white rounded-xl p-4 shadow-sm font-semibold">Share feedback →</Link>
-        <Link to="/contact" className="bg-white rounded-xl p-4 shadow-sm font-semibold">Contact us →</Link>
+    <div className="space-y-12">
+      <section
+        className="relative overflow-hidden rounded-3xl text-white"
+        style={
+          HERO_IMAGE
+            ? {
+                backgroundImage: `linear-gradient(rgba(11,26,51,.6),rgba(11,26,51,.85)), url(${HERO_IMAGE})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
+        {!HERO_IMAGE && <div className="absolute inset-0 bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600" aria-hidden="true" />}
+        <div className="relative px-6 py-16 md:py-24 text-center">
+          <motion.img
+            src="/logo/logo-512.png"
+            alt=""
+            width={112}
+            height={112}
+            className="mx-auto h-28 w-28 rounded-full ring-4 ring-copper-500/60"
+            initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.7, ease: 'backOut' }}
+          />
+          <motion.h1 className="mt-6 text-4xl md:text-6xl font-semibold" {...fade(0.15)}>
+            Milestones Coffee
+          </motion.h1>
+          <motion.p className="mt-4 text-lg text-copper-300" {...fade(0.25)}>
+            {branches ? (
+              <>
+                <CountUp to={openCount} /> of {branches.length} branches open now
+              </>
+            ) : (
+              'Loading branches…'
+            )}
+          </motion.p>
+          <motion.div className="mt-8 flex flex-wrap justify-center gap-3" {...fade(0.35)}>
+            <Link to="/menu" className="px-6 py-3 rounded-xl bg-copper-700 hover:bg-copper-500 font-semibold">
+              View menu
+            </Link>
+            <Link to="/branches" className="px-6 py-3 rounded-xl border border-white/60 hover:bg-white/10 font-semibold">
+              Find a branch
+            </Link>
+          </motion.div>
+        </div>
       </section>
+
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {quick.map(([to, title, sub]) => (
+          <Link key={to} to={to} className="rounded-2xl bg-white p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition">
+            <p className="font-semibold text-brand-800">{title}</p>
+            <p className="text-sm text-slate-600 mt-1">{sub}</p>
+          </Link>
+        ))}
+      </section>
+
+      <FeaturedMenu />
+      <OfferBand />
+      <LoyaltyBand />
+
+      {nearest.length > 0 && (
+        <section>
+          <div className="flex items-end justify-between mb-4 gap-3">
+            <h2 className="text-2xl md:text-3xl text-brand-800">{coords ? 'Nearest to you' : 'Our branches'}</h2>
+            <div className="flex gap-4 text-sm font-semibold">
+              {!coords && (
+                <button type="button" onClick={locate} className="text-copper-700">
+                  Use my location
+                </button>
+              )}
+              <Link to="/branches" className="text-brand-700">
+                See all →
+              </Link>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {nearest.map(({ b, km }) => (
+              <Link key={b.id} to={`/branches/${b.id}`} className="rounded-2xl bg-white p-5 shadow-sm hover:shadow-md transition">
+                <p className="font-semibold text-brand-800">{b.name}</p>
+                <p className="text-sm text-slate-600 mt-1">{b.address}</p>
+                <div className="mt-2">
+                  <HoursLine branch={b} />
+                </div>
+                {km !== null && <p className="mt-1 text-xs text-slate-500">{km.toFixed(1)} km away</p>}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
