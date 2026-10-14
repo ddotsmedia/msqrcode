@@ -115,6 +115,59 @@ function Layout() {
   );
 }
 
+interface FeaturedProduct {
+  id: string;
+  name: string;
+  description?: string;
+  base_price: number | string;
+  image_url?: string;
+  status: string;
+  is_popular?: boolean;
+  display_order?: number;
+}
+
+function FeaturedMenu() {
+  const [items, setItems] = useState<FeaturedProduct[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${API}/products`)
+      .then((res) => {
+        if (cancelled || !Array.isArray(res.data)) return;
+        const popular = (res.data as FeaturedProduct[])
+          .filter((p) => p.is_popular && p.status === 'active')
+          .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
+          .slice(0, 6);
+        setItems(popular);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <section className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-brand-800">Our favourites</h2>
+        <Link to="/menu" className="text-sm font-semibold text-brand-700">View full menu →</Link>
+      </div>
+      <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+        {items.map((p) => (
+          <li key={p.id} className="rounded-lg border p-4">
+            <p className="font-semibold text-gray-800">{p.name}</p>
+            {p.description && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{p.description}</p>}
+            <p className="mt-2 font-bold text-brand-600">{Number(p.base_price).toFixed(2)} AED</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function HomePage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -192,6 +245,7 @@ function HomePage() {
           </div>
         )}
       </section>
+      <FeaturedMenu />
       <section className="grid md:grid-cols-3 gap-4">
         <Link to="/loyalty" className="bg-white rounded-xl p-4 shadow-sm font-semibold">Loyalty card →</Link>
         <Link to="/feedback" className="bg-white rounded-xl p-4 shadow-sm font-semibold">Share feedback →</Link>
