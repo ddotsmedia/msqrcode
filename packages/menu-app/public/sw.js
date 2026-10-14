@@ -1,4 +1,4 @@
-const CACHE_NAME = 'milestones-v1';
+const CACHE_NAME = 'milestones-v2';
 const ASSETS_TO_CACHE = ['/index.html'];
 
 // Precache app shell on install

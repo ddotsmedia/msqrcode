@@ -4,6 +4,13 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background: #faf6f0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Fraunces, Georgia, serif;
 }

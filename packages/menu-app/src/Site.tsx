@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { animate, motion, useReducedMotion } from 'motion/react';
-import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FeedbackForm, LoyaltyCard, MenuPage, QRScannerPage } from './App';
 import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, getWeekHours, isOpenNow } from './lib/hours';
@@ -66,53 +66,169 @@ function HoursLine({ branch }: { branch: SiteBranch }) {
   );
 }
 
-function Layout() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const links: [string, string][] = [
-    ['/', 'Home'],
-    ['/branches', 'Branches'],
-    ['/map', 'Map'],
-    ['/offers', 'Offers'],
-    ['/gallery', 'Gallery'],
-    ['/blog', 'News'],
-    ['/faq', 'FAQ'],
-    ['/menu', 'Menu'],
-    ['/loyalty', 'Loyalty'],
-    ['/feedback', 'Feedback'],
-    ['/about', 'About'],
-    ['/contact', 'Contact'],
-  ];
+const NAV: [string, string][] = [
+  ['/menu', 'Menu'],
+  ['/branches', 'Find a Branch'],
+  ['/loyalty', 'Rewards'],
+  ['/news', "What's New"],
+];
+const MORE: [string, string][] = [
+  ['/about', 'About'],
+  ['/gallery', 'Gallery'],
+  ['/faq', 'FAQ'],
+  ['/feedback', 'Feedback'],
+  ['/contact', 'Contact'],
+];
+// Social links shown in the footer. Add the owner's, e.g. ['Instagram', 'https://instagram.com/...'].
+const SOCIAL: [string, string][] = [];
+
+function FooterCol({ title, links }: { title: string; links: [string, string][] }) {
   return (
-    <div className="min-h-screen bg-brand-50">
-      <header className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-brand-800 text-lg">
+    <div>
+      <p className="text-white font-semibold mb-3">{title}</p>
+      <ul className="space-y-2">
+        {links.map(([to, label]) => (
+          <li key={to}>
+            <Link to={to} className="hover:text-white">
+              {label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SiteFooter() {
+  return (
+    <footer className="bg-brand-900 text-white/75 text-sm pb-16 md:pb-0">
+      <div className="max-w-6xl mx-auto px-4 py-10 grid gap-8 grid-cols-2 md:grid-cols-4">
+        <div className="col-span-2 md:col-span-1">
+          <div className="flex items-center gap-2 text-white font-display text-lg">
             <img src="/logo/logo-512.png" alt="" width={32} height={32} className="h-8 w-8 rounded-full" />
             Milestones Coffee
+          </div>
+          <p className="mt-3">Branches across Abu Dhabi.</p>
+          {SOCIAL.length > 0 && (
+            <div className="mt-3 flex gap-3">
+              {SOCIAL.map(([label, href]) => (
+                <a key={href} href={href} target="_blank" rel="noopener noreferrer" className="hover:text-white">
+                  {label}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/news', "What's New"], ['/loyalty', 'Rewards'], ['/gallery', 'Gallery']]} />
+        <FooterCol title="Visit" links={[['/branches', 'Find a Branch'], ['/scan', 'Scan a QR'], ['/contact', 'Contact']]} />
+        <FooterCol title="Help" links={[['/faq', 'FAQ'], ['/feedback', 'Feedback'], ['/about', 'About']]} />
+      </div>
+      <div className="border-t border-white/10 py-4 text-center text-xs text-white/60">© {new Date().getFullYear()} Milestones Coffee</div>
+    </footer>
+  );
+}
+
+function Layout() {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => setMoreOpen(false), [pathname]);
+  const active = (to: string) => (to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`));
+  const tabClass = (on: boolean) =>
+    `px-3 py-2 rounded-lg text-sm font-medium ${on ? 'bg-white/15 text-white' : 'text-white/80 hover:text-white hover:bg-white/10'}`;
+  const barItems: [string, string][] = [
+    ['/', 'Home'],
+    ['/menu', 'Menu'],
+    ['/branches', 'Branches'],
+    ['/loyalty', 'Rewards'],
+  ];
+
+  return (
+    <div className="min-h-screen bg-cream flex flex-col">
+      <header className="bg-brand-700 text-white sticky top-0 z-40 shadow">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-2 font-display text-xl font-semibold">
+            <img src="/logo/logo-512.png" alt="" width={36} height={36} className="h-9 w-9 rounded-full ring-2 ring-copper-500" />
+            Milestones Coffee
           </Link>
-          <button
-            type="button"
-            className="md:hidden px-3 py-1 border rounded text-sm"
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-expanded={menuOpen}
-            aria-label="Toggle navigation"
-          >
-            Menu
-          </button>
-          <nav className={`${menuOpen ? 'block' : 'hidden'} md:flex gap-4 absolute md:static left-0 right-0 top-full bg-white md:bg-transparent p-4 md:p-0 border-b md:border-0`}>
-            {links.map(([to, label]) => (
-              <Link key={to} to={to} onClick={() => setMenuOpen(false)} className="block py-1 text-sm font-semibold text-gray-700 hover:text-brand-700">
+          <nav className="hidden md:flex items-center gap-1" aria-label="Main">
+            {NAV.map(([to, label]) => (
+              <Link key={to} to={to} className={tabClass(active(to))}>
                 {label}
               </Link>
             ))}
+            <div className="relative">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className={tabClass(moreOpen)}>
+                More ▾
+              </button>
+              {moreOpen && (
+                <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white text-brand-800 shadow-lg py-2">
+                  {MORE.map(([to, label]) => (
+                    <Link key={to} to={to} className="block px-4 py-2 text-sm hover:bg-cream">
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Link to="/scan" className="ml-2 px-4 py-2 rounded-lg bg-copper-700 hover:bg-copper-500 text-white text-sm font-semibold">
+              Scan QR
+            </Link>
           </nav>
+          <Link to="/scan" className="md:hidden px-3 py-2 rounded-lg bg-copper-700 text-white text-sm font-semibold">
+            Scan QR
+          </Link>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto p-4">
+
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8">
         <Outlet />
       </main>
-      <footer className="text-center text-xs text-gray-500 py-6">© Milestones Coffee</footer>
+
+      <SiteFooter />
+
+      {moreOpen && (
+        <div className="md:hidden fixed inset-x-0 bottom-16 z-40 bg-white border-t shadow-lg p-2">
+          {MORE.map(([to, label]) => (
+            <Link key={to} to={to} className="block px-4 py-3 text-brand-800 font-medium rounded-lg hover:bg-cream">
+              {label}
+            </Link>
+          ))}
+        </div>
+      )}
+      <nav aria-label="Mobile" className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-white border-t grid grid-cols-5">
+        {barItems.map(([to, label]) => (
+          <Link
+            key={to}
+            to={to}
+            className={`flex items-center justify-center text-xs font-semibold ${
+              active(to) ? 'text-brand-700 border-t-2 border-copper-500' : 'text-slate-500'
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+        <button
+          type="button"
+          onClick={() => setMoreOpen((o) => !o)}
+          aria-expanded={moreOpen}
+          className={`text-xs font-semibold ${moreOpen ? 'text-brand-700' : 'text-slate-500'}`}
+        >
+          More
+        </button>
+      </nav>
     </div>
+  );
+}
+
+function ScanPage() {
+  const navigate = useNavigate();
+  useEffect(() => setPageTitle('Scan a branch QR'), []);
+  return (
+    <section className="max-w-md mx-auto space-y-4">
+      <h1 className="text-3xl font-semibold text-brand-800">Scan a branch QR</h1>
+      <p className="text-slate-600">Point your camera at the QR code on your table to open that branch's menu.</p>
+      <QRScannerPage onBranchDetected={(id, table) => navigate(`/menu/${id}${table ? `?table=${table}` : ''}`)} />
+    </section>
   );
 }
 
@@ -502,6 +618,8 @@ export function SiteRoutes() {
         <Route path="feedback" element={<FeedbackPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="contact" element={<ContactPage />} />
+        <Route path="scan" element={<ScanPage />} />
+        <Route path="rewards" element={<Navigate to="/loyalty" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
