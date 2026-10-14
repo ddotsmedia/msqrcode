@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { motion, useReducedMotion } from 'motion/react';
+import { animate, motion, useReducedMotion } from 'motion/react';
 import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FeedbackForm, LoyaltyCard, MenuPage, QRScannerPage } from './App';
 import { ContactButtons } from './lib/ContactButtons';
@@ -114,6 +114,27 @@ function Layout() {
       <footer className="text-center text-xs text-gray-500 py-6">© Milestones Coffee</footer>
     </div>
   );
+}
+
+// Counts from 0 up to `to` once, then stays. Shows the final number straight away if reduced motion is on.
+function CountUp({ to }: { to: number }) {
+  const reduceMotion = useReducedMotion();
+  const [value, setValue] = useState(reduceMotion ? to : 0);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setValue(to);
+      return;
+    }
+    const controls = animate(0, to, {
+      duration: 0.9,
+      ease: 'easeOut',
+      onUpdate: (v) => setValue(Math.round(v)),
+    });
+    return () => controls.stop();
+  }, [to, reduceMotion]);
+
+  return <>{value}</>;
 }
 
 interface FeaturedProduct {
@@ -233,9 +254,25 @@ function HomePage() {
   return (
     <div className="space-y-6">
       <motion.section className="bg-white rounded-xl p-6 shadow-sm" {...fadeUp(0)}>
-        <motion.h1 className="text-3xl font-bold text-brand-800" {...fadeUp(0.05)}>Milestones Coffee</motion.h1>
-        <motion.p className="text-gray-600 mt-2" {...fadeUp(0.12)}>
-          {branches ? `${openCount} of ${branches.length} branches open now` : 'Loading branches…'}
+        <motion.img
+          src="/logo/logo-512.png"
+          alt=""
+          width={96}
+          height={96}
+          className="h-24 w-24 rounded-full mb-3"
+          initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.6, ease: 'backOut' }}
+        />
+        <motion.h1 className="text-3xl font-bold text-brand-800" {...fadeUp(0.1)}>Milestones Coffee</motion.h1>
+        <motion.p className="text-gray-600 mt-2" {...fadeUp(0.17)}>
+          {branches ? (
+            <>
+              <CountUp to={openCount} /> of {branches.length} branches open now
+            </>
+          ) : (
+            'Loading branches…'
+          )}
         </motion.p>
         <motion.div className="flex flex-wrap gap-2 mt-4" {...fadeUp(0.2)}>
           <Link to="/menu" className="px-4 py-2 bg-brand-600 text-white rounded-lg font-semibold">View menu</Link>
