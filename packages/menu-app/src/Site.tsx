@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { motion, useReducedMotion } from 'motion/react';
 import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FeedbackForm, LoyaltyCard, MenuPage, QRScannerPage } from './App';
 import { ContactButtons } from './lib/ContactButtons';
@@ -209,21 +210,27 @@ function HomePage() {
     setMetaDescription('Milestones Coffee menus, branches, opening hours and loyalty card.');
   }, []);
 
+  const reduceMotion = useReducedMotion();
+  const fadeUp = (delay: number) =>
+    reduceMotion
+      ? {}
+      : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.5, delay, ease: 'easeOut' as const } };
+
   return (
     <div className="space-y-6">
-      <section className="bg-white rounded-xl p-6 shadow-sm">
-        <h1 className="text-3xl font-bold text-brand-800">Milestones Coffee</h1>
-        <p className="text-gray-600 mt-2">
+      <motion.section className="bg-white rounded-xl p-6 shadow-sm" {...fadeUp(0)}>
+        <motion.h1 className="text-3xl font-bold text-brand-800" {...fadeUp(0.05)}>Milestones Coffee</motion.h1>
+        <motion.p className="text-gray-600 mt-2" {...fadeUp(0.12)}>
           {branches ? `${openCount} of ${branches.length} branches open now` : 'Loading branches…'}
-        </p>
-        <div className="flex flex-wrap gap-2 mt-4">
+        </motion.p>
+        <motion.div className="flex flex-wrap gap-2 mt-4" {...fadeUp(0.2)}>
           <Link to="/menu" className="px-4 py-2 bg-brand-600 text-white rounded-lg font-semibold">View menu</Link>
           <Link to="/branches" className="px-4 py-2 bg-gray-100 rounded-lg font-semibold">Find a branch</Link>
           <button type="button" onClick={findNearest} className="px-4 py-2 bg-gray-100 rounded-lg font-semibold">Nearest branch</button>
           <button type="button" onClick={() => setShowScanner((s) => !s)} className="px-4 py-2 bg-gray-100 rounded-lg font-semibold">
             {showScanner ? 'Close scanner' : 'Scan a branch QR'}
           </button>
-        </div>
+        </motion.div>
         {nearest && (
           <ul className="mt-4 space-y-2">
             {nearest.length === 0 && <li className="text-sm text-gray-600">Location not available.</li>}
@@ -244,7 +251,7 @@ function HomePage() {
             />
           </div>
         )}
-      </section>
+      </motion.section>
       <FeaturedMenu />
       <section className="grid md:grid-cols-3 gap-4">
         <Link to="/loyalty" className="bg-white rounded-xl p-4 shadow-sm font-semibold">Loyalty card →</Link>
