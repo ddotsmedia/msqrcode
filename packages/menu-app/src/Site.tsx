@@ -8,6 +8,7 @@ import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import BranchMapPage from './BranchMapPage';
 import GalleryPage from './GalleryPage';
 import { BlogListPage, BlogPostPage } from './BlogPages';
+import FaqPage from './FaqPage';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -71,6 +72,7 @@ function Layout() {
     ['/map', 'Map'],
     ['/gallery', 'Gallery'],
     ['/blog', 'News'],
+    ['/faq', 'FAQ'],
     ['/menu', 'Menu'],
     ['/loyalty', 'Loyalty'],
     ['/feedback', 'Feedback'],
@@ -374,6 +376,7 @@ export function SiteRoutes() {
         <Route path="map" element={<MapRoute />} />
         <Route path="gallery" element={<GalleryPage />} />
         <Route path="blog" element={<BlogListPage />} />
+        <Route path="faq" element={<FaqPage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />
         <Route path="menu" element={<AllMenuPage />} />
         <Route path="menu/:id" element={<BranchMenuPage />} />
