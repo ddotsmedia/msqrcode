@@ -85,7 +85,10 @@ function Layout() {
     <div className="min-h-screen bg-brand-50">
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="font-bold text-brand-800 text-lg">☕ Milestones Coffee</Link>
+          <Link to="/" className="flex items-center gap-2 font-bold text-brand-800 text-lg">
+            <img src="/logo/logo-512.png" alt="" width={32} height={32} className="h-8 w-8 rounded-full" />
+            Milestones Coffee
+          </Link>
           <button
             type="button"
             className="md:hidden px-3 py-1 border rounded text-sm"
