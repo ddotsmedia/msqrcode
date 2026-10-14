@@ -5,6 +5,7 @@ import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
 const API_BASE_URL = '/api';
@@ -721,6 +722,7 @@ const LOYALTY_KEY = 'milestones_loyalty_token';
 
 export function LoyaltyCard() {
   const { t } = useLang();
+  const reduceMotion = useReducedMotion();
   const [token, setToken] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LOYALTY_KEY);
@@ -780,14 +782,17 @@ export function LoyaltyCard() {
         </p>
         <div className="grid grid-cols-5 gap-2 mb-2">
           {dots.map((filled, i) => (
-            <div
+            <motion.div
               key={i}
               className={`aspect-square rounded-full flex items-center justify-center text-sm ${
                 filled ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
               }`}
+              initial={reduceMotion || !filled ? false : { scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.35, delay: filled ? i * 0.06 : 0, ease: 'backOut' }}
             >
               {filled ? '☕' : i + 1}
-            </div>
+            </motion.div>
           ))}
         </div>
         <p className="text-xs text-gray-600">
