@@ -520,17 +520,24 @@ function HomePage() {
   );
 }
 
-function MapRoute() {
-  const { branches } = useBranches();
-  setPageTitle('Branch map');
-  return <BranchMapPage branches={branches} />;
+function WhatsNewPage() {
+  useEffect(() => setPageTitle("What's New"), []);
+  return (
+    <div className="space-y-12">
+      <h1 className="text-3xl md:text-4xl font-semibold text-brand-800">What's New</h1>
+      <OffersPage />
+      <BlogListPage />
+    </div>
+  );
 }
 
 function BranchesPage() {
   const { branches, error } = useBranches();
   const [query, setQuery] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);
-  setPageTitle('Branches');
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'map' ? 'map' : 'list';
+  setPageTitle('Find a Branch');
 
   const list = (branches ?? []).filter((b) => {
     if (query && !`${b.name} ${b.address}`.toLowerCase().includes(query.toLowerCase())) return false;
@@ -540,7 +547,26 @@ function BranchesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Our branches</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl md:text-4xl font-semibold text-brand-800">Find a Branch</h1>
+        <div className="inline-flex rounded-lg bg-white p-1 shadow-sm" role="group" aria-label="View">
+          {(['list', 'map'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => setParams(v === 'map' ? { view: 'map' } : {})}
+              className={`rounded-md px-4 py-2 text-sm font-semibold ${view === v ? 'bg-brand-700 text-white' : 'text-brand-800'}`}
+            >
+              {v === 'map' ? 'Map' : 'List'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === 'map' ? (
+        <BranchMapPage branches={branches} />
+      ) : (
+        <>
       <div className="flex flex-wrap gap-3">
         <input
           value={query}
@@ -566,6 +592,8 @@ function BranchesPage() {
         ))}
       </ul>
       {branches && list.length === 0 && <p className="text-gray-500">No branches match.</p>}
+        </>
+      )}
     </div>
   );
 }
@@ -649,10 +677,10 @@ function FeedbackPage() {
 }
 
 function LoyaltyPage() {
-  setPageTitle('Loyalty card');
+  setPageTitle('Rewards');
   return (
     <div className="space-y-4 max-w-md">
-      <h1 className="text-2xl font-bold">Loyalty card</h1>
+      <h1 className="text-3xl md:text-4xl font-semibold text-brand-800">Rewards</h1>
       <p className="text-sm text-gray-600">Collect 10 stamps and your next drink is on us. Staff add a stamp when you order.</p>
       <LoyaltyCard />
     </div>
@@ -697,10 +725,11 @@ export function SiteRoutes() {
         <Route index element={<HomePage />} />
         <Route path="branches" element={<BranchesPage />} />
         <Route path="branches/:id" element={<BranchDetailPage />} />
-        <Route path="map" element={<MapRoute />} />
-        <Route path="offers" element={<OffersPage />} />
+        <Route path="map" element={<Navigate to="/branches?view=map" replace />} />
+        <Route path="offers" element={<Navigate to="/news" replace />} />
+        <Route path="news" element={<WhatsNewPage />} />
         <Route path="gallery" element={<GalleryPage />} />
-        <Route path="blog" element={<BlogListPage />} />
+        <Route path="blog" element={<Navigate to="/news" replace />} />
         <Route path="faq" element={<FaqPage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />
         <Route path="menu" element={<AllMenuPage />} />
