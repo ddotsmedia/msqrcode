@@ -148,24 +148,38 @@ function FeaturedMenu() {
     };
   }, []);
 
+  const reduceMotion = useReducedMotion();
   if (items.length === 0) return null;
 
   return (
-    <section className="bg-white rounded-xl p-6 shadow-sm">
+    <motion.section
+      className="bg-white rounded-xl p-6 shadow-sm"
+      initial={reduceMotion ? false : { opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+    >
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-brand-800">Our favourites</h2>
         <Link to="/menu" className="text-sm font-semibold text-brand-700">View full menu →</Link>
       </div>
       <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-        {items.map((p) => (
-          <li key={p.id} className="rounded-lg border p-4">
+        {items.map((p, i) => (
+          <motion.li
+            key={p.id}
+            className="rounded-lg border p-4"
+            initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.4, delay: i * 0.08, ease: 'easeOut' }}
+          >
             <p className="font-semibold text-gray-800">{p.name}</p>
             {p.description && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{p.description}</p>}
             <p className="mt-2 font-bold text-brand-600">{Number(p.base_price).toFixed(2)} AED</p>
-          </li>
+          </motion.li>
         ))}
       </ul>
-    </section>
+    </motion.section>
   );
 }
 
