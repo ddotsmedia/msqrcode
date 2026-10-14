@@ -7,6 +7,9 @@ import { getTodayHours, getWeekHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import BranchMapPage from './BranchMapPage';
 import OffersPage from './OffersPage';
+import GalleryPage from './GalleryPage';
+import { BlogListPage, BlogPostPage } from './BlogPages';
+import FaqPage from './FaqPage';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -69,6 +72,9 @@ function Layout() {
     ['/branches', 'Branches'],
     ['/map', 'Map'],
     ['/offers', 'Offers'],
+    ['/gallery', 'Gallery'],
+    ['/blog', 'News'],
+    ['/faq', 'FAQ'],
     ['/menu', 'Menu'],
     ['/loyalty', 'Loyalty'],
     ['/feedback', 'Feedback'],
@@ -371,6 +377,10 @@ export function SiteRoutes() {
         <Route path="branches/:id" element={<BranchDetailPage />} />
         <Route path="map" element={<MapRoute />} />
         <Route path="offers" element={<OffersPage />} />
+        <Route path="gallery" element={<GalleryPage />} />
+        <Route path="blog" element={<BlogListPage />} />
+        <Route path="faq" element={<FaqPage />} />
+        <Route path="blog/:slug" element={<BlogPostPage />} />
         <Route path="menu" element={<AllMenuPage />} />
         <Route path="menu/:id" element={<BranchMenuPage />} />
         <Route path="loyalty" element={<LoyaltyPage />} />
