@@ -14,3 +14,4 @@ export { Order } from './order.entity';
 export { OrderItem } from './order-item.entity';
 export { BranchFeedback } from './branch-feedback.entity';
 export { LoyaltyCard } from './loyalty-card.entity';
+export { Promotion } from './promotion.entity';

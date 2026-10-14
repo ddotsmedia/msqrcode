@@ -6,6 +6,7 @@ import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, getWeekHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import BranchMapPage from './BranchMapPage';
+import OffersPage from './OffersPage';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -67,6 +68,7 @@ function Layout() {
     ['/', 'Home'],
     ['/branches', 'Branches'],
     ['/map', 'Map'],
+    ['/offers', 'Offers'],
     ['/menu', 'Menu'],
     ['/loyalty', 'Loyalty'],
     ['/feedback', 'Feedback'],
@@ -368,6 +370,7 @@ export function SiteRoutes() {
         <Route path="branches" element={<BranchesPage />} />
         <Route path="branches/:id" element={<BranchDetailPage />} />
         <Route path="map" element={<MapRoute />} />
+        <Route path="offers" element={<OffersPage />} />
         <Route path="menu" element={<AllMenuPage />} />
         <Route path="menu/:id" element={<BranchMenuPage />} />
         <Route path="loyalty" element={<LoyaltyPage />} />
