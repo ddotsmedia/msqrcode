@@ -5,6 +5,7 @@ import { FeedbackForm, LoyaltyCard, MenuPage, QRScannerPage } from './App';
 import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, getWeekHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
+import BranchMapPage from './BranchMapPage';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -65,6 +66,7 @@ function Layout() {
   const links: [string, string][] = [
     ['/', 'Home'],
     ['/branches', 'Branches'],
+    ['/map', 'Map'],
     ['/menu', 'Menu'],
     ['/loyalty', 'Loyalty'],
     ['/feedback', 'Feedback'],
@@ -186,6 +188,12 @@ function HomePage() {
       </section>
     </div>
   );
+}
+
+function MapRoute() {
+  const { branches } = useBranches();
+  setPageTitle('Branch map');
+  return <BranchMapPage branches={branches} />;
 }
 
 function BranchesPage() {
@@ -359,6 +367,7 @@ export function SiteRoutes() {
         <Route index element={<HomePage />} />
         <Route path="branches" element={<BranchesPage />} />
         <Route path="branches/:id" element={<BranchDetailPage />} />
+        <Route path="map" element={<MapRoute />} />
         <Route path="menu" element={<AllMenuPage />} />
         <Route path="menu/:id" element={<BranchMenuPage />} />
         <Route path="loyalty" element={<LoyaltyPage />} />
