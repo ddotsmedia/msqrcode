@@ -12,6 +12,28 @@ export class LoyaltySettings {
   @Column({ type: 'varchar', length: 80, default: 'Free drink' })
   reward_name: string;
 
+  // Most stamps one card can get per day (Asia/Dubai).
+  @Column({ type: 'int', default: 3 })
+  daily_stamp_limit: number;
+
+  // Bonus stamps given on the first visit in the customer's birthday week.
+  @Column({ type: 'int', default: 1 })
+  birthday_bonus: number;
+
+  // Bonus stamps given to both friends after the new customer's first stamp.
+  @Column({ type: 'int', default: 1 })
+  referral_bonus: number;
+
+  // Double-stamp hours: weekdays 0-6 (0 = Sunday, Asia/Dubai), comma separated. Empty = off.
+  @Column({ type: 'varchar', length: 20, default: '' })
+  double_days: string;
+
+  @Column({ type: 'varchar', length: 5, default: '14:00' })
+  double_from: string;
+
+  @Column({ type: 'varchar', length: 5, default: '17:00' })
+  double_to: string;
+
   @UpdateDateColumn()
   updated_at: Date;
 }

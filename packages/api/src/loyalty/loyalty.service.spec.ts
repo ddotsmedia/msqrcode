@@ -1,52 +1,103 @@
 import { BadRequestException } from '@nestjs/common';
-import { LoyaltyService } from './loyalty.service';
+import { LoyaltyService, dubaiNow, isDoubleNow, nearBirthday, parseBirthday, type Rules } from './loyalty.service';
+
+type Opts = {
+  stamps?: number;
+  lastStampMsAgo?: number;
+  stampsToday?: number;
+  settings?: Record<string, unknown>;
+  card?: Record<string, unknown>;
+  referrer?: Record<string, unknown>;
+};
 
 // In-memory stand-ins for the TypeORM repositories the service uses.
-function setup(opts: { stamps?: number; lastStampMsAgo?: number; target?: number } = {}) {
-  const card = { id: 'c1', phone: '971501234567', name: 'Test', token: 't', stamps: opts.stamps ?? 0, redeemed_count: 0 };
+function setup(opts: Opts = {}) {
+  const card: any = { id: 'c1', phone: '971501234567', name: 'Test', token: 't', stamps: opts.stamps ?? 0, redeemed_count: 0, referral_rewarded: false, ...opts.card };
+  const referrer: any = opts.referrer ? { id: 'r1', stamps: 0, redeemed_count: 0, ...opts.referrer } : null;
   const saved: any[] = [];
-  const cards = { findOne: jest.fn(async () => card), save: jest.fn(async (c: any) => c) };
+  const cards = {
+    findOne: jest.fn(async ({ where }: any) => {
+      if (where.id && referrer && where.id === referrer.id) return referrer;
+      if (where.referral_code) return null;
+      return card;
+    }),
+    save: jest.fn(async (c: any) => c),
+  };
   const events = {
     create: jest.fn((e: any) => e),
     save: jest.fn(async (e: any) => {
       saved.push(e);
       return e;
     }),
-    findOne: jest.fn(async () =>
-      opts.lastStampMsAgo === undefined ? null : { created_at: new Date(Date.now() - opts.lastStampMsAgo) },
-    ),
+    findOne: jest.fn(async () => (opts.lastStampMsAgo === undefined ? null : { created_at: new Date(Date.now() - opts.lastStampMsAgo) })),
+    count: jest.fn(async () => opts.stampsToday ?? 0),
   };
   const settings = {
-    findOne: jest.fn(async () => (opts.target ? { id: 1, stamps_target: opts.target, reward_name: 'Free drink' } : null)),
+    findOne: jest.fn(async () => (opts.settings ? { id: 1, stamps_target: 10, reward_name: 'Free drink', ...opts.settings } : null)),
     save: jest.fn(async (s: any) => s),
   };
   const svc = new LoyaltyService(cards as any, events as any, settings as any, {} as any, {} as any);
-  return { svc, card, saved, settings };
+  return { svc, card, referrer, saved };
 }
+
+const allDays = { double_days: '0,1,2,3,4,5,6', double_from: '00:00', double_to: '23:59' };
 
 describe('LoyaltyService', () => {
   it('adds a stamp and logs it with the staff user', async () => {
     const { svc, card, saved } = setup({ stamps: 2 });
     const res = await svc.addStamp({ phone: card.phone }, { id: 'u1', role: 'admin', assigned_branch_id: 'b1' });
-    expect(res).toEqual({ ok: true, stamps: 3 });
+    expect(res).toMatchObject({ ok: true, stamps: 3, earned: 1, double: false });
     expect(saved[0]).toMatchObject({ type: 'stamp', delta: 1, stamps_after: 3, staff_user_id: 'u1', branch_id: 'b1' });
+  });
+
+  it('finds a card by the token in its QR code', async () => {
+    const { svc } = setup({ stamps: 0 });
+    expect((await svc.addStamp({ token: 't' })).ok).toBe(true);
   });
 
   it('blocks a second stamp within a minute', async () => {
     const { svc, card, saved } = setup({ stamps: 2, lastStampMsAgo: 10_000 });
-    const res = await svc.addStamp({ phone: card.phone });
-    expect(res.ok).toBe(false);
+    expect((await svc.addStamp({ phone: card.phone })).ok).toBe(false);
     expect(card.stamps).toBe(2);
     expect(saved).toHaveLength(0);
   });
 
-  it('allows a stamp after the cooldown', async () => {
-    const { svc, card } = setup({ stamps: 2, lastStampMsAgo: 61_000 });
-    expect((await svc.addStamp({ phone: card.phone })).ok).toBe(true);
+  it('enforces the daily stamp limit', async () => {
+    const { svc, card } = setup({ stamps: 2, stampsToday: 3, settings: { daily_stamp_limit: 3 } });
+    const res = await svc.addStamp({ phone: card.phone });
+    expect(res).toMatchObject({ ok: false, message: expect.stringContaining('Daily limit') });
+  });
+
+  it('gives two stamps during double-stamp hours, capped at the target', async () => {
+    const { svc, card } = setup({ stamps: 9, settings: allDays });
+    const res = await svc.addStamp({ phone: card.phone });
+    expect(res).toMatchObject({ ok: true, stamps: 10, earned: 1, double: true });
+  });
+
+  it('gives the birthday bonus once a year in the birthday week', async () => {
+    const today = dubaiNow().md;
+    const { svc, card, saved } = setup({ stamps: 0, card: { birthday: today } });
+    const res = await svc.addStamp({ phone: card.phone });
+    expect(res).toMatchObject({ ok: true, stamps: 2, bonuses: ['birthday'] });
+    expect(saved.map((e) => e.type)).toEqual(['stamp', 'bonus']);
+    expect(card.birthday_rewarded_year).toBe(dubaiNow().year);
+  });
+
+  it('does not repeat the birthday bonus in the same year', async () => {
+    const { svc, card } = setup({ stamps: 0, card: { birthday: dubaiNow().md, birthday_rewarded_year: dubaiNow().year } });
+    expect(await svc.addStamp({ phone: card.phone })).toMatchObject({ stamps: 1, bonuses: [] });
+  });
+
+  it('rewards both friends once after a referred customer is first stamped', async () => {
+    const { svc, card, referrer } = setup({ stamps: 0, card: { referred_by: 'r1' }, referrer: { stamps: 4 } });
+    const res = await svc.addStamp({ phone: card.phone });
+    expect(res).toMatchObject({ ok: true, stamps: 2, bonuses: ['referral'] });
+    expect(referrer.stamps).toBe(5);
+    expect(card.referral_rewarded).toBe(true);
   });
 
   it('uses the saved stamps target', async () => {
-    const { svc, card } = setup({ stamps: 8, target: 8 });
+    const { svc, card } = setup({ stamps: 8, settings: { stamps_target: 8 } });
     expect((await svc.addStamp({ phone: card.phone })).ok).toBe(false);
     expect((await svc.redeem({ phone: card.phone })).ok).toBe(true);
   });
@@ -66,7 +117,32 @@ describe('LoyaltyService', () => {
 
   it('validates settings', async () => {
     const { svc } = setup();
-    await expect(svc.updateSettings({ stamps_target: 2, reward_name: 'Coffee' })).rejects.toBeInstanceOf(BadRequestException);
-    await expect(svc.updateSettings({ stamps_target: 12, reward_name: '' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.updateSettings({ stamps_target: 2 })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.updateSettings({ reward_name: '' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.updateSettings({ double_days: [7] })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.updateSettings({ double_from: '17:00', double_to: '14:00' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('loyalty helpers', () => {
+  const rules: Rules = { stamps_target: 10, reward_name: 'x', daily_stamp_limit: 3, birthday_bonus: 1, referral_bonus: 1, double_days: [1], double_from: '14:00', double_to: '17:00' };
+
+  it('checks double-stamp hours in Dubai time', () => {
+    // Monday 2026-10-12 11:00 UTC = 15:00 in Dubai
+    expect(isDoubleNow(rules, Date.UTC(2026, 9, 12, 11, 0))).toBe(true);
+    // Monday 2026-10-12 14:00 UTC = 18:00 in Dubai
+    expect(isDoubleNow(rules, Date.UTC(2026, 9, 12, 14, 0))).toBe(false);
+  });
+
+  it('matches the birthday week across the new year', () => {
+    expect(nearBirthday('12-30', '01-01')).toBe(true);
+    expect(nearBirthday('06-10', '06-20')).toBe(false);
+  });
+
+  it('parses birthdays and keeps only month and day', () => {
+    expect(parseBirthday('1990-04-15')).toBe('04-15');
+    expect(parseBirthday('02-29')).toBe('02-29');
+    expect(parseBirthday('')).toBeNull();
+    expect(() => parseBirthday('2020-02-30')).toThrow(BadRequestException);
   });
 });

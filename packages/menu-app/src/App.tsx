@@ -5,6 +5,7 @@ import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import QRCode from 'qrcode';
 import { readFavs, toggleFav } from './lib/favorites';
 import { motion, useReducedMotion } from 'motion/react';
 
@@ -748,14 +749,38 @@ export function LoyaltyCard() {
     target: number;
     redeemed_count: number;
     reward_name?: string;
-    history?: { type: 'enroll' | 'stamp' | 'redeem' | 'adjust'; delta: number; created_at: string }[];
+    referral_code?: string;
+    referral_bonus?: number;
+    has_birthday?: boolean;
+    double_now?: boolean;
+    history?: { type: 'enroll' | 'stamp' | 'redeem' | 'adjust' | 'bonus'; delta: number; created_at: string }[];
   } | null>(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // Invite code from a friend's link: /loyalty?ref=CODE
+  const [ref] = useState(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('ref') ?? '';
+      return /^[A-Z0-9]{6,12}$/i.test(v) ? v.toUpperCase() : '';
+    } catch {
+      return '';
+    }
+  });
 
+  // QR that staff scan to add a stamp. Encodes the card's secret token.
   useEffect(() => {
+    if (!token) return;
+    QRCode.toDataURL(`MSQ-CARD:${token}`, { margin: 1, width: 220, color: { dark: '#13284b', light: '#ffffff' } })
+      .then(setQr)
+      .catch(() => setQr(null));
+  }, [token]);
+
+  function loadCard() {
     if (!token) return;
     axios
       .get(`${API_BASE_URL}/loyalty/card/${token}`)
@@ -768,13 +793,47 @@ export function LoyaltyCard() {
         }
         setToken(null);
       });
-  }, [token]);
+  }
+
+  async function saveBirthday() {
+    if (!token || !birthday) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await axios.patch(`${API_BASE_URL}/loyalty/card/${token}/birthday`, { birthday });
+      if (!res.data.ok) setMessage(res.data.message);
+      loadCard();
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message || 'Could not save your birthday.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shareInvite() {
+    if (!card?.referral_code) return;
+    const url = `${window.location.origin}/loyalty?ref=${card.referral_code}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Milestones Coffee', url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* share cancelled or clipboard blocked */
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadCard, [token]);
 
   async function enroll() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await axios.post(`${API_BASE_URL}/loyalty/enroll`, { phone, name });
+      const res = await axios.post(`${API_BASE_URL}/loyalty/enroll`, { phone, name, birthday: birthday || undefined, ref: ref || undefined });
       if (res.data.ok) {
         try {
           localStorage.setItem(LOYALTY_KEY, res.data.token);
@@ -799,6 +858,15 @@ export function LoyaltyCard() {
         <p className="text-sm font-semibold text-gray-800 mb-2">
           {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
+        {card.double_now && (
+          <p className="mb-2 rounded bg-amber-50 p-2 text-xs font-semibold text-amber-800">{t('loyaltyDoubleNow')}</p>
+        )}
+        {qr && (
+          <div className="mb-3 flex items-center gap-3">
+            <img src={qr} alt="" width={110} height={110} className="h-28 w-28 rounded border" />
+            <p className="text-xs text-gray-600">{t('loyaltyShowQr')}</p>
+          </div>
+        )}
         <div className="grid grid-cols-5 gap-2 mb-2 max-w-xs">
           {dots.map((filled, i) => (
             <motion.div
@@ -826,6 +894,37 @@ export function LoyaltyCard() {
           <p className="mt-1 text-xs text-gray-500">{t('loyaltyRedeemed').replace('{n}', String(card.redeemed_count))}</p>
         )}
         {card.reward_name && <p className="mt-1 text-xs text-gray-500">{t('loyaltyReward').replace('{r}', card.reward_name)}</p>}
+        {card.has_birthday === false && (
+          <div className="mt-3 border-t pt-2">
+            <p className="text-xs font-semibold text-gray-700 mb-1">{t('loyaltyAddBirthday')}</p>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                className="flex-1 min-w-0 border border-gray-300 rounded px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={saveBirthday}
+                disabled={busy || !birthday}
+                className="shrink-0 px-3 py-1 bg-brand-700 text-white rounded text-sm font-semibold disabled:opacity-50"
+              >
+                {t('loyaltySave')}
+              </button>
+            </div>
+            {message && <p className="mt-1 text-xs text-amber-700">{message}</p>}
+          </div>
+        )}
+        {card.referral_code && (card.referral_bonus ?? 0) > 0 && (
+          <div className="mt-3 border-t pt-2">
+            <p className="text-xs font-semibold text-gray-700">{t('loyaltyInvite')}</p>
+            <p className="text-xs text-gray-600 mt-0.5">{t('loyaltyInviteText').replace('{n}', String(card.referral_bonus))}</p>
+            <button type="button" onClick={shareInvite} className="mt-2 px-3 py-1.5 rounded bg-copper-700 text-white text-xs font-semibold">
+              {copied ? t('loyaltyCopied') : t('loyaltyShare')}
+            </button>
+          </div>
+        )}
         {card.history && card.history.length > 0 && (
           <div className="mt-3 border-t pt-2">
             <p className="text-xs font-semibold text-gray-700 mb-1">{t('loyaltyActivity')}</p>
@@ -834,15 +933,16 @@ export function LoyaltyCard() {
                 <li key={i} className="flex justify-between gap-3 text-xs text-gray-600">
                   <span>
                     {t(
-                      h.type === 'stamp'
-                        ? 'loyaltyEvStamp'
-                        : h.type === 'redeem'
-                          ? 'loyaltyEvRedeem'
-                          : h.type === 'adjust'
-                            ? 'loyaltyEvAdjust'
-                            : 'loyaltyEvEnroll',
+                      {
+                        stamp: 'loyaltyEvStamp',
+                        redeem: 'loyaltyEvRedeem',
+                        adjust: 'loyaltyEvAdjust',
+                        bonus: 'loyaltyEvBonus',
+                        enroll: 'loyaltyEvEnroll',
+                      }[h.type],
                     )}
-                    {h.type === 'adjust' && ` (${h.delta > 0 ? '+' : ''}${h.delta})`}
+                    {(h.type === 'adjust' || h.type === 'bonus' || (h.type === 'stamp' && h.delta > 1)) &&
+                      ` (${h.delta > 0 ? '+' : ''}${h.delta})`}
                   </span>
                   <span className="text-gray-400">
                     {new Date(h.created_at).toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-GB', {
@@ -876,6 +976,16 @@ export function LoyaltyCard() {
         inputMode="tel"
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
       />
+      <label className="block text-xs text-gray-600">
+        {t('loyaltyBirthday')}
+        <input
+          type="date"
+          value={birthday}
+          onChange={(e) => setBirthday(e.target.value)}
+          className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
+        />
+      </label>
+      {ref && <p className="text-xs text-green-700">{t('loyaltyJoinedRef')}</p>}
       {message && <p className="text-xs text-amber-700">{message}</p>}
       <button
         type="button"

@@ -10,15 +10,73 @@ import { Branch } from '../entities/branch.entity';
 
 // Defaults used until an admin saves the settings.
 export const STAMPS_TARGET = 10;
-const DEFAULT_REWARD = 'Free drink';
+const DEFAULTS = {
+  stamps_target: STAMPS_TARGET,
+  reward_name: 'Free drink',
+  daily_stamp_limit: 3,
+  birthday_bonus: 1,
+  referral_bonus: 1,
+  double_days: [] as number[],
+  double_from: '14:00',
+  double_to: '17:00',
+};
+export type Rules = typeof DEFAULTS;
+
 // Blocks an accidental second stamp from a double tap or two staff members at once.
 const STAMP_COOLDOWN_MS = 60_000;
+// Days either side of the birthday that count as the birthday week.
+const BIRTHDAY_WINDOW_DAYS = 3;
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// UAE has no daylight saving, so Asia/Dubai is always UTC+4.
+const DUBAI_OFFSET_MS = 4 * 3600_000;
+export function dubaiNow(ms = Date.now()) {
+  const d = new Date(ms + DUBAI_OFFSET_MS);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    year: d.getUTCFullYear(),
+    md: `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`,
+    hm: `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`,
+    weekday: d.getUTCDay(),
+    dayStart: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - DUBAI_OFFSET_MS),
+  };
+}
+
+export function isDoubleNow(rules: Rules, ms = Date.now()) {
+  const now = dubaiNow(ms);
+  return rules.double_days.includes(now.weekday) && now.hm >= rules.double_from && now.hm < rules.double_to;
+}
+
+// True when today (MM-DD) is within the birthday window, wrapping around the new year.
+export function nearBirthday(birthday: string, todayMd: string) {
+  const day = (md: string) => {
+    const [m, d] = md.split('-').map(Number);
+    return Math.round((Date.UTC(2024, m - 1, d) - Date.UTC(2024, 0, 1)) / 864e5);
+  };
+  const diff = Math.abs(day(birthday) - day(todayMd));
+  return Math.min(diff, 366 - diff) <= BIRTHDAY_WINDOW_DAYS;
+}
+
+// Accepts YYYY-MM-DD (date input) or MM-DD; keeps MM-DD only.
+export function parseBirthday(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const m = raw.trim().match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/);
+  if (!m) throw new BadRequestException('Enter a valid birthday');
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  const max = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  if (!max || day < 1 || day > max) throw new BadRequestException('Enter a valid birthday');
+  return `${m[1]}-${m[2]}`;
+}
 
 export interface StaffUser {
   id: string;
   role: string;
   assigned_branch_id?: string | null;
 }
+
+type CardRef = { phone?: unknown; token?: unknown };
 
 @Injectable()
 export class LoyaltyService {
@@ -38,11 +96,25 @@ export class LoyaltyService {
     return digits;
   }
 
-  private async cardByPhone(raw: unknown): Promise<LoyaltyCard> {
-    const phone = this.normalizePhone(raw);
-    const card = await this.cards.findOne({ where: { phone } });
+  // Staff identify a card by phone number or by the token in the card's QR code.
+  private async findCard(ref: CardRef): Promise<LoyaltyCard> {
+    if (typeof ref.token === 'string' && ref.token.trim()) {
+      const card = await this.cards.findOne({ where: { token: ref.token.trim() } });
+      if (!card) throw new NotFoundException('Card not found. Ask the customer to refresh their card.');
+      return card;
+    }
+    const card = await this.cards.findOne({ where: { phone: this.normalizePhone(ref.phone) } });
     if (!card) throw new NotFoundException('No card for this number');
     return card;
+  }
+
+  private async newReferralCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const bytes = randomBytes(8);
+      const code = Array.from(bytes, (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+      if (!(await this.cards.findOne({ where: { referral_code: code } }))) return code;
+    }
+    throw new Error('Could not create a referral code');
   }
 
   private log(card: LoyaltyCard, type: LoyaltyEventType, delta: number, staff?: StaffUser, note?: string) {
@@ -59,42 +131,112 @@ export class LoyaltyService {
     );
   }
 
-  async getSettings() {
+  // Adds bonus stamps up to the target and logs what was actually added.
+  private async bonus(card: LoyaltyCard, amount: number, target: number, note: string, staff?: StaffUser) {
+    const before = card.stamps;
+    card.stamps = Math.min(target, card.stamps + amount);
+    await this.cards.save(card);
+    if (card.stamps > before) await this.log(card, 'bonus', card.stamps - before, staff, note);
+    return card.stamps - before;
+  }
+
+  async getSettings(): Promise<Rules> {
     const s = await this.settingsRepo.findOne({ where: { id: 1 } });
+    if (!s) return { ...DEFAULTS, double_days: [] };
     return {
-      stamps_target: s?.stamps_target ?? STAMPS_TARGET,
-      reward_name: s?.reward_name ?? DEFAULT_REWARD,
+      stamps_target: s.stamps_target ?? DEFAULTS.stamps_target,
+      reward_name: s.reward_name ?? DEFAULTS.reward_name,
+      daily_stamp_limit: s.daily_stamp_limit ?? DEFAULTS.daily_stamp_limit,
+      birthday_bonus: s.birthday_bonus ?? DEFAULTS.birthday_bonus,
+      referral_bonus: s.referral_bonus ?? DEFAULTS.referral_bonus,
+      double_days: (s.double_days ?? '')
+        .split(',')
+        .filter((x) => x !== '')
+        .map(Number),
+      double_from: s.double_from ?? DEFAULTS.double_from,
+      double_to: s.double_to ?? DEFAULTS.double_to,
     };
   }
 
-  // Admin: change the programme rules.
-  async updateSettings(body: { stamps_target?: unknown; reward_name?: unknown }) {
-    const target = Number(body.stamps_target);
-    if (!Number.isInteger(target) || target < 3 || target > 30) {
-      throw new BadRequestException('Stamps needed must be a whole number from 3 to 30');
+  // Admin: change the programme rules. Fields left out keep their current value.
+  async updateSettings(body: Record<string, unknown>) {
+    const cur = await this.getSettings();
+    const int = (key: keyof Rules, min: number, max: number, label: string) => {
+      if (body[key] === undefined) return cur[key] as number;
+      const v = Number(body[key]);
+      if (!Number.isInteger(v) || v < min || v > max) throw new BadRequestException(`${label} must be a whole number from ${min} to ${max}`);
+      return v;
+    };
+    const stamps_target = int('stamps_target', 3, 30, 'Stamps needed');
+    const daily_stamp_limit = int('daily_stamp_limit', 1, 10, 'Daily stamp limit');
+    const birthday_bonus = int('birthday_bonus', 0, 5, 'Birthday bonus');
+    const referral_bonus = int('referral_bonus', 0, 5, 'Referral bonus');
+
+    let reward_name = cur.reward_name;
+    if (body.reward_name !== undefined) {
+      reward_name = typeof body.reward_name === 'string' ? body.reward_name.trim().slice(0, 80) : '';
+      if (reward_name.length < 2) throw new BadRequestException('Enter a reward name');
     }
-    const reward = typeof body.reward_name === 'string' ? body.reward_name.trim().slice(0, 80) : '';
-    if (reward.length < 2) throw new BadRequestException('Enter a reward name');
-    await this.settingsRepo.save({ id: 1, stamps_target: target, reward_name: reward });
+
+    let double_days = cur.double_days;
+    if (body.double_days !== undefined) {
+      if (!Array.isArray(body.double_days) || !body.double_days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
+        throw new BadRequestException('Double-stamp days must be weekdays 0 to 6');
+      }
+      double_days = [...new Set(body.double_days as number[])].sort();
+    }
+    const double_from = body.double_from === undefined ? cur.double_from : String(body.double_from);
+    const double_to = body.double_to === undefined ? cur.double_to : String(body.double_to);
+    if (!HHMM.test(double_from) || !HHMM.test(double_to) || double_from >= double_to) {
+      throw new BadRequestException('Double-stamp hours must be HH:MM, with the start before the end');
+    }
+
+    await this.settingsRepo.save({
+      id: 1,
+      stamps_target,
+      reward_name,
+      daily_stamp_limit,
+      birthday_bonus,
+      referral_bonus,
+      double_days: double_days.join(','),
+      double_from,
+      double_to,
+    });
     return this.getSettings();
   }
 
+  // Public settings, plus whether double stamps are on right now.
+  async publicSettings() {
+    const rules = await this.getSettings();
+    return { ...rules, double_now: isDoubleNow(rules) };
+  }
+
   // Public. Never reveals an existing card: if the phone is already enrolled, staff must help.
-  async enroll(body: { phone?: unknown; name?: unknown }) {
+  async enroll(body: { phone?: unknown; name?: unknown; birthday?: unknown; ref?: unknown }) {
     const phone = this.normalizePhone(body.phone);
     const existing = await this.cards.findOne({ where: { phone } });
     if (existing) {
       return { ok: false, message: 'This number already has a card. Please ask our staff.' };
     }
     const name = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : null;
+    const birthday = parseBirthday(body.birthday);
+    let referredBy: string | null = null;
+    if (typeof body.ref === 'string' && /^[A-Z0-9]{6,12}$/i.test(body.ref.trim())) {
+      const referrer = await this.cards.findOne({ where: { referral_code: body.ref.trim().toUpperCase() } });
+      if (referrer) referredBy = referrer.id;
+    }
     const card = this.cards.create({
       phone,
       name: name || null,
       token: randomBytes(24).toString('hex'),
       stamps: 0,
+      birthday,
+      referral_code: await this.newReferralCode(),
+      referred_by: referredBy,
+      referral_rewarded: false,
     });
     await this.cards.save(card);
-    await this.log(card, 'enroll', 0);
+    await this.log(card, 'enroll', 0, undefined, referredBy ? 'Joined by referral' : undefined);
     return { ok: true, token: card.token };
   }
 
@@ -102,16 +244,37 @@ export class LoyaltyService {
   async getByToken(token: string) {
     const card = await this.cards.findOne({ where: { token } });
     if (!card) throw new NotFoundException('Card not found');
-    const { stamps_target, reward_name } = await this.getSettings();
+    if (!card.referral_code) {
+      // Cards created before referrals existed get a code on first view.
+      card.referral_code = await this.newReferralCode();
+      await this.cards.save(card);
+    }
+    const rules = await this.getSettings();
     const history = await this.events.find({ where: { card_id: card.id }, order: { created_at: 'DESC' }, take: 10 });
     return {
       name: card.name,
       stamps: card.stamps,
-      target: stamps_target,
-      reward_name,
+      target: rules.stamps_target,
+      reward_name: rules.reward_name,
       redeemed_count: card.redeemed_count,
+      referral_code: card.referral_code,
+      referral_bonus: rules.referral_bonus,
+      has_birthday: !!card.birthday,
+      double_now: isDoubleNow(rules),
       history: history.map((e) => ({ type: e.type, delta: e.delta, created_at: e.created_at })),
     };
+  }
+
+  // Public: a customer can add their birthday once. It cannot be changed afterwards.
+  async setBirthday(token: string, body: { birthday?: unknown }) {
+    const card = await this.cards.findOne({ where: { token } });
+    if (!card) throw new NotFoundException('Card not found');
+    if (card.birthday) return { ok: false, message: 'Birthday is already set. Ask our staff to change it.' };
+    const birthday = parseBirthday(body.birthday);
+    if (!birthday) throw new BadRequestException('Enter a valid birthday');
+    card.birthday = birthday;
+    await this.cards.save(card);
+    return { ok: true };
   }
 
   // Staff: find customers by name or phone (max 50). Never returns the secret token.
@@ -128,30 +291,57 @@ export class LoyaltyService {
       stamps: c.stamps,
       target: stamps_target,
       redeemed_count: c.redeemed_count,
+      birthday: c.birthday,
       created_at: c.created_at,
     }));
   }
 
-  // Staff: add one stamp. Card stays at the target until redeemed.
-  async addStamp(body: { phone?: unknown }, staff?: StaffUser) {
-    const card = await this.cardByPhone(body.phone);
-    const { stamps_target } = await this.getSettings();
-    if (card.stamps >= stamps_target) {
-      return { ok: false, message: 'Card is full. Redeem the reward first.', stamps: card.stamps };
+  // Staff: add a stamp (two during double-stamp hours), then any birthday or referral bonus.
+  async addStamp(body: CardRef, staff?: StaffUser) {
+    const card = await this.findCard(body);
+    const rules = await this.getSettings();
+    const who = { name: card.name, phone: card.phone };
+    if (card.stamps >= rules.stamps_target) {
+      return { ok: false, message: 'Card is full. Redeem the reward first.', stamps: card.stamps, ...who };
     }
     const last = await this.events.findOne({ where: { card_id: card.id, type: 'stamp' }, order: { created_at: 'DESC' } });
     if (last && Date.now() - new Date(last.created_at).getTime() < STAMP_COOLDOWN_MS) {
-      return { ok: false, message: 'A stamp was added less than a minute ago. Wait before adding another.', stamps: card.stamps };
+      return { ok: false, message: 'A stamp was added less than a minute ago. Wait before adding another.', stamps: card.stamps, ...who };
     }
-    card.stamps += 1;
+    const now = dubaiNow();
+    const today = await this.events.count({ where: { card_id: card.id, type: 'stamp', created_at: MoreThanOrEqual(now.dayStart) } });
+    if (today >= rules.daily_stamp_limit) {
+      return { ok: false, message: `Daily limit reached: ${rules.daily_stamp_limit} stamps a day per card.`, stamps: card.stamps, ...who };
+    }
+
+    const double = isDoubleNow(rules);
+    const before = card.stamps;
+    card.stamps = Math.min(rules.stamps_target, card.stamps + (double ? 2 : 1));
     await this.cards.save(card);
-    await this.log(card, 'stamp', 1, staff);
-    return { ok: true, stamps: card.stamps };
+    await this.log(card, 'stamp', card.stamps - before, staff, double ? 'Double stamps' : undefined);
+
+    const bonuses: string[] = [];
+    if (card.birthday && rules.birthday_bonus > 0 && card.birthday_rewarded_year !== now.year && nearBirthday(card.birthday, now.md)) {
+      card.birthday_rewarded_year = now.year;
+      if ((await this.bonus(card, rules.birthday_bonus, rules.stamps_target, 'Birthday', staff)) > 0) bonuses.push('birthday');
+      else await this.cards.save(card);
+    }
+    if (card.referred_by && !card.referral_rewarded) {
+      card.referral_rewarded = true;
+      await this.cards.save(card);
+      if (rules.referral_bonus > 0) {
+        await this.bonus(card, rules.referral_bonus, rules.stamps_target, 'Referral: welcome bonus', staff);
+        const referrer = await this.cards.findOne({ where: { id: card.referred_by } });
+        if (referrer) await this.bonus(referrer, rules.referral_bonus, rules.stamps_target, 'Referral: friend joined', staff);
+        bonuses.push('referral');
+      }
+    }
+    return { ok: true, stamps: card.stamps, earned: card.stamps - before, double, bonuses, ...who };
   }
 
   // Staff: redeem a full card and reset it.
-  async redeem(body: { phone?: unknown }, staff?: StaffUser) {
-    const card = await this.cardByPhone(body.phone);
+  async redeem(body: CardRef, staff?: StaffUser) {
+    const card = await this.findCard(body);
     const { stamps_target } = await this.getSettings();
     if (card.stamps < stamps_target) {
       return { ok: false, message: `Card needs ${stamps_target} stamps to redeem`, stamps: card.stamps };
@@ -172,7 +362,7 @@ export class LoyaltyService {
     }
     const note = typeof body.note === 'string' ? body.note.trim().slice(0, 200) : '';
     if (note.length < 3) throw new BadRequestException('Enter a reason for the change');
-    const card = await this.cardByPhone(body.phone);
+    const card = await this.findCard({ phone: body.phone });
     const { stamps_target } = await this.getSettings();
     const next = Math.min(stamps_target, Math.max(0, card.stamps + delta));
     const applied = next - card.stamps;
@@ -187,7 +377,7 @@ export class LoyaltyService {
 
   // Staff: last 50 events for one card, with staff email and branch name.
   async historyByPhone(raw: unknown) {
-    const card = await this.cardByPhone(raw);
+    const card = await this.findCard({ phone: raw });
     const list = await this.events.find({ where: { card_id: card.id }, order: { created_at: 'DESC' }, take: 50 });
     const userIds = [...new Set(list.map((e) => e.staff_user_id).filter((x): x is string => !!x))];
     const branchIds = [...new Set(list.map((e) => e.branch_id).filter((x): x is string => !!x))];
@@ -214,12 +404,13 @@ export class LoyaltyService {
     const week = new Date(now - 7 * 864e5);
     const month = new Date(now - 30 * 864e5);
     const { stamps_target } = await this.getSettings();
-    const [members, newThisWeek, stampsThisWeek, redemptionsThisMonth, readyToRedeem] = await Promise.all([
+    const [members, newThisWeek, stampsThisWeek, redemptionsThisMonth, readyToRedeem, referralsThisMonth] = await Promise.all([
       this.cards.count(),
       this.cards.count({ where: { created_at: MoreThanOrEqual(week) } }),
       this.events.count({ where: { type: 'stamp', created_at: MoreThanOrEqual(week) } }),
       this.events.count({ where: { type: 'redeem', created_at: MoreThanOrEqual(month) } }),
       this.cards.count({ where: { stamps: MoreThanOrEqual(stamps_target) } }),
+      this.events.count({ where: { type: 'bonus', note: 'Referral: welcome bonus', created_at: MoreThanOrEqual(month) } }),
     ]);
     return {
       members,
@@ -227,6 +418,7 @@ export class LoyaltyService {
       stamps_this_week: stampsThisWeek,
       redemptions_this_month: redemptionsThisMonth,
       ready_to_redeem: readyToRedeem,
+      referrals_this_month: referralsThisMonth,
       stamps_target,
     };
   }

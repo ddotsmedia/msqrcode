@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
-export type LoyaltyEventType = 'enroll' | 'stamp' | 'redeem' | 'adjust';
+export type LoyaltyEventType = 'enroll' | 'stamp' | 'redeem' | 'adjust' | 'bonus';
 
 // One row per change to a loyalty card: the card's history and the staff audit log.
 @Entity('loyalty_events')
