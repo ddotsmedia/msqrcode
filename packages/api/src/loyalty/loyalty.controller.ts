@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -20,9 +20,15 @@ export class LoyaltyController {
     return this.loyalty.getByToken(token);
   }
 
+  // Customers can add their birthday once; it cannot be changed afterwards.
+  @Patch('loyalty/card/:token/birthday')
+  setBirthday(@Param('token') token: string, @Body() body: Record<string, unknown>) {
+    return this.loyalty.setBirthday(token, body);
+  }
+
   @Get('loyalty/settings')
   publicSettings() {
-    return this.loyalty.getSettings();
+    return this.loyalty.publicSettings();
   }
 
   @Get('admin/loyalty/cards')

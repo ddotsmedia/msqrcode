@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { api } from '../api';
 
 interface CardRow {
@@ -11,7 +12,7 @@ interface CardRow {
 }
 
 interface HistoryRow {
-  type: 'enroll' | 'stamp' | 'redeem' | 'adjust';
+  type: 'enroll' | 'stamp' | 'redeem' | 'adjust' | 'bonus';
   delta: number;
   stamps_after: number;
   note: string | null;
@@ -26,21 +27,47 @@ interface Stats {
   stamps_this_week: number;
   redemptions_this_month: number;
   ready_to_redeem: number;
+  referrals_this_month: number;
   stamps_target: number;
 }
 
 interface Settings {
   stamps_target: number;
   reward_name: string;
+  daily_stamp_limit: number;
+  birthday_bonus: number;
+  referral_bonus: number;
+  double_days: number[];
+  double_from: string;
+  double_to: string;
+  double_now?: boolean;
 }
 
-type ActionResult = { ok: boolean; message?: string; stamps?: number };
+type ActionResult = {
+  ok: boolean;
+  message?: string;
+  stamps?: number;
+  earned?: number;
+  double?: boolean;
+  bonuses?: string[];
+  name?: string | null;
+  phone?: string;
+};
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Readable summary of a stamp result, e.g. "2 stamps added (double stamps) + birthday bonus. Now 7."
+function stampSummary(res: ActionResult) {
+  const extra = (res.bonuses ?? []).map((b) => `${b} bonus`).join(', ');
+  return `${res.earned ?? 1} stamp${(res.earned ?? 1) === 1 ? '' : 's'} added${res.double ? ' (double stamps)' : ''}${extra ? ` + ${extra}` : ''}. Now ${res.stamps}.`;
+}
 
 const EVENT_LABEL: Record<HistoryRow['type'], string> = {
   enroll: 'Card created',
   stamp: 'Stamp added',
   redeem: 'Reward redeemed',
   adjust: 'Manual adjustment',
+  bonus: 'Bonus',
 };
 
 const inputClass = 'border border-gray-300 rounded px-3 py-2 text-sm';
@@ -56,9 +83,10 @@ function StatsRow({ stats }: { stats: Stats | null }) {
     ['Stamps this week', stats?.stamps_this_week],
     ['Rewards this month', stats?.redemptions_this_month],
     ['Ready to redeem', stats?.ready_to_redeem],
+    ['Referrals this month', stats?.referrals_this_month],
   ];
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
       {tiles.map(([label, value]) => (
         <div key={label} className="bg-white rounded-xl border shadow-sm p-4">
           <p className="text-xs text-gray-500">{label}</p>
@@ -70,26 +98,38 @@ function StatsRow({ stats }: { stats: Stats | null }) {
 }
 
 function SettingsForm({ token, settings, onSaved }: { token: string; settings: Settings | null; onSaved: () => void }) {
-  const [target, setTarget] = useState('');
-  const [reward, setReward] = useState('');
+  const [form, setForm] = useState<Settings | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (settings) {
-      setTarget(String(settings.stamps_target));
-      setReward(settings.reward_name);
-    }
+    if (settings) setForm({ ...settings });
   }, [settings]);
+
+  if (!form) return null;
+  const num = (key: 'stamps_target' | 'daily_stamp_limit' | 'birthday_bonus' | 'referral_bonus') => (e: { target: { value: string } }) =>
+    setForm({ ...form, [key]: Number(e.target.value) });
+  const toggleDay = (d: number) =>
+    setForm({ ...form, double_days: form.double_days.includes(d) ? form.double_days.filter((x) => x !== d) : [...form.double_days, d] });
 
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (!form) return;
     setSaving(true);
     setMsg(null);
     try {
       await api('/admin/loyalty/settings', token, {
         method: 'PUT',
-        body: JSON.stringify({ stamps_target: Number(target), reward_name: reward }),
+        body: JSON.stringify({
+          stamps_target: form.stamps_target,
+          reward_name: form.reward_name,
+          daily_stamp_limit: form.daily_stamp_limit,
+          birthday_bonus: form.birthday_bonus,
+          referral_bonus: form.referral_bonus,
+          double_days: form.double_days,
+          double_from: form.double_from,
+          double_to: form.double_to,
+        }),
       });
       setMsg('Saved.');
       onSaved();
@@ -100,22 +140,96 @@ function SettingsForm({ token, settings, onSaved }: { token: string; settings: S
     }
   }
 
+  const label = 'block text-xs font-semibold text-gray-600 mb-1';
   return (
-    <form onSubmit={save} className="bg-white rounded-xl border shadow-sm p-4 flex flex-wrap items-end gap-3">
+    <form onSubmit={save} className="bg-white rounded-xl border shadow-sm p-4 space-y-4">
+      <p className="font-semibold text-gray-800">Programme rules</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className={label}>Stamps needed</label>
+          <input type="number" min={3} max={30} value={form.stamps_target} onChange={num('stamps_target')} className={`${inputClass} w-24`} />
+        </div>
+        <div className="flex-1 min-w-[12rem]">
+          <label className={label}>Reward</label>
+          <input value={form.reward_name} maxLength={80} onChange={(e) => setForm({ ...form, reward_name: e.target.value })} className={`${inputClass} w-full`} />
+        </div>
+        <div>
+          <label className={label}>Max stamps per day</label>
+          <input type="number" min={1} max={10} value={form.daily_stamp_limit} onChange={num('daily_stamp_limit')} className={`${inputClass} w-24`} />
+        </div>
+        <div>
+          <label className={label}>Birthday bonus</label>
+          <input type="number" min={0} max={5} value={form.birthday_bonus} onChange={num('birthday_bonus')} className={`${inputClass} w-24`} />
+        </div>
+        <div>
+          <label className={label}>Referral bonus (each)</label>
+          <input type="number" min={0} max={5} value={form.referral_bonus} onChange={num('referral_bonus')} className={`${inputClass} w-24`} />
+        </div>
+      </div>
       <div>
-        <label className="block text-xs font-semibold text-gray-600 mb-1">Stamps needed</label>
-        <input type="number" min={3} max={30} value={target} onChange={(e) => setTarget(e.target.value)} className={`${inputClass} w-24`} />
+        <p className={label}>Double-stamp hours (Dubai time){form.double_days.length === 0 ? ': off' : ''}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {WEEKDAYS.map((d, i) => (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={form.double_days.includes(i)}
+              onClick={() => toggleDay(i)}
+              className={`rounded px-3 py-1.5 text-sm font-semibold border ${form.double_days.includes(i) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700'}`}
+            >
+              {d}
+            </button>
+          ))}
+          <input type="time" value={form.double_from} onChange={(e) => setForm({ ...form, double_from: e.target.value })} className={inputClass} aria-label="Double stamps from" />
+          <span className="text-sm text-gray-500">to</span>
+          <input type="time" value={form.double_to} onChange={(e) => setForm({ ...form, double_to: e.target.value })} className={inputClass} aria-label="Double stamps until" />
+        </div>
       </div>
-      <div className="flex-1 min-w-[12rem]">
-        <label className="block text-xs font-semibold text-gray-600 mb-1">Reward</label>
-        <input value={reward} maxLength={80} onChange={(e) => setReward(e.target.value)} className={`${inputClass} w-full`} placeholder="Free drink" />
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={saving} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-60">
+          {saving ? 'Saving…' : 'Save rules'}
+        </button>
+        {msg && <p className="text-sm text-gray-600">{msg}</p>}
       </div>
-      <button type="submit" disabled={saving} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-60">
-        {saving ? 'Saving…' : 'Save rules'}
-      </button>
-      {msg && <p className="w-full text-sm text-gray-600">{msg}</p>}
     </form>
   );
+}
+
+// Staff scan the QR on the customer's card to add a stamp without typing the phone number.
+function ScanStamp({ token, onDone }: { token: string; onDone: (msg: string, ok: boolean) => void }) {
+  const ref = useRef<Html5QrcodeScanner | null>(null);
+  const busy = useRef(false);
+
+  useEffect(() => {
+    const scanner = new Html5QrcodeScanner('loyalty-qr-reader', { fps: 10, qrbox: { width: 240, height: 240 } }, false);
+    ref.current = scanner;
+    scanner.render(
+      async (text) => {
+        if (busy.current) return;
+        const m = text.match(/^MSQ-CARD:([a-f0-9]{16,64})$/i);
+        if (!m) {
+          onDone('That QR is not a Milestones loyalty card.', false);
+          return;
+        }
+        busy.current = true;
+        scanner.clear().catch(() => {});
+        try {
+          const res = await api<ActionResult>('/admin/loyalty/stamp', token, { method: 'POST', body: JSON.stringify({ token: m[1] }) });
+          const who = res.name || res.phone || 'Customer';
+          onDone(res.ok ? `${who}: ${stampSummary(res)}` : `${who}: ${res.message ?? 'Could not add a stamp.'}`, res.ok);
+        } catch (err) {
+          onDone((err as Error).message, false);
+        }
+      },
+      () => {},
+    );
+    return () => {
+      scanner.clear().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  return <div id="loyalty-qr-reader" className="bg-white rounded-xl border shadow-sm p-2 max-w-sm" />;
 }
 
 function CardDetails({ token, phone, isAdmin, onChanged }: { token: string; phone: string; isAdmin: boolean; onChanged: () => void }) {
@@ -205,6 +319,7 @@ export default function LoyaltyPage({ token, role }: { token: string; role: stri
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   function loadStats() {
     api<Stats>('/admin/loyalty/stats', token).then(setStats).catch(() => undefined);
@@ -241,7 +356,7 @@ export default function LoyaltyPage({ token, role }: { token: string; role: stri
         body: JSON.stringify({ phone }),
       });
       if (res.ok) {
-        setNotice(path === 'stamp' ? `Stamp added. Now ${res.stamps} stamps.` : 'Reward redeemed. Card reset.');
+        setNotice(path === 'stamp' ? stampSummary(res) : 'Reward redeemed. Card reset.');
       } else {
         setError(res.message ?? 'Could not update the card.');
       }
@@ -265,6 +380,36 @@ export default function LoyaltyPage({ token, role }: { token: string; role: stri
 
       <StatsRow stats={stats} />
       {isAdmin && <SettingsForm token={token} settings={settings} onSaved={() => { loadSettings(); loadStats(); }} />}
+
+      {settings?.double_now && (
+        <p className="bg-amber-50 text-amber-800 rounded p-3 text-sm font-semibold">Double-stamp hours are on now: each visit earns 2 stamps.</p>
+      )}
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setScanning((v) => !v)}
+          className="bg-amber-600 text-white rounded px-4 py-2 text-sm font-semibold"
+        >
+          {scanning ? 'Close scanner' : 'Scan card to add a stamp'}
+        </button>
+      </div>
+      {scanning && (
+        <ScanStamp
+          token={token}
+          onDone={(msg, ok) => {
+            setScanning(false);
+            if (ok) {
+              setNotice(msg);
+              setError(null);
+            } else {
+              setError(msg);
+              setNotice(null);
+            }
+            loadStats();
+          }}
+        />
+      )}
 
       <form onSubmit={search} className="flex gap-2">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name or phone" className={`flex-1 ${inputClass}`} />

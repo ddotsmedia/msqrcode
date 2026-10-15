@@ -25,6 +25,9 @@ importers:
 
   packages/admin-dashboard:
     dependencies:
+      html5-qrcode:
+        specifier: ^2.3.0
+        version: 2.3.8
       jszip:
         specifier: ^3.10.1
         version: 3.10.2
@@ -244,6 +247,9 @@ importers:
       motion:
         specifier: ^14.2.0
         version: 14.2.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      qrcode:
+        specifier: 1.5.4
+        version: 1.5.4
       react:
         specifier: ^19.0.0
         version: 19.3.0
@@ -260,6 +266,9 @@ importers:
       '@types/leaflet':
         specifier: ^1.9.12
         version: 1.9.22
+      '@types/qrcode':
+        specifier: 1.5.5
+        version: 1.5.5
       '@types/react':
         specifier: ^19.0.0
         version: 19.3.0
