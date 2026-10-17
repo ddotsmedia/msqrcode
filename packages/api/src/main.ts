@@ -13,11 +13,19 @@ async function bootstrap() {
   // Security middleware
   app.use(helmet());
 
+  // nginx on the server is the one proxy in front of the API: use the visitor's IP from X-Forwarded-For,
+  // otherwise every visitor shares the proxy's IP and one rate-limit bucket.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   // Rate limiting
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per windowMs
+      max: 300, // per IP; guests on one café Wi-Fi share an IP
+      // Status checks a page repeats every few seconds, and signed-in staff screens, are not counted.
+      skip: (req) =>
+        (req.method === 'GET' && /^\/(orders|service-requests)\/[0-9a-f-]{36}$/i.test(req.path)) ||
+        /^Bearer\s+\S+/.test(req.headers.authorization ?? ''),
     }),
   );
 

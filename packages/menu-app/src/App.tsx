@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLang } from './i18n';
 import axios from 'axios';
 import { ContactButtons } from './lib/ContactButtons';
@@ -9,6 +10,7 @@ import QRCode from 'qrcode';
 import { readFavs, toggleFav } from './lib/favorites';
 import { TableService } from './TableService';
 import { NotifyButton } from './NotifyButton';
+import { AddToOrder, TableOrder, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
 import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
@@ -26,6 +28,7 @@ interface Branch {
   longitude?: number;
   operating_hours?: Record<string, any>;
   whatsapp_number?: string;
+  ordering_enabled?: boolean;
   google_maps_url?: string;
   google_review_url?: string;
   delivery_links?: Record<string, string>;
@@ -60,6 +63,7 @@ interface Product {
   dietary_tags?: string[];
   allergens?: string[];
   variants?: ProductVariant[];
+  option_groups?: ChoiceGroup[];
 }
 
 interface ProductVariant {
@@ -67,7 +71,7 @@ interface ProductVariant {
   product_id: string;
   name: string;
   display_order: number;
-  options?: Record<string, any>;
+  options?: { choices?: { name: string; price_adjustment: number }[] } | null;
 }
 
 interface ProductAvailability {
@@ -184,27 +188,26 @@ function ProductDetailsModal({
   product,
   onClose,
   availability,
+  branchId,
+  onAdd,
 }: {
   product: Product;
   onClose: () => void;
   availability: boolean;
+  branchId: string | null;
+  onAdd?: (line: Omit<CartLine, 'key'>) => void;
 }) {
-  const handleAddToOrder = () => {
-    // Track analytics
+  // Count the product as viewed (feeds "Top products" in the admin Insights page).
+  useEffect(() => {
     fetch(`${API_BASE_URL}/analytics/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_type: 'product_selected',
-        product_id: product.id,
-      }),
+      body: JSON.stringify({ event_type: 'product_selected', product_id: product.id, ...(branchId ? { branch_id: branchId } : {}) }),
     }).catch(() => {});
+  }, [product.id, branchId]);
 
-    alert(`${product.name} added to order! Please proceed to counter to complete purchase.`);
-    onClose();
-  };
-
-  return (
+  // Rendered on <body> so the phone's bottom navigation cannot cover the buttons.
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg max-h-[90vh] overflow-y-auto">
         {product.image_url && (
@@ -265,17 +268,18 @@ function ProductDetailsModal({
           </div>
 
           <div className="space-y-3">
-            <button
-              onClick={handleAddToOrder}
-              disabled={!availability}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition ${
-                availability
-                  ? 'bg-brand-600 hover:bg-brand-700'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {availability ? 'Add to Order' : 'Currently Unavailable'}
-            </button>
+            {onAdd ? (
+              <AddToOrder
+                product={product}
+                available={availability}
+                onAdd={(line) => {
+                  onAdd(line);
+                  onClose();
+                }}
+              />
+            ) : (
+              !availability && <p className="w-full py-3 rounded-lg text-center font-semibold bg-gray-100 text-gray-500">Currently Unavailable</p>
+            )}
             <button
               onClick={onClose}
               className="w-full py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
@@ -285,7 +289,8 @@ function ProductDetailsModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -306,6 +311,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
   const [showText, setShowText] = useState(false);
+  const cart = useCart(branchId ?? '', table ?? '');
 
   useEffect(() => {
     const loadMenuData = async () => {
@@ -471,11 +477,12 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   }
 
   const filteredProducts = getFilteredProducts();
+  const canOrder = !!(table && branchId && branch?.ordering_enabled);
 
   return (
     <div className="min-h-screen bg-brand-50">
       {/* Header */}
-      <div className="bg-white border-b border-brand-200 sticky top-0 z-40">
+      <div className="bg-white border-b border-brand-200 md:sticky md:top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -670,8 +677,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
       {table && branchId && branch && (
         <>
-          <div className="h-28" aria-hidden="true" />
+          <div className={canOrder ? 'h-44' : 'h-28'} aria-hidden="true" />
           <TableService
+            extra={canOrder ? <TableOrder branchId={branchId} table={table} cart={cart} /> : null}
             branchId={branchId}
             branchName={branch.name}
             table={table}
@@ -687,6 +695,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           availability={availability[selectedProduct.id] !== false}
+          branchId={branchId}
+          onAdd={canOrder ? cart.add : undefined}
         />
       )}
     </div>
