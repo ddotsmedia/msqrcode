@@ -17,11 +17,13 @@ const latte = {
 };
 const cake = { id: P2, name: 'Cake', status: 'active', base_price: 22, variants: [], option_groups: [] };
 
-function setup(opts: { enabled?: boolean; openTable?: number; soldOut?: string[]; branchPrice?: number; order?: any } = {}) {
+function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; openPhone?: number; inSlot?: number; soldOut?: string[]; branchPrice?: number; order?: any } = {}) {
   const saved: any[] = [];
   const counts = { table: opts.openTable ?? 0 };
   const orders = {
-    count: jest.fn(async ({ where }: any) => (where.table_number ? counts.table : where.created_at ? 4 : 0)),
+    count: jest.fn(async ({ where }: any) =>
+      where.table_number ? counts.table : where.pickup_at ? (opts.inSlot ?? 0) : where.phone ? (opts.openPhone ?? 0) : where.created_at ? 4 : 0,
+    ),
     create: jest.fn((x: any) => x),
     save: jest.fn(async (x: any) => {
       saved.push(x);
@@ -32,7 +34,7 @@ function setup(opts: { enabled?: boolean; openTable?: number; soldOut?: string[]
   };
   const items = { create: jest.fn((x: any) => x), save: jest.fn(async (x: any) => x) };
   const products = { find: jest.fn(async () => [latte, cake]) };
-  const branch = { id: B1, status: 'active', ordering_enabled: opts.enabled ?? true };
+  const branch = { id: B1, status: 'active', ordering_enabled: opts.enabled ?? true, pickup_enabled: opts.pickup ?? true };
   const branches = { findOne: jest.fn(async ({ where }: any) => (where.id === B1 ? branch : null)), save: jest.fn(async (x: any) => x) };
   const prices = { find: jest.fn(async () => (opts.branchPrice ? [{ product_id: P2, price_aed: opts.branchPrice }] : [])) };
   const availability = { find: jest.fn(async () => (opts.soldOut ?? []).map((product_id) => ({ product_id }))) };
@@ -127,9 +129,46 @@ describe('OrdersService', () => {
     await expect(setup({ order }).svc.setStatus(O1, 'ready', { id: 'm', role: 'branch_manager', assigned_branch_id: B2 })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  describe('order ahead for pickup', () => {
+    const inHalfHour = () => new Date(Date.now() + 30 * 60_000).toISOString();
+    const pickup = (extra: Record<string, unknown> = {}) =>
+      body({ type: 'pickup', table: undefined, phone: '050 123 4567', pickup_at: inHalfHour(), items: [{ product_id: P2, qty: 1 }], ...extra });
+
+    it('creates a pickup order with the chosen time and no table', async () => {
+      const { svc, saved } = setup();
+      const at = inHalfHour();
+      expect(await svc.create(pickup({ pickup_at: at }))).toMatchObject({ total: 22 });
+      expect(saved[0]).toMatchObject({ type: 'pickup', table_number: null, phone: '0501234567' });
+      expect(saved[0].pickup_at.toISOString()).toBe(at);
+    });
+
+    it('needs pickup switched on, a mobile number and a time today', async () => {
+      await expect(setup({ pickup: false }).svc.create(pickup())).rejects.toThrow('Order ahead is not available');
+      await expect(setup().svc.create(pickup({ phone: '12' }))).rejects.toThrow('mobile');
+      await expect(setup().svc.create(pickup({ pickup_at: undefined }))).rejects.toThrow('pickup time');
+      await expect(setup().svc.create(pickup({ pickup_at: new Date(Date.now() - 3600_000).toISOString() }))).rejects.toThrow('pickup time');
+      await expect(setup().svc.create(pickup({ pickup_at: new Date(Date.now() + 13 * 3600_000).toISOString() }))).rejects.toThrow('pickup time');
+    });
+
+    it('does not need table ordering to be on', async () => {
+      expect(await setup({ enabled: false }).svc.create(pickup())).toMatchObject({ total: 22 });
+    });
+
+    it('limits orders per time slot and per phone', async () => {
+      await expect(setup({ inSlot: 10 }).svc.create(pickup())).rejects.toThrow('fully booked');
+      await expect(setup({ openPhone: 3 }).svc.create(pickup())).rejects.toThrow('already have orders');
+    });
+
+    it('switches pickup separately from table ordering', async () => {
+      const { svc, branch } = setup({ enabled: true, pickup: false });
+      expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' }, 'pickup')).toEqual({ ordering_enabled: true, pickup_enabled: true });
+      expect(branch.ordering_enabled).toBe(true);
+    });
+  });
+
   it('switches table ordering on and off', async () => {
     const { svc, branch } = setup({ enabled: false });
-    expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' })).toEqual({ ordering_enabled: true });
+    expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' })).toEqual({ ordering_enabled: true, pickup_enabled: true });
     expect(branch.ordering_enabled).toBe(true);
     await expect(svc.setOrdering(B1, true, { id: 'm', role: 'branch_manager', assigned_branch_id: B2 })).rejects.toBeInstanceOf(ForbiddenException);
   });

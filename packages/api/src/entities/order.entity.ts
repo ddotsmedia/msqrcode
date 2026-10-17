@@ -29,6 +29,10 @@ export class Order {
   @Column({ type: 'varchar', length: 20, nullable: true })
   table_number: string | null;
 
+  // Pickup orders: when the customer will collect it.
+  @Column({ type: 'timestamptz', nullable: true })
+  pickup_at: Date | null;
+
   @Column({ type: 'varchar', length: 20, default: 'placed' })
   status: 'placed' | 'paid' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 
