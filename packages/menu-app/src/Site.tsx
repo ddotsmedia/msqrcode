@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import axios from 'axios';
 import { animate, motion, useReducedMotion } from 'motion/react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FeedbackForm, LoyaltyCard, MenuPage, QRScannerPage } from './App';
 import { ContactButtons } from './lib/ContactButtons';
+import { Icon } from './lib/Icon';
 import { getTodayHours, getWeekHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import BranchMapPage from './BranchMapPage';
@@ -81,8 +82,9 @@ function HoursLine({ branch }: { branch: SiteBranch }) {
 }
 
 const NAV: [string, string][] = [
+  ['/', 'Home'],
   ['/menu', 'Menu'],
-  ['/branches', 'Find a Branch'],
+  ['/branches', 'Branches'],
   ['/loyalty', 'Rewards'],
   ['/news', "What's New"],
 ];
@@ -99,8 +101,8 @@ const SOCIAL: [string, string][] = [];
 function FooterCol({ title, links }: { title: string; links: [string, string][] }) {
   return (
     <div>
-      <p className="text-white font-semibold mb-3">{title}</p>
-      <ul className="space-y-2">
+      <p className="text-xs font-semibold tracking-[0.14em] uppercase text-copper-300 mb-4">{title}</p>
+      <ul className="space-y-3">
         {links.map(([to, label]) => (
           <li key={to}>
             <Link to={to} className="hover:text-white">
@@ -113,31 +115,43 @@ function FooterCol({ title, links }: { title: string; links: [string, string][] 
   );
 }
 
+function Logo({ dark = false }: { dark?: boolean }) {
+  return (
+    <Link to="/" className="flex items-center gap-3" aria-label="Milestones Coffee home">
+      <img src="/logo/logo-512.png" alt="" width={40} height={40} className="h-10 w-10 rounded-xl" />
+      <span className="leading-none">
+        <span className={`block font-display text-[22px] font-semibold ${dark ? 'text-white' : 'text-brand-700'}`}>Milestones</span>
+        <span className="block mt-1 text-[10px] font-semibold tracking-[0.18em] text-copper-500">COFFEE · ABU DHABI</span>
+      </span>
+    </Link>
+  );
+}
+
 function SiteFooter() {
   return (
-    <footer className="bg-brand-900 text-white/75 text-sm pb-16 md:pb-0">
-      <div className="max-w-6xl mx-auto px-4 py-10 grid gap-8 grid-cols-2 md:grid-cols-4">
+    <footer className="bg-brand-900 text-brand-100 text-[15px] pb-20 md:pb-0">
+      <div className="max-w-6xl mx-auto px-4 pt-16 pb-10 grid gap-10 grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="col-span-2 md:col-span-1">
-          <div className="flex items-center gap-2 text-white font-display text-lg">
-            <img src="/logo/logo-512.png" alt="" width={32} height={32} className="h-8 w-8 rounded-full" />
-            Milestones Coffee
-          </div>
-          <p className="mt-3">Branches across Abu Dhabi.</p>
+          <Logo dark />
+          <p className="mt-4 max-w-xs text-brand-300 leading-relaxed">Specialty coffee and fresh bakes across Abu Dhabi.</p>
           {SOCIAL.length > 0 && (
-            <div className="mt-3 flex gap-3">
+            <div className="mt-4 flex gap-3">
               {SOCIAL.map(([label, href]) => (
-                <a key={href} href={href} target="_blank" rel="noopener noreferrer" className="hover:text-white">
+                <a key={href} href={href} target="_blank" rel="noopener noreferrer" className="rounded-full border border-brand-500 px-3 py-1.5 text-copper-300 hover:text-white">
                   {label}
                 </a>
               ))}
             </div>
           )}
         </div>
-        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/news', "What's New"], ['/loyalty', 'Rewards'], ['/gallery', 'Gallery']]} />
-        <FooterCol title="Visit" links={[['/branches', 'Find a Branch'], ['/scan', 'Scan a QR'], ['/contact', 'Contact']]} />
-        <FooterCol title="Help" links={[['/faq', 'FAQ'], ['/feedback', 'Feedback'], ['/about', 'About']]} />
+        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/branches', 'Branches'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
+        <FooterCol title="Rewards" links={[['/loyalty', 'My card'], ['/scan', 'Scan a QR'], ['/faq', 'FAQ']]} />
+        <FooterCol title="Company" links={[['/about', 'About'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
       </div>
-      <div className="border-t border-white/10 py-4 text-center text-xs text-white/60">© {new Date().getFullYear()} Milestones Coffee</div>
+      <div className="max-w-6xl mx-auto px-4 border-t border-brand-700 py-6 flex justify-between text-[13px] text-brand-300">
+        <span>© {new Date().getFullYear()} Milestones Coffee</span>
+        <span>coffeesales.ae</span>
+      </div>
     </footer>
   );
 }
@@ -147,24 +161,23 @@ function Layout() {
   const { pathname } = useLocation();
   useEffect(() => setMoreOpen(false), [pathname]);
   const active = (to: string) => (to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`));
+  const isHome = pathname === '/';
   const tabClass = (on: boolean) =>
-    `px-3 py-2 rounded-lg text-sm font-medium ${on ? 'bg-white/15 text-white' : 'text-white/80 hover:text-white hover:bg-white/10'}`;
-  const barItems: [string, string][] = [
-    ['/', 'Home'],
-    ['/menu', 'Menu'],
-    ['/branches', 'Branches'],
-    ['/loyalty', 'Rewards'],
+    `px-4 py-2 rounded-full text-[15px] ${on ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-slate-600 font-medium hover:text-brand-700'}`;
+  const barItems: [string, string, string][] = [
+    ['/', 'Home', 'home'],
+    ['/menu', 'Menu', 'book'],
+    ['/scan', 'Scan', 'qr'],
+    ['/branches', 'Branches', 'pin'],
+    ['/loyalty', 'Rewards', 'gift'],
   ];
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
-      <header className="bg-brand-700 text-white sticky top-0 z-40 shadow">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 font-display text-xl font-semibold">
-            <img src="/logo/logo-512.png" alt="" width={36} height={36} className="h-9 w-9 rounded-full ring-2 ring-copper-500" />
-            Milestones Coffee
-          </Link>
-          <nav className="hidden md:flex items-center gap-1" aria-label="Main">
+      <header className="bg-white/95 backdrop-blur border-b border-brand-100 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 h-[72px] flex items-center justify-between gap-4">
+          <Logo />
+          <nav className="hidden lg:flex items-center gap-1" aria-label="Main">
             {NAV.map(([to, label]) => (
               <Link key={to} to={to} className={tabClass(active(to))}>
                 {label}
@@ -175,7 +188,7 @@ function Layout() {
                 More ▾
               </button>
               {moreOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white text-brand-800 shadow-lg py-2">
+                <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-brand-100 bg-white text-brand-800 shadow-lg py-2">
                   {MORE.map(([to, label]) => (
                     <Link key={to} to={to} className="block px-4 py-2 text-sm hover:bg-cream">
                       {label}
@@ -184,51 +197,56 @@ function Layout() {
                 </div>
               )}
             </div>
-            <Link to="/scan" className="ml-2 px-4 py-2 rounded-lg bg-copper-700 hover:bg-copper-500 text-white text-sm font-semibold">
-              Scan QR
-            </Link>
           </nav>
-          <Link to="/scan" className="md:hidden px-3 py-2 rounded-lg bg-copper-700 text-white text-sm font-semibold">
-            Scan QR
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link to="/scan" className="hidden sm:inline-flex items-center gap-2 rounded-full bg-copper-700 hover:bg-copper-500 px-5 py-2.5 text-[15px] font-semibold text-white">
+              <Icon name="qr" className="h-4 w-4" /> Scan table QR
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-expanded={moreOpen}
+              aria-label="Open menu"
+              className="lg:hidden grid h-10 w-10 place-items-center rounded-full border border-brand-100 text-brand-700"
+            >
+              <Icon name={moreOpen ? 'x' : 'menu'} />
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8">
+      <main className={isHome ? 'flex-1 w-full' : 'flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8'}>
         <Outlet />
       </main>
 
       <SiteFooter />
 
       {moreOpen && (
-        <div className="md:hidden fixed inset-x-0 bottom-16 z-40 bg-white border-t shadow-lg p-2">
-          {MORE.map(([to, label]) => (
-            <Link key={to} to={to} className="block px-4 py-3 text-brand-800 font-medium rounded-lg hover:bg-cream">
+        <div className="lg:hidden fixed inset-x-0 top-[72px] z-40 bg-white border-b border-brand-100 shadow-lg p-2">
+          {[...NAV.slice(4), ...MORE].map(([to, label]) => (
+            <Link key={to} to={to} className="block px-4 py-3 text-brand-800 font-medium rounded-xl hover:bg-cream">
               {label}
             </Link>
           ))}
         </div>
       )}
-      <nav aria-label="Mobile" className="md:hidden fixed bottom-0 inset-x-0 z-40 h-16 bg-white border-t grid grid-cols-5">
-        {barItems.map(([to, label]) => (
-          <Link
-            key={to}
-            to={to}
-            className={`flex items-center justify-center text-xs font-semibold ${
-              active(to) ? 'text-brand-700 border-t-2 border-copper-500' : 'text-slate-500'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-        <button
-          type="button"
-          onClick={() => setMoreOpen((o) => !o)}
-          aria-expanded={moreOpen}
-          className={`text-xs font-semibold ${moreOpen ? 'text-brand-700' : 'text-slate-500'}`}
-        >
-          More
-        </button>
+      <nav aria-label="Mobile" className="md:hidden fixed bottom-0 inset-x-0 z-40 h-[68px] bg-white border-t border-brand-100 grid grid-cols-5 items-center">
+        {barItems.map(([to, label, icon]) =>
+          to === '/scan' ? (
+            <Link key={to} to={to} aria-label="Scan QR" className="justify-self-center -mt-6 grid h-14 w-14 place-items-center rounded-full bg-copper-700 text-white shadow-[0_6px_14px_rgba(138,95,56,0.4)]">
+              <Icon name={icon} className="h-6 w-6" />
+            </Link>
+          ) : (
+            <Link
+              key={to}
+              to={to}
+              className={`flex flex-col items-center gap-1 text-[11px] ${active(to) ? 'text-brand-700 font-semibold' : 'text-slate-500 font-medium'}`}
+            >
+              <Icon name={icon} className="h-[22px] w-[22px]" />
+              {label}
+            </Link>
+          ),
+        )}
       </nav>
     </div>
   );
@@ -278,6 +296,45 @@ interface FeaturedProduct {
   display_order?: number;
 }
 
+const PHOTO_GRADIENTS = [
+  'from-[#d9b88f] to-[#8a5f38]',
+  'from-[#e8cfa8] to-[#a87a50]',
+  'from-[#caa27a] to-[#5e3b22]',
+  'from-[#f0e0c8] to-[#b8864a]',
+];
+
+// Fades and lifts a block into view once. Does nothing when reduced motion is on.
+function Reveal({ children, className = '', delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  const reduceMotion = useReducedMotion();
+  return (
+    <motion.div
+      className={className}
+      initial={reduceMotion ? false : { opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2 }}
+      transition={{ duration: 0.5, delay, ease: 'easeOut' }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+function SectionHead({ eyebrow, title, to, cta }: { eyebrow: string; title: string; to?: string; cta?: string }) {
+  return (
+    <div className="flex items-end justify-between gap-4 mb-8">
+      <div>
+        <p className="text-xs font-semibold tracking-[0.14em] uppercase text-copper-700">{eyebrow}</p>
+        <h2 className="mt-2 text-3xl md:text-[44px] leading-tight tracking-tight text-brand-900">{title}</h2>
+      </div>
+      {to && (
+        <Link to={to} className="hidden sm:inline-flex shrink-0 items-center gap-2 rounded-full border border-brand-100 bg-white px-5 py-2.5 text-sm font-semibold text-brand-700 hover:border-brand-300">
+          {cta} <Icon name="arrow" className="h-4 w-4" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function FeaturedMenu() {
   const [items, setItems] = useState<FeaturedProduct[]>([]);
 
@@ -287,11 +344,9 @@ function FeaturedMenu() {
       .get(`${API}/products`)
       .then((res) => {
         if (cancelled || !Array.isArray(res.data)) return;
-        const popular = (res.data as FeaturedProduct[])
-          .filter((p) => p.is_popular && p.status === 'active')
-          .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
-          .slice(0, 6);
-        setItems(popular);
+        const active = (res.data as FeaturedProduct[]).filter((p) => p.status === 'active');
+        const popular = active.filter((p) => p.is_popular);
+        setItems((popular.length ? popular : active).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).slice(0, 4));
       })
       .catch(() => {});
     return () => {
@@ -299,38 +354,38 @@ function FeaturedMenu() {
     };
   }, []);
 
-  const reduceMotion = useReducedMotion();
   if (items.length === 0) return null;
 
   return (
-    <motion.section
-      className=""
-      initial={reduceMotion ? false : { opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.5, ease: 'easeOut' }}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl md:text-3xl text-brand-800">Our favourites</h2>
-        <Link to="/menu" className="text-sm font-semibold text-brand-700">View full menu →</Link>
+    <section className="py-16 md:py-24">
+      <div className="max-w-6xl mx-auto px-4">
+        <SectionHead eyebrow="Customer favourites" title="Loved by our regulars" to="/menu" cta="See full menu" />
+        <ul className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
+          {items.map((p, i) => (
+            <li key={p.id} className="h-full">
+              <Reveal delay={i * 0.08} className="h-full">
+                <Link to="/menu" className="group flex h-full flex-col overflow-hidden rounded-[20px] border border-brand-100 bg-white shadow-[0_8px_24px_rgba(10,26,51,0.06)] transition hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(10,26,51,0.12)]">
+                  <div className={`relative aspect-[4/3] bg-gradient-to-br ${PHOTO_GRADIENTS[i % 4]}`}>
+                    {p.image_url && <img src={p.image_url} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
+                  </div>
+                  <div className="flex flex-1 flex-col p-3 sm:p-5">
+                    {p.is_popular && (
+                      <span className="self-start rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-500">Bestseller</span>
+                    )}
+                    <p className="mt-2 font-display text-base sm:text-xl text-brand-900">{p.name}</p>
+                    {p.description && <p className="mt-1 text-xs sm:text-sm text-slate-600 line-clamp-2">{p.description}</p>}
+                    <p className="mt-auto pt-3 font-semibold text-brand-700">AED {Number(p.base_price).toFixed(2).replace(/\.00$/, '')}</p>
+                  </div>
+                </Link>
+              </Reveal>
+            </li>
+          ))}
+        </ul>
+        <Link to="/menu" className="sm:hidden mt-6 flex items-center justify-center gap-2 rounded-full border border-brand-100 bg-white px-5 py-3 text-sm font-semibold text-brand-700">
+          See full menu <Icon name="arrow" className="h-4 w-4" />
+        </Link>
       </div>
-      <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-        {items.map((p, i) => (
-          <motion.li
-            key={p.id}
-            className="rounded-2xl bg-white p-5 shadow-sm"
-            initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.4, delay: i * 0.08, ease: 'easeOut' }}
-          >
-            <p className="font-semibold text-gray-800">{p.name}</p>
-            {p.description && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{p.description}</p>}
-            <p className="mt-2 font-bold text-copper-700">{Number(p.base_price).toFixed(2)} AED</p>
-          </motion.li>
-        ))}
-      </ul>
-    </motion.section>
+    </section>
   );
 }
 
@@ -349,40 +404,151 @@ function OfferBand() {
   }, []);
   if (!offer) return null;
   return (
-    <section className="rounded-3xl bg-brand-800 text-white p-8 md:flex md:items-center md:justify-between gap-6">
-      <div>
-        <p className="text-copper-300 text-sm font-semibold uppercase tracking-wide">Offer</p>
-        <h2 className="text-2xl md:text-3xl mt-1">{offer.title}</h2>
-        {offer.body && <p className="mt-2 text-white/80">{offer.body}</p>}
-        {offer.ends_on && <p className="mt-2 text-sm text-white/60">Until {offer.ends_on}</p>}
-      </div>
-      <Link to="/news" className="mt-4 md:mt-0 inline-block px-5 py-3 rounded-xl bg-copper-700 hover:bg-copper-500 font-semibold">
-        All offers
-      </Link>
+    <section className="pb-16 md:pb-24">
+      <Reveal className="max-w-6xl mx-auto px-4">
+        <div className="rounded-[28px] bg-gradient-to-r from-copper-500 to-[#7a5230] px-7 py-9 md:px-14 md:py-11 text-white md:flex md:items-center md:justify-between gap-8">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.14em] uppercase text-cream/90">Offer{offer.ends_on ? ` · until ${offer.ends_on}` : ''}</p>
+            <h2 className="mt-2 text-3xl md:text-4xl tracking-tight">{offer.title}</h2>
+            {offer.body && <p className="mt-2 text-cream/90 md:text-lg">{offer.body}</p>}
+          </div>
+          <Link to="/news" className="mt-6 md:mt-0 inline-flex shrink-0 rounded-full bg-brand-700 hover:bg-brand-900 px-6 py-3.5 font-semibold">
+            All offers
+          </Link>
+        </div>
+      </Reveal>
     </section>
+  );
+}
+
+function StampGrid({ target, filled }: { target: number; filled: number }) {
+  const n = Math.min(target, 15);
+  return (
+    <div className="grid grid-cols-5 gap-3" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => {
+        const last = i === n - 1;
+        return (
+          <span
+            key={i}
+            className={`aspect-square rounded-full grid place-items-center ${
+              i < filled ? 'bg-copper-500 text-white' : last ? 'bg-brand-700 text-copper-300' : 'border-2 border-dashed border-brand-100 bg-white'
+            }`}
+          >
+            {i < filled ? <Icon name="coffee" className="h-1/2 w-1/2" /> : last ? <Icon name="gift" className="h-1/2 w-1/2" /> : null}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
 function LoyaltyBand() {
   const { stamps_target, reward_name } = useLoyaltyRules();
+  const demo = Math.max(0, Math.min(stamps_target - 3, 7));
+  const perks = ['Your card lives in your browser — add it to your home screen', 'Bonus stamp in your birthday week', 'Invite a friend and you both get a stamp'];
   return (
-    <section className="rounded-3xl bg-white p-8 shadow-sm md:flex md:items-center md:justify-between gap-6">
-      <div>
-        <h2 className="text-2xl md:text-3xl text-brand-800">Collect {stamps_target} stamps, earn a reward</h2>
-        <p className="mt-2 text-slate-600">Reward: {reward_name}. Join free with your phone number. Staff add stamps at the counter.</p>
-        <div className="mt-4 flex flex-wrap gap-1.5" aria-hidden="true">
-          {Array.from({ length: Math.min(stamps_target, 15) }, (_, i) => (
-            <span key={i} className={`h-6 w-6 rounded-full ${i < 3 ? 'bg-copper-500' : 'border-2 border-copper-300'}`} />
-          ))}
-        </div>
+    <section className="bg-brand-700 text-white py-16 md:py-24">
+      <div className="max-w-6xl mx-auto px-4 grid gap-12 md:grid-cols-[1fr_440px] md:items-center">
+        <Reveal>
+          <p className="text-xs font-semibold tracking-[0.14em] uppercase text-copper-300">Milestones Rewards</p>
+          <h2 className="mt-4 text-4xl md:text-[46px] leading-[1.1] tracking-tight">
+            {stamps_target} stamps. {reward_name}.<br />
+            No app needed.
+          </h2>
+          <ul className="mt-6 space-y-3">
+            {perks.map((p) => (
+              <li key={p} className="flex items-center gap-3 text-brand-100 md:text-lg">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-copper-500">
+                  <Icon name="check" className="h-3.5 w-3.5 text-white" />
+                </span>
+                {p}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link to="/loyalty" className="rounded-full bg-copper-700 hover:bg-copper-500 px-6 py-3.5 font-semibold">
+              Join free
+            </Link>
+            <Link to="/faq" className="rounded-full bg-white px-6 py-3.5 font-semibold text-brand-700 hover:bg-brand-50">
+              How it works
+            </Link>
+          </div>
+        </Reveal>
+        <Reveal delay={0.15}>
+          <div className="rounded-[28px] bg-cream p-7 md:p-8 text-brand-900 shadow-[0_30px_60px_rgba(0,0,0,0.3)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-display text-2xl">Your card</p>
+                <p className="text-sm text-slate-600">Reward: {reward_name}</p>
+              </div>
+              <span className="grid h-14 w-14 place-items-center rounded-2xl border border-brand-100 bg-white text-brand-700">
+                <Icon name="qr" className="h-9 w-9" />
+              </span>
+            </div>
+            <div className="mt-6">
+              <StampGrid target={stamps_target} filled={demo} />
+            </div>
+            <div className="mt-6 h-2 rounded-full bg-brand-100">
+              <div className="h-2 rounded-full bg-copper-500" style={{ width: `${(demo / stamps_target) * 100}%` }} />
+            </div>
+            <p className="mt-3 text-sm font-medium text-brand-700">
+              Example: {demo} of {stamps_target} · {stamps_target - demo} more to go
+            </p>
+          </div>
+        </Reveal>
       </div>
-      <Link
-        to="/loyalty"
-        className="mt-6 md:mt-0 inline-block px-5 py-3 rounded-xl bg-brand-700 hover:bg-brand-600 text-white font-semibold"
-      >
-        Join free
-      </Link>
     </section>
+  );
+}
+
+function BranchCard({ b, km }: { b: SiteBranch; km: number | null }) {
+  const open = isOpenNow(b.operating_hours, b.timezone || TZ, new Date());
+  const today = getTodayHours(b.operating_hours, b.timezone || TZ, new Date());
+  const maps = b.google_maps_url || (typeof b.latitude === 'number' ? `https://www.google.com/maps/dir/?api=1&destination=${b.latitude},${b.longitude}` : null);
+  return (
+    <div className="flex h-full flex-col rounded-[20px] border border-brand-100 bg-white p-6">
+      <div className="flex items-start justify-between gap-3">
+        <Link to={`/branches/${b.id}`} className="font-display text-xl text-brand-900 hover:underline">
+          {b.name}
+        </Link>
+        {open !== null && (
+          <span className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${open ? 'bg-green-50 text-green-800' : 'bg-slate-100 text-slate-600'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${open ? 'bg-green-600' : 'bg-slate-400'}`} />
+            {open ? 'Open now' : 'Closed'}
+          </span>
+        )}
+      </div>
+      <p className="mt-3 flex items-start gap-2 text-sm text-slate-600">
+        <Icon name="pin" className="mt-0.5 h-4 w-4 shrink-0 text-copper-500" />
+        <span>
+          {b.address}
+          {km !== null && ` · ${km.toFixed(1)} km`}
+        </span>
+      </p>
+      {today && (
+        <p className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+          <Icon name="clock" className="h-4 w-4 shrink-0 text-copper-500" />
+          Today {today.open}–{today.close}
+        </p>
+      )}
+      <div className="mt-auto pt-5 flex gap-2.5">
+        {maps && (
+          <a href={maps} target="_blank" rel="noopener noreferrer" className="rounded-full bg-brand-700 hover:bg-brand-900 px-5 py-2.5 text-sm font-semibold text-white">
+            Directions
+          </a>
+        )}
+        {b.phone && (
+          <a href={`tel:${b.phone.replace(/\s/g, '')}`} className="rounded-full border border-brand-100 px-5 py-2.5 text-sm font-semibold text-brand-700 hover:border-brand-300">
+            Call
+          </a>
+        )}
+        {!maps && !b.phone && (
+          <Link to={`/branches/${b.id}`} className="rounded-full bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white">
+            Details
+          </Link>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -434,69 +600,98 @@ function HomePage() {
     reduceMotion
       ? {}
       : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: 'easeOut' as const } };
-  const quick: [string, string, string][] = [
-    ['/menu', 'Menu', 'Browse drinks and food'],
-    ['/branches', 'Find a branch', 'Open now near you'],
-    ['/scan', 'Scan QR', 'Open your table menu'],
-    ['/loyalty', 'Rewards', `${rules.stamps_target} stamps: ${rules.reward_name}`],
+  const quick: [string, string, string, string, string][] = [
+    ['/menu', 'Menu', 'Coffee, bakery & desserts', 'Browse', 'coffee'],
+    ['/branches', 'Branches', 'Find the nearest café', 'Get directions', 'pin'],
+    ['/loyalty', 'Rewards', `${rules.stamps_target} stamps: ${rules.reward_name}`, 'Join free', 'gift'],
+    ['/scan', 'Scan table QR', 'Open your table’s menu', 'Open scanner', 'qr'],
   ];
 
   return (
-    <div className="space-y-12">
-      <section
-        className="relative overflow-hidden rounded-3xl text-white"
-        style={
-          HERO_IMAGE
-            ? {
-                backgroundImage: `linear-gradient(rgba(11,26,51,.6),rgba(11,26,51,.85)), url(${HERO_IMAGE})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }
-            : undefined
-        }
-      >
-        {!HERO_IMAGE && <div className="absolute inset-0 bg-gradient-to-br from-brand-900 via-brand-700 to-brand-600" aria-hidden="true" />}
-        <div className="relative px-6 py-16 md:py-24 text-center">
-          <motion.img
-            src="/logo/logo-512.png"
-            alt=""
-            width={112}
-            height={112}
-            className="mx-auto h-28 w-28 rounded-full ring-4 ring-copper-500/60"
-            initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.7, ease: 'backOut' }}
-          />
-          <motion.h1 className="mt-6 text-4xl md:text-6xl font-semibold" {...fade(0.15)}>
-            Milestones Coffee
-          </motion.h1>
-          <motion.p className="mt-4 text-lg text-copper-300" {...fade(0.25)}>
-            {branches ? (
-              <>
+    <div>
+      <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 to-brand-600 text-white">
+        <div className="max-w-6xl mx-auto px-4 pt-12 pb-16 md:pt-20 md:pb-28 grid gap-12 md:grid-cols-[1fr_minmax(0,500px)] md:items-center">
+          <div>
+            {branches && branches.length > 0 && (
+              <motion.p
+                className="inline-flex items-center gap-2 rounded-full border border-copper-300/40 bg-white/10 px-3.5 py-1.5 text-sm font-medium text-copper-300"
+                {...fade(0)}
+              >
+                <span className={`h-2 w-2 rounded-full ${openCount ? 'bg-green-400' : 'bg-slate-400'}`} />
                 <CountUp to={openCount} /> of {branches.length} branches open now
-              </>
-            ) : (
-              'Loading branches…'
+              </motion.p>
             )}
-          </motion.p>
-          <motion.div className="mt-8 flex flex-wrap justify-center gap-3" {...fade(0.35)}>
-            <Link to="/menu" className="px-6 py-3 rounded-xl bg-copper-700 hover:bg-copper-500 font-semibold">
-              View menu
-            </Link>
-            <Link to="/branches" className="px-6 py-3 rounded-xl border border-white/60 hover:bg-white/10 font-semibold">
-              Find a branch
-            </Link>
+            <motion.h1 className="mt-6 text-5xl md:text-[76px] leading-[1.02] tracking-tight" {...fade(0.1)}>
+              Every cup,
+              <br />
+              <em className="text-copper-300">a milestone.</em>
+            </motion.h1>
+            <motion.p className="mt-6 max-w-lg text-lg md:text-xl leading-relaxed text-brand-100" {...fade(0.2)}>
+              Specialty coffee, fresh bakes every morning, and a rewards card that lives on your phone.
+            </motion.p>
+            <motion.div className="mt-8 flex flex-wrap gap-3" {...fade(0.3)}>
+              <Link to="/menu" className="rounded-full bg-copper-700 hover:bg-copper-500 px-6 py-3.5 font-semibold">
+                Explore the menu
+              </Link>
+              <Link to="/branches" className="rounded-full bg-white px-6 py-3.5 font-semibold text-brand-700 hover:bg-brand-50">
+                Find a branch
+              </Link>
+            </motion.div>
+          </div>
+          <motion.div
+            className="relative"
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
+          >
+            <div className="relative ml-auto aspect-[25/27] w-full max-w-[460px] overflow-hidden rounded-[36px] bg-gradient-to-br from-copper-300 via-copper-500 to-[#4a3020]">
+              {HERO_IMAGE ? (
+                <img src={HERO_IMAGE} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <img src="/logo/logo-512.png" alt="" width={160} height={160} className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-90 shadow-2xl" />
+              )}
+            </div>
+            <motion.div
+              className="absolute -bottom-6 left-0 md:-left-6 rounded-[20px] bg-white p-4 md:p-5 text-brand-900 shadow-[0_24px_48px_rgba(5,15,36,0.35)]"
+              animate={reduceMotion ? undefined : { y: [0, -8, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Icon name="gift" className="h-5 w-5 text-copper-500" /> Milestones Rewards
+              </p>
+              <div className="mt-3 flex gap-1.5" aria-hidden="true">
+                {Array.from({ length: Math.min(rules.stamps_target, 10) }, (_, i) => (
+                  <span key={i} className={`h-4 w-4 rounded-full border-[1.5px] ${i < 7 ? 'border-copper-500 bg-copper-500' : 'border-brand-100'}`} />
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                {rules.stamps_target} stamps = {rules.reward_name}
+              </p>
+            </motion.div>
           </motion.div>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {quick.map(([to, title, sub]) => (
-          <Link key={to} to={to} className="rounded-2xl bg-white p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition">
-            <p className="font-semibold text-brand-800">{title}</p>
-            <p className="text-sm text-slate-600 mt-1">{sub}</p>
-          </Link>
-        ))}
+      <section className="max-w-6xl mx-auto px-4 pt-10 md:pt-12">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+          {quick.map(([to, title, sub, cta, icon], i) => (
+            <Reveal key={to} delay={i * 0.06}>
+              <Link
+                to={to}
+                className="flex h-full flex-col rounded-[20px] border border-brand-100 bg-white p-4 md:p-6 shadow-[0_8px_24px_rgba(10,26,51,0.06)] transition hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(10,26,51,0.12)]"
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-brand-50 text-brand-700">
+                  <Icon name={icon} className="h-[22px] w-[22px]" />
+                </span>
+                <p className="mt-4 font-display text-lg text-brand-900">{title}</p>
+                <p className="mt-1 text-sm text-slate-600">{sub}</p>
+                <p className="mt-auto pt-3 flex items-center gap-1.5 text-sm font-semibold text-copper-700">
+                  {cta} <Icon name="arrow" className="h-4 w-4" />
+                </p>
+              </Link>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
       <FeaturedMenu />
@@ -504,31 +699,31 @@ function HomePage() {
       <LoyaltyBand />
 
       {nearest.length > 0 && (
-        <section>
-          <div className="flex items-end justify-between mb-4 gap-3">
-            <h2 className="text-2xl md:text-3xl text-brand-800">{coords ? 'Nearest to you' : 'Our branches'}</h2>
-            <div className="flex gap-4 text-sm font-semibold">
-              {!coords && (
-                <button type="button" onClick={locate} className="text-copper-700">
-                  Use my location
-                </button>
-              )}
-              <Link to="/branches" className="text-brand-700">
-                See all →
-              </Link>
+        <section className="py-16 md:py-24">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex items-end justify-between gap-4 mb-8">
+              <div>
+                <p className="text-xs font-semibold tracking-[0.14em] uppercase text-copper-700">Visit us</p>
+                <h2 className="mt-2 text-3xl md:text-[44px] leading-tight tracking-tight text-brand-900">{coords ? 'Nearest to you' : 'Our branches'}</h2>
+              </div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                {!coords && (
+                  <button type="button" onClick={locate} className="inline-flex items-center gap-2 rounded-full bg-copper-700 hover:bg-copper-500 px-4 py-2.5 text-sm font-semibold text-white">
+                    <Icon name="nav" className="h-4 w-4" /> Near me
+                  </button>
+                )}
+                <Link to="/branches?view=map" className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 hover:border-brand-300">
+                  Map <Icon name="arrow" className="h-4 w-4" />
+                </Link>
+              </div>
             </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {nearest.map(({ b, km }) => (
-              <Link key={b.id} to={`/branches/${b.id}`} className="rounded-2xl bg-white p-5 shadow-sm hover:shadow-md transition">
-                <p className="font-semibold text-brand-800">{b.name}</p>
-                <p className="text-sm text-slate-600 mt-1">{b.address}</p>
-                <div className="mt-2">
-                  <HoursLine branch={b} />
-                </div>
-                {km !== null && <p className="mt-1 text-xs text-slate-500">{km.toFixed(1)} km away</p>}
-              </Link>
-            ))}
+            <div className="grid gap-6 md:grid-cols-3">
+              {nearest.map(({ b, km }, i) => (
+                <Reveal key={b.id} delay={i * 0.08} className="h-full">
+                  <BranchCard b={b} km={km} />
+                </Reveal>
+              ))}
+            </div>
           </div>
         </section>
       )}
