@@ -110,13 +110,23 @@ export function useCart(branchId: string, table: string) {
 export type Cart = ReturnType<typeof useCart>;
 
 // Choices, quantity and note inside the product sheet.
-export function AddToOrder({ product, available, onAdd }: { product: OrderableProduct; available: boolean; onAdd: (line: Omit<CartLine, 'key'>) => void }) {
+export function AddToOrder({
+  product,
+  available,
+  onAdd,
+  discount,
+}: {
+  product: OrderableProduct;
+  available: boolean;
+  onAdd: (line: Omit<CartLine, 'key'>) => void;
+  discount?: number; // happy-hour %
+}) {
   const { t } = useLang();
   const groups = useMemo(() => groupsOf(product), [product]);
   const [picked, setPicked] = useState<Record<string, string>>(() => Object.fromEntries(groups.map((g) => [g.id, g.options!.choices![0].name])));
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState('');
-  const unit = unitPrice(product, picked);
+  const unit = discount ? Math.round(unitPrice(product, picked) * (100 - discount)) / 100 : unitPrice(product, picked);
 
   if (!available) {
     return <p className="rounded-xl bg-slate-100 py-3 text-center font-semibold text-slate-500">{t('orderSoldOut')}</p>;

@@ -11,6 +11,7 @@ import { readFavs, toggleFav } from './lib/favorites';
 import { TableService } from './TableService';
 import { NotifyButton } from './NotifyButton';
 import { AddToOrder, TableOrder, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
+import { bestDiscount, discounted, isLive, type HappyHour } from './lib/happyHour';
 import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
@@ -191,12 +192,14 @@ function ProductDetailsModal({
   availability,
   branchId,
   onAdd,
+  deal,
 }: {
   product: Product;
   onClose: () => void;
   availability: boolean;
   branchId: string | null;
   onAdd?: (line: Omit<CartLine, 'key'>) => void;
+  deal?: { percent: number; title: string; until: string | null } | null;
 }) {
   // Count the product as viewed (feeds "Top products" in the admin Insights page).
   useEffect(() => {
@@ -265,13 +268,22 @@ function ProductDetailsModal({
           )}
 
           <div className="mb-6">
-            <p className="text-3xl font-bold text-brand-600">{Number(product.base_price).toFixed(2)} AED</p>
+            {deal ? (
+              <p className="text-3xl font-bold text-copper-700">
+                {discounted(Number(product.base_price), deal.percent).toFixed(2)} AED{' '}
+                <s className="text-lg font-medium text-gray-400">{Number(product.base_price).toFixed(2)}</s>
+                <span className="ml-2 align-middle rounded-full bg-copper-500 px-2 py-0.5 text-xs font-semibold text-white">−{deal.percent}%</span>
+              </p>
+            ) : (
+              <p className="text-3xl font-bold text-brand-600">{Number(product.base_price).toFixed(2)} AED</p>
+            )}
           </div>
 
           <div className="space-y-3">
             {onAdd ? (
               <AddToOrder
                 product={product}
+                discount={deal?.percent}
                 available={availability}
                 onAdd={(line) => {
                   onAdd(line);
@@ -312,6 +324,20 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
   const [showText, setShowText] = useState(false);
+  // Happy-hour deals for this branch; re-checked every minute so prices change on time.
+  const [deals, setDeals] = useState<HappyHour[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    axios
+      .get(`${API_BASE_URL}/promotions`, { params: branchId ? { branch_id: branchId } : {} })
+      .then((r) => setDeals(Array.isArray(r.data) ? r.data.filter((p: HappyHour) => p.discount_percent) : []))
+      .catch(() => setDeals([]));
+  }, [branchId]);
+  const dealFor = (p: Product) => bestDiscount(deals, p.category_id, new Date(now));
   const cart = useCart(branchId ?? '', table ?? 'pickup');
 
   useEffect(() => {
@@ -616,6 +642,24 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           </div>
         )}
 
+        {(() => {
+          const live = deals.filter((d) => isLive(d, new Date(now)));
+          if (!live.length) return null;
+          const d = live.sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0))[0];
+          return (
+            <div role="status" className="mb-6 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-copper-500 to-[#7a5230] px-5 py-4 text-white">
+              <span className="text-2xl font-bold">−{d.discount_percent}%</span>
+              <div>
+                <p className="font-semibold">{d.title}</p>
+                <p className="text-sm text-cream/90">
+                  {t('happyHourNow')}
+                  {d.end_time ? ` · ${t('happyHourUntil').replace('{t}', d.end_time)}` : ''}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Products Grid */}
         {filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -652,9 +696,16 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                     </div>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-brand-600">
-                        {Number(product.base_price).toFixed(2)} AED
-                      </span>
+                      {dealFor(product) ? (
+                        <span className="text-lg font-bold text-copper-700">
+                          {discounted(Number(product.base_price), dealFor(product)!.percent).toFixed(2)} AED{' '}
+                          <s className="text-sm font-medium text-gray-400">{Number(product.base_price).toFixed(2)}</s>
+                        </span>
+                      ) : (
+                        <span className="text-lg font-bold text-brand-600">
+                          {Number(product.base_price).toFixed(2)} AED
+                        </span>
+                      )}
                       <span
                         className={`text-xs font-semibold px-2 py-1 rounded ${
                           isAvailable
@@ -709,6 +760,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           onClose={() => setSelectedProduct(null)}
           availability={availability[selectedProduct.id] !== false}
           branchId={branchId}
+          deal={dealFor(selectedProduct)}
           onAdd={canOrder || canPickup ? cart.add : undefined}
         />
       )}
