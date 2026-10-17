@@ -419,7 +419,8 @@ export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Staff: add a stamp (two during double-stamp hours), then any birthday or referral bonus.
-  async addStamp(body: CardRef, staff?: StaffUser) {
+  // extraNote: e.g. 'Order 012' when a collected order earns the stamp.
+  async addStamp(body: CardRef, staff?: StaffUser, extraNote?: string) {
     const card = await this.findCard(body);
     const rules = await this.getSettings();
     const who = { name: card.name, phone: card.phone };
@@ -440,7 +441,7 @@ export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
     const before = card.stamps;
     card.stamps = Math.min(rules.stamps_target, card.stamps + (double ? 2 : 1));
     await this.cards.save(card);
-    const note = [staff?.role === 'self' ? 'Self-stamp at counter' : '', double ? 'Double stamps' : ''].filter(Boolean).join(' · ');
+    const note = [staff?.role === 'self' ? 'Self-stamp at counter' : '', extraNote ?? '', double ? 'Double stamps' : ''].filter(Boolean).join(' · ');
     await this.log(card, 'stamp', card.stamps - before, staff, note || undefined);
 
     const bonuses: string[] = [];

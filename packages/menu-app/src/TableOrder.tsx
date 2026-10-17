@@ -46,6 +46,7 @@ interface Tracked {
   order_no: string;
   status: string;
   total: number;
+  loyalty?: 'linked' | 'stamped' | null;
   items: {
     name: string;
     qty: number;
@@ -55,6 +56,14 @@ interface Tracked {
 }
 
 const money = (n: number) => `AED ${n.toFixed(2)}`;
+// The rewards card this phone holds (set by the Rewards page).
+const rewardsToken = () => {
+  try {
+    return localStorage.getItem('milestones_loyalty_token') ?? '';
+  } catch {
+    return '';
+  }
+};
 const read = <T,>(key: string, fallback: T): T => {
   try {
     const v = localStorage.getItem(key);
@@ -342,6 +351,7 @@ export function TableOrder({
         ...(pickup ? { type: 'pickup', pickup_at: slot!.at } : { table }),
         customer_name: name.trim(),
         phone: phone.trim() || undefined,
+        loyalty_token: rewardsToken() || undefined,
         items: cart.lines.map((l) => ({
           product_id: l.product_id,
           qty: l.qty,
@@ -511,6 +521,13 @@ export function TableOrder({
                         <span className="text-xl font-bold text-brand-900">{money(cart.total)}</span>
                       </div>
                       <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>
+                      {rewardsToken() ? (
+                        <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-xs font-medium text-brand-900">⭐ {t('orderEarnsStamp')}</p>
+                      ) : (
+                        <a href="/loyalty" className="mt-2 block rounded-lg bg-cream px-3 py-2 text-xs font-medium text-brand-900 underline-offset-2 hover:underline">
+                          ⭐ {t('orderJoinRewards')}
+                        </a>
+                      )}
                       {error && <p className="mt-3 rounded-lg bg-red-50 p-2.5 text-sm text-red-700">{error}</p>}
                       <button
                         type="button"
@@ -576,6 +593,11 @@ export function TableOrder({
                         <span>{money(detail.total)}</span>
                       </div>
                       {!['completed', 'cancelled'].includes(current.status ?? '') && <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>}
+                      {detail.loyalty && (
+                        <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-xs font-medium text-brand-900">
+                          ⭐ {t(detail.loyalty === 'stamped' ? 'orderStamped' : 'orderEarnsStamp')}
+                        </p>
+                      )}
                     </>
                   )}
                   {error && <p className="mt-3 rounded-lg bg-red-50 p-2.5 text-sm text-red-700">{error}</p>}

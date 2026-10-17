@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
@@ -10,6 +10,8 @@ import { BranchProductPrice } from '../entities/branch-product-price.entity';
 import { ProductAvailability } from '../entities/product-availability.entity';
 import { dubaiNow } from '../loyalty/loyalty.service';
 import { Promotion } from '../entities/promotion.entity';
+import { LoyaltyCard } from '../entities/loyalty-card.entity';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { bestDiscount, discounted } from '../promotions/happy-hour';
 
 export interface StaffUser {
@@ -44,6 +46,7 @@ const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\
 
 @Injectable()
 export class OrdersService {
+  private logger = new Logger(OrdersService.name);
   constructor(
     @InjectRepository(Order) private orders: Repository<Order>,
     @InjectRepository(OrderItem) private items: Repository<OrderItem>,
@@ -52,6 +55,8 @@ export class OrdersService {
     @InjectRepository(BranchProductPrice) private prices: Repository<BranchProductPrice>,
     @InjectRepository(ProductAvailability) private availability: Repository<ProductAvailability>,
     @InjectRepository(Promotion) private promotions: Repository<Promotion>,
+    @InjectRepository(LoyaltyCard) private cards: Repository<LoyaltyCard>,
+    @Optional() private loyalty?: LoyaltyService,
   ) {}
 
   // Public: a customer sends an order from their table, or orders ahead for pickup. Prices come from the database only.
@@ -151,6 +156,10 @@ export class OrdersService {
     total = Math.round(total * 100) / 100;
     full = Math.round(full * 100) / 100;
 
+    // Link the customer's rewards card (if the phone has one) so the order earns a stamp when collected.
+    const loyaltyToken = typeof body.loyalty_token === 'string' ? body.loyalty_token.trim().slice(0, 128) : '';
+    const card = loyaltyToken ? await this.cards.findOne({ where: { token: loyaltyToken } }) : null;
+
     const today = await this.orders.count({ where: { branch_id: branchId, created_at: MoreThanOrEqual(dubaiNow().dayStart) } });
     const token = randomBytes(24).toString('hex');
     const saved = await this.orders.save(
@@ -162,6 +171,7 @@ export class OrdersService {
         type: pickup ? 'pickup' : 'dine_in',
         table_number: pickup ? null : table,
         pickup_at: pickupAt,
+        loyalty_card_id: card?.id ?? null,
         subtotal: full,
         total,
         status: 'placed',
@@ -172,7 +182,7 @@ export class OrdersService {
     );
     items.forEach((i) => (i.order_id = saved.id));
     await this.items.save(items);
-    return { id: saved.id, access_token: token, order_no: saved.order_no, total };
+    return { id: saved.id, access_token: token, order_no: saved.order_no, total, earns_stamp: !!card };
   }
 
   private async own(id: string, token: unknown) {
@@ -194,6 +204,7 @@ export class OrdersService {
       pickup_at: o.pickup_at,
       total: Number(o.total),
       created_at: o.created_at,
+      loyalty: o.loyalty_card_id ? (o.loyalty_stamped ? 'stamped' : 'linked') : null,
       items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
     };
   }
@@ -234,6 +245,7 @@ export class OrdersService {
       order_no: o.order_no,
       customer_name: o.customer_name,
       phone: o.phone,
+      rewards_card: !!o.loyalty_card_id,
       type: o.type,
       table: o.table_number,
       pickup_at: o.pickup_at,
@@ -254,7 +266,24 @@ export class OrdersService {
     if (!(NEXT[order.status] ?? []).includes(status)) throw new BadRequestException(`Cannot move an order from ${order.status} to ${status}`);
     order.status = status as Order['status'];
     await this.orders.save(order);
-    return { ok: true, status };
+    let stamp: string | null = null;
+    if (status === 'completed' && order.loyalty_card_id && !order.loyalty_stamped && this.loyalty) {
+      // Collected: stamp the linked card with the normal rules (cooldown, daily limit, bonuses).
+      try {
+        const card = await this.cards.findOne({ where: { id: order.loyalty_card_id } });
+        if (card) {
+          const res = await this.loyalty.addStamp({ token: card.token }, { id: UUID.test(staff.id ?? '') ? staff.id : null, role: staff.role, assigned_branch_id: order.branch_id }, `Order ${order.order_no}`);
+          if (res.ok) {
+            order.loyalty_stamped = true;
+            await this.orders.save(order);
+          }
+          stamp = 'message' in res ? res.message : 'added';
+        }
+      } catch (e) {
+        this.logger.warn(`Order ${order.id}: stamp failed: ${(e as Error).message}`);
+      }
+    }
+    return { ok: true, status, stamp };
   }
 
   // kind 'table' = order from the table QR, 'pickup' = order ahead and collect.
