@@ -34,6 +34,10 @@ export class LoyaltySettings {
   @Column({ type: 'varchar', length: 5, default: '17:00' })
   double_to: string;
 
+  // Customers can stamp their own card by scanning the rotating code on the counter screen.
+  @Column({ type: 'boolean', default: false })
+  self_stamp: boolean;
+
   @UpdateDateColumn()
   updated_at: Date;
 }

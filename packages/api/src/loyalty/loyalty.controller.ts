@@ -31,6 +31,19 @@ export class LoyaltyController {
     return this.loyalty.publicSettings();
   }
 
+  // Customer scanned the rotating code on the counter screen.
+  @Post('loyalty/self-stamp')
+  selfStamp(@Body() body: Record<string, unknown>) {
+    return this.loyalty.selfStamp(body);
+  }
+
+  @Get('admin/loyalty/counter')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'branch_manager')
+  counter(@Query('branch_id') branchId: string | undefined, @Req() req: StaffReq) {
+    return this.loyalty.counter(branchId, req.user);
+  }
+
   @Get('admin/loyalty/cards')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'branch_manager')

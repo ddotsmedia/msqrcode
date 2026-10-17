@@ -1,5 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
-import { LoyaltyService, dubaiNow, isDoubleNow, nearBirthday, parseBirthday, type Rules } from './loyalty.service';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { COUNTER_WINDOW_MS, LoyaltyService, counterCode, dubaiNow, isDoubleNow, nearBirthday, parseBirthday, type Rules } from './loyalty.service';
+
+process.env.JWT_SECRET = 'test-secret';
 
 type Opts = {
   stamps?: number;
@@ -36,7 +38,10 @@ function setup(opts: Opts = {}) {
     findOne: jest.fn(async () => (opts.settings ? { id: 1, stamps_target: 10, reward_name: 'Free drink', ...opts.settings } : null)),
     save: jest.fn(async (s: any) => s),
   };
-  const svc = new LoyaltyService(cards as any, events as any, settings as any, {} as any, {} as any);
+  const branches = {
+    findOne: jest.fn(async ({ where }: any) => (where.id === 'b1b1b1b1' ? { id: 'b1b1b1b1', name: 'Khalidiya', status: 'active' } : null)),
+  };
+  const svc = new LoyaltyService(cards as any, events as any, settings as any, {} as any, branches as any);
   return { svc, card, referrer, saved };
 }
 
@@ -124,8 +129,42 @@ describe('LoyaltyService', () => {
   });
 });
 
+describe('counter self-stamp', () => {
+  const code = (offset = 0) => `b1b1b1b1.${counterCode('test-secret', 'b1b1b1b1', Math.floor(Date.now() / COUNTER_WINDOW_MS) + offset)}`;
+  const on = { settings: { self_stamp: true } };
+
+  it('stamps with the current or previous code and records the branch', async () => {
+    const { svc, saved } = setup(on);
+    const res = await svc.selfStamp({ token: 't', code: code() });
+    expect(res).toMatchObject({ ok: true, stamps: 1, branch_name: 'Khalidiya' });
+    expect(res).not.toHaveProperty('phone');
+    expect(saved[0]).toMatchObject({ type: 'stamp', branch_id: 'b1b1b1b1', staff_user_id: null, note: 'Self-stamp at counter' });
+    expect((await setup(on).svc.selfStamp({ token: 't', code: code(-1) })).ok).toBe(true);
+  });
+
+  it('rejects an old, wrong or foreign code', async () => {
+    const { svc, card } = setup(on);
+    expect((await svc.selfStamp({ token: 't', code: code(-2) })).ok).toBe(false);
+    expect((await svc.selfStamp({ token: 't', code: 'b1b1b1b1.AAAAAAAA' })).ok).toBe(false);
+    expect((await svc.selfStamp({ token: 't', code: `cccccccc.${code().split('.')[1]}` })).ok).toBe(false);
+    expect(card.stamps).toBe(0);
+  });
+
+  it('does nothing while switched off', async () => {
+    const { svc, card } = setup();
+    expect(await svc.selfStamp({ token: 't', code: code() })).toMatchObject({ ok: false });
+    expect(card.stamps).toBe(0);
+  });
+
+  it('keeps branch managers to their own branch', async () => {
+    const { svc } = setup(on);
+    await expect(svc.counter('b1b1b1b1', { id: 'u', role: 'branch_manager', assigned_branch_id: 'b2b2b2b2' })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(await svc.counter('b1b1b1b1', { id: 'u', role: 'admin' })).toMatchObject({ code: code(), branch_name: 'Khalidiya' });
+  });
+});
+
 describe('loyalty helpers', () => {
-  const rules: Rules = { stamps_target: 10, reward_name: 'x', daily_stamp_limit: 3, birthday_bonus: 1, referral_bonus: 1, double_days: [1], double_from: '14:00', double_to: '17:00' };
+  const rules: Rules = { stamps_target: 10, reward_name: 'x', daily_stamp_limit: 3, birthday_bonus: 1, referral_bonus: 1, double_days: [1], double_from: '14:00', double_to: '17:00', self_stamp: false };
 
   it('checks double-stamp hours in Dubai time', () => {
     // Monday 2026-10-12 11:00 UTC = 15:00 in Dubai

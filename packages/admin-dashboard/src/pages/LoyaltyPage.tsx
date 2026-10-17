@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import QRCode from 'qrcode';
 import { api } from '../api';
 
 interface CardRow {
@@ -40,6 +41,7 @@ interface Settings {
   double_days: number[];
   double_from: string;
   double_to: string;
+  self_stamp: boolean;
   double_now?: boolean;
 }
 
@@ -129,6 +131,7 @@ function SettingsForm({ token, settings, onSaved }: { token: string; settings: S
           double_days: form.double_days,
           double_from: form.double_from,
           double_to: form.double_to,
+          self_stamp: form.self_stamp,
         }),
       });
       setMsg('Saved.');
@@ -185,6 +188,13 @@ function SettingsForm({ token, settings, onSaved }: { token: string; settings: S
           <input type="time" value={form.double_to} onChange={(e) => setForm({ ...form, double_to: e.target.value })} className={inputClass} aria-label="Double stamps until" />
         </div>
       </div>
+      <label className="flex items-start gap-2 text-sm text-gray-700">
+        <input type="checkbox" checked={form.self_stamp} onChange={(e) => setForm({ ...form, self_stamp: e.target.checked })} className="mt-0.5" />
+        <span>
+          <span className="font-semibold">Counter self-stamp.</span> Customers scan a code on the counter screen to stamp their own card. The code
+          changes every 30 seconds, so a photo of it stops working within a minute.
+        </span>
+      </label>
       <div className="flex items-center gap-3">
         <button type="submit" disabled={saving} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-60">
           {saving ? 'Saving…' : 'Save rules'}
@@ -230,6 +240,95 @@ function ScanStamp({ token, onDone }: { token: string; onDone: (msg: string, ok:
   }, [token]);
 
   return <div id="loyalty-qr-reader" className="bg-white rounded-xl border shadow-sm p-2 max-w-sm" />;
+}
+
+const MENU_URL = ((import.meta.env.VITE_MENU_URL as string | undefined) ?? 'https://coffeesales.ae').replace(/\/$/, '');
+
+// Full-screen QR for a counter tablet. Customers scan it with their phone to stamp their own card.
+// The code rotates every 30 seconds so a shared photo soon stops working.
+function CounterScreen({ token, branchId, onClose }: { token: string; branchId: string | null; onClose: () => void }) {
+  const [branches, setBranches] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [branch, setBranch] = useState(branchId ?? '');
+  const [qr, setQr] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [left, setLeft] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ id: string; name: string; status: string }[]>('/branches', token)
+      .then((list) => {
+        const active = list.filter((b) => b.status === 'active' && (!branchId || b.id === branchId));
+        setBranches(active);
+        if (!branchId && active.length === 1) setBranch(active[0].id);
+      })
+      .catch((err) => setError((err as Error).message));
+  }, [token, branchId]);
+
+  useEffect(() => {
+    if (!branch) return;
+    let timer: ReturnType<typeof setTimeout>;
+    let stopped = false;
+    async function refresh() {
+      try {
+        const res = await api<{ code: string; branch_name: string; expires_in_ms: number }>(
+          `/admin/loyalty/counter?branch_id=${encodeURIComponent(branch)}`,
+          token,
+        );
+        if (stopped) return;
+        setName(res.branch_name);
+        setQr(await QRCode.toDataURL(`${MENU_URL}/loyalty?stamp=${encodeURIComponent(res.code)}`, { margin: 1, width: 560, color: { dark: '#0b1a33', light: '#ffffff' } }));
+        setError(null);
+        setLeft(Math.ceil(res.expires_in_ms / 1000));
+        timer = setTimeout(refresh, res.expires_in_ms + 300);
+      } catch (err) {
+        if (stopped) return;
+        setError((err as Error).message);
+        timer = setTimeout(refresh, 10_000);
+      }
+    }
+    refresh();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [branch, token]);
+
+  useEffect(() => {
+    const t = setInterval(() => setLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-[#0b1a33] text-white flex flex-col items-center justify-center p-6 text-center">
+      <button type="button" onClick={onClose} className="absolute top-4 right-4 rounded-full border border-white/30 px-4 py-2 text-sm font-semibold">
+        Close
+      </button>
+      {!branch ? (
+        <div className="space-y-3">
+          <p className="text-lg font-semibold">Which branch is this screen at?</p>
+          <select value={branch} onChange={(e) => setBranch(e.target.value)} className="rounded px-3 py-2 text-gray-900">
+            <option value="">Choose a branch</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm font-semibold tracking-widest uppercase text-[#d9b88f]">Milestones Rewards{name ? ` · ${name}` : ''}</p>
+          <h2 className="mt-3 text-3xl md:text-5xl font-semibold">Scan to collect your stamp</h2>
+          <p className="mt-3 text-white/70">Open your phone camera and point it at the code.</p>
+          <div className="mt-8 rounded-3xl bg-white p-4">
+            {qr ? <img src={qr} alt="Counter stamp code" className="h-72 w-72 md:h-96 md:w-96" /> : <div className="h-72 w-72 md:h-96 md:w-96" />}
+          </div>
+          <p className="mt-4 text-sm text-white/60">New code in {left}s</p>
+        </>
+      )}
+      {error && <p className="mt-4 rounded bg-red-500/20 px-4 py-2 text-sm">{error}</p>}
+    </div>
+  );
 }
 
 function CardDetails({ token, phone, isAdmin, onChanged }: { token: string; phone: string; isAdmin: boolean; onChanged: () => void }) {
@@ -309,7 +408,7 @@ function CardDetails({ token, phone, isAdmin, onChanged }: { token: string; phon
   );
 }
 
-export default function LoyaltyPage({ token, role }: { token: string; role: string }) {
+export default function LoyaltyPage({ token, role, branchId }: { token: string; role: string; branchId?: string | null }) {
   const isAdmin = role === 'admin';
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState<CardRow[] | null>(null);
@@ -320,6 +419,7 @@ export default function LoyaltyPage({ token, role }: { token: string; role: stri
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [counter, setCounter] = useState(false);
 
   function loadStats() {
     api<Stats>('/admin/loyalty/stats', token).then(setStats).catch(() => undefined);
@@ -385,7 +485,7 @@ export default function LoyaltyPage({ token, role }: { token: string; role: stri
         <p className="bg-amber-50 text-amber-800 rounded p-3 text-sm font-semibold">Double-stamp hours are on now: each visit earns 2 stamps.</p>
       )}
 
-      <div>
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setScanning((v) => !v)}
@@ -393,7 +493,13 @@ export default function LoyaltyPage({ token, role }: { token: string; role: stri
         >
           {scanning ? 'Close scanner' : 'Scan card to add a stamp'}
         </button>
+        {settings?.self_stamp && (
+          <button type="button" onClick={() => setCounter(true)} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold">
+            Open counter screen
+          </button>
+        )}
       </div>
+      {counter && <CounterScreen token={token} branchId={branchId ?? null} onClose={() => setCounter(false)} />}
       {scanning && (
         <ScanStamp
           token={token}
