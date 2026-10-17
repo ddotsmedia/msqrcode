@@ -41,7 +41,9 @@ interface Placed {
   status?: string;
   seen?: boolean;
   pickup?: string; // pickup time label, for order-ahead
+  lines?: Omit<CartLine, 'key'>[]; // what was ordered, for "Order again"
 }
+const HOUR = 3600_000;
 interface Tracked {
   order_no: string;
   status: string;
@@ -251,12 +253,15 @@ export function TableOrder({
   cart,
   hours,
   timezone = 'Asia/Dubai',
+  reprice,
 }: {
   branchId: string;
   table: string | null;
   cart: Cart;
   hours?: Record<string, { open: string; close: string }> | null;
   timezone?: string;
+  // Re-prices a past line from today's menu (null when it is gone or sold out).
+  reprice?: (line: Omit<CartLine, 'key'>) => Omit<CartLine, 'key'> | null;
 }) {
   const { t } = useLang();
   const pickup = !table;
@@ -265,7 +270,7 @@ export function TableOrder({
   const slot = slots.find((x) => x.at === pickupAt) ?? slots[0];
   const where = pickup ? t('orderPickupAt').replace('{t}', slot?.label ?? '') : t('orderTable').replace('{t}', table ?? '');
   const ordersKey = `msq_orders_${branchId}`;
-  const [placed, setPlaced] = useState<Placed[]>(() => read<Placed[]>(ordersKey, []).filter((o) => Date.now() - o.at < 6 * 3600_000));
+  const [placed, setPlaced] = useState<Placed[]>(() => read<Placed[]>(ordersKey, []).filter((o) => Date.now() - o.at < 30 * 24 * HOUR).slice(0, 20));
   const [sheet, setSheet] = useState<'cart' | string | null>(null); // 'cart' or an order id
   const [name, setName] = useState(() => read<string>('msq_order_name', ''));
   const [phone, setPhone] = useState(() => read<string>('msq_order_phone', ''));
@@ -278,13 +283,14 @@ export function TableOrder({
   useEffect(() => write(ordersKey, placed), [ordersKey, placed]);
 
   // Check open orders every 5 seconds; chime when one becomes ready.
-  const live = placed.filter((o) => !['completed', 'cancelled'].includes(o.status ?? ''));
+  const recent = (o: Placed) => Date.now() - o.at < 6 * HOUR;
+  const live = placed.filter((o) => recent(o) && !['completed', 'cancelled'].includes(o.status ?? ''));
   useEffect(() => {
     if (!live.length) return;
     const tick = async () => {
       const updates = await Promise.all(
         placedRef.current
-          .filter((o) => !['completed', 'cancelled'].includes(o.status ?? ''))
+          .filter((o) => Date.now() - o.at < 6 * HOUR && !['completed', 'cancelled'].includes(o.status ?? ''))
           .map((o) =>
             axios
               .get(`/api/orders/${o.id}`, { params: { token: o.token } })
@@ -357,8 +363,9 @@ export function TableOrder({
           at: Date.now(),
           status: 'placed',
           ...(pickup ? { pickup: slot!.label } : {}),
+          lines: cart.lines.map(({ key: _key, ...l }) => l),
         },
-        ...prev,
+        ...prev.slice(0, 19),
       ]);
       cart.clear();
       setSheet(r.data.id);
@@ -384,7 +391,20 @@ export function TableOrder({
     }
   }
 
-  const shown = placed.filter((o) => !o.seen);
+  const shown = placed.filter((o) => !o.seen && recent(o));
+  const last = placed.find((o) => o.lines?.length && o.status !== 'cancelled');
+
+  // Put a past order back in the cart at today's prices; anything gone or sold out is skipped.
+  function reorder(o: Placed) {
+    const lines = (o.lines ?? []).map((l) => (reprice ? reprice(l) : l)).filter((l): l is Omit<CartLine, 'key'> => !!l);
+    setError(lines.length < (o.lines ?? []).length ? t('orderAgainSome') : null);
+    if (!lines.length) {
+      setError(t('orderAgainNone'));
+      return;
+    }
+    lines.forEach(cart.add);
+    setSheet('cart');
+  }
   const current = sheet && sheet !== 'cart' ? placed.find((o) => o.id === sheet) : null;
 
   return (
@@ -412,6 +432,23 @@ export function TableOrder({
       {cart.count === 0 && shown.length === 0 && (
         <p className="mb-2 rounded-xl bg-cream px-3 py-2 text-sm font-medium text-brand-900">
           {!pickup ? t('orderHint') : slots.length ? t('orderPickupHint').replace('{t}', slots[0].label) : t('orderPickupClosed')}
+        </p>
+      )}
+      {cart.count === 0 && last && (
+        <button
+          type="button"
+          onClick={() => reorder(last)}
+          className="mb-2 flex w-full items-center gap-2 rounded-xl border border-brand-100 px-3 py-2 text-left text-sm text-brand-900 hover:bg-brand-50"
+        >
+          <span aria-hidden="true">↻</span>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-semibold">{t('orderAgain')}:</span> {last.lines!.map((l) => (l.qty > 1 ? `${l.qty}× ${l.name}` : l.name)).join(', ')}
+          </span>
+        </button>
+      )}
+      {cart.count === 0 && error && !sheet && (
+        <p role="alert" className="mb-2 text-xs text-red-700">
+          {error}
         </p>
       )}
       {cart.count > 0 && (
@@ -602,9 +639,15 @@ export function TableOrder({
                         {t('orderDismiss')}
                       </button>
                     )}
-                    <button type="button" onClick={() => setSheet(null)} className="flex-1 rounded-xl bg-brand-700 py-3 text-sm font-semibold text-white">
-                      {t('orderMore')}
-                    </button>
+                    {['completed', 'cancelled'].includes(current.status ?? '') && current.lines?.length ? (
+                      <button type="button" onClick={() => reorder(current)} className="flex-1 rounded-xl bg-brand-700 py-3 text-sm font-semibold text-white">
+                        ↻ {t('orderAgain')}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => setSheet(null)} className="flex-1 rounded-xl bg-brand-700 py-3 text-sm font-semibold text-white">
+                        {t('orderMore')}
+                      </button>
+                    )}
                   </div>
                 </>
               ) : null}
