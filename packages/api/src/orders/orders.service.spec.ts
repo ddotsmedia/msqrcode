@@ -41,7 +41,7 @@ function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; 
   const availability = { find: jest.fn(async () => (opts.soldOut ?? []).map((product_id) => ({ product_id }))) };
   const promotions = { find: jest.fn(async () => opts.deals ?? []) };
   const svc = new OrdersService(orders as any, items as any, products as any, branches as any, prices as any, availability as any, promotions as any);
-  return { svc, saved, items, branch };
+  return { svc, saved, items, branch, orders };
 }
 
 const body = (extra: Record<string, unknown> = {}) => ({
@@ -178,6 +178,15 @@ describe('OrdersService', () => {
       expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' }, 'pickup')).toEqual({ ordering_enabled: true, pickup_enabled: true });
       expect(branch.ordering_enabled).toBe(true);
     });
+  });
+
+  it('estimates the wait from the queue', async () => {
+    const { svc, orders } = setup() as any;
+    orders.count.mockResolvedValueOnce(4);
+    expect(await svc.wait(B1)).toEqual({ queued: 4, minutes: 17 });
+    orders.count.mockResolvedValueOnce(30);
+    expect((await svc.wait(B1)).minutes).toBe(45);
+    await expect(svc.wait('x')).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('switches table ordering on and off', async () => {

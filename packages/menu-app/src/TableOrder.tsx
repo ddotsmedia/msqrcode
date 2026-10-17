@@ -260,7 +260,19 @@ export function TableOrder({
 }) {
   const { t } = useLang();
   const pickup = !table;
-  const slots = pickup ? pickupSlots(hours, timezone, new Date()) : [];
+  // Live wait estimate from the branch's queue; pickup times start no earlier than this.
+  const [wait, setWait] = useState<number | null>(null);
+  useEffect(() => {
+    const load = () =>
+      axios
+        .get('/api/orders/wait', { params: { branch_id: branchId } })
+        .then((r) => setWait(Number(r.data?.minutes) || null))
+        .catch(() => undefined);
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => clearInterval(timer);
+  }, [branchId]);
+  const slots = pickup ? pickupSlots(hours, timezone, new Date(), Math.max(15, wait ?? 15)) : [];
   const [pickupAt, setPickupAt] = useState('');
   const slot = slots.find((x) => x.at === pickupAt) ?? slots[0];
   const where = pickup ? t('orderPickupAt').replace('{t}', slot?.label ?? '') : t('orderTable').replace('{t}', table ?? '');
@@ -412,6 +424,7 @@ export function TableOrder({
       {cart.count === 0 && shown.length === 0 && (
         <p className="mb-2 rounded-xl bg-cream px-3 py-2 text-sm font-medium text-brand-900">
           {!pickup ? t('orderHint') : slots.length ? t('orderPickupHint').replace('{t}', slots[0].label) : t('orderPickupClosed')}
+          {!pickup && wait ? ` ${t('orderWait').replace('{n}', String(wait))}` : ''}
         </p>
       )}
       {cart.count > 0 && (
