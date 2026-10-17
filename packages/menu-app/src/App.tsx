@@ -7,6 +7,7 @@ import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import QRCode from 'qrcode';
 import { readFavs, toggleFav } from './lib/favorites';
+import { TableService } from './TableService';
 import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
@@ -658,6 +659,19 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           </div>
         )}
       </div>
+
+      {table && branchId && branch && (
+        <>
+          <div className="h-28" aria-hidden="true" />
+          <TableService
+            branchId={branchId}
+            branchName={branch.name}
+            table={table}
+            whatsapp={branch.whatsapp_number}
+            picks={products.filter((p) => favs.includes(p.id)).map((p) => p.name).slice(0, 10)}
+          />
+        </>
+      )}
 
       {/* Product Details Modal */}
       {selectedProduct && (

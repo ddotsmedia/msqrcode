@@ -15,6 +15,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PromotionsModule } from './promotions/promotions.module';
 import { OrdersModule } from './orders/orders.module';
+import { ServiceRequestsModule } from './service-requests/service-requests.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { OrdersModule } from './orders/orders.module';
     FeedbackModule,
     LoyaltyModule,
     PromotionsModule,
+    ServiceRequestsModule,
     OrdersModule,
   ],
   controllers: [],
