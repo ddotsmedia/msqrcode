@@ -1,4 +1,4 @@
-const CACHE_NAME = 'milestones-v2';
+const CACHE_NAME = 'milestones-v3';
 const ASSETS_TO_CACHE = ['/index.html'];
 
 // Precache app shell on install
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (e) => {
 
   // Network-first for navigations, fallback to shell
   e.respondWith(
-    fetch(request)
+    fetch(request, { cache: 'no-cache' })
       .then((r) => {
         if (r.status === 200) {
           const cache_resp = r.clone();
