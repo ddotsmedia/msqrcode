@@ -33,6 +33,13 @@ export class Order {
   @Column({ type: 'timestamptz', nullable: true })
   pickup_at: Date | null;
 
+  // The customer's rewards card, if they had one open; it earns a stamp when the order is collected.
+  @Column({ type: 'uuid', nullable: true })
+  loyalty_card_id: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  loyalty_stamped: boolean;
+
   @Column({ type: 'varchar', length: 20, default: 'placed' })
   status: 'placed' | 'paid' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 

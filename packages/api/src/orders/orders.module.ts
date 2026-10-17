@@ -7,11 +7,13 @@ import { Branch } from '../entities/branch.entity';
 import { BranchProductPrice } from '../entities/branch-product-price.entity';
 import { ProductAvailability } from '../entities/product-availability.entity';
 import { Promotion } from '../entities/promotion.entity';
+import { LoyaltyCard } from '../entities/loyalty-card.entity';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, OrderItem, Product, Branch, BranchProductPrice, ProductAvailability, Promotion])],
+  imports: [TypeOrmModule.forFeature([Order, OrderItem, Product, Branch, BranchProductPrice, ProductAvailability, Promotion, LoyaltyCard]), LoyaltyModule],
   providers: [OrdersService],
   controllers: [OrdersController],
 })
