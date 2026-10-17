@@ -38,6 +38,26 @@ export class LoyaltySettings {
   @Column({ type: 'boolean', default: false })
   self_stamp: boolean;
 
+  // Tiers by visits in the last 12 months. Perks are shown to the customer and to staff when stamping.
+  @Column({ type: 'int', default: 10 })
+  silver_visits: number;
+
+  @Column({ type: 'int', default: 30 })
+  gold_visits: number;
+
+  @Column({ type: 'varchar', length: 60, default: '' })
+  silver_perk: string;
+
+  @Column({ type: 'varchar', length: 60, default: '' })
+  gold_perk: string;
+
+  // Weekly challenge: visit this many times Mon-Sun (Dubai) for bonus stamps. 0 = off.
+  @Column({ type: 'int', default: 0 })
+  challenge_visits: number;
+
+  @Column({ type: 'int', default: 1 })
+  challenge_bonus: number;
+
   @UpdateDateColumn()
   updated_at: Date;
 }

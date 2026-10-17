@@ -774,6 +774,12 @@ export function LoyaltyCard() {
     referral_bonus?: number;
     has_birthday?: boolean;
     double_now?: boolean;
+    tier?: 'bronze' | 'silver' | 'gold';
+    tier_perk?: string;
+    visits_year?: number;
+    next_tier?: 'silver' | 'gold' | null;
+    next_tier_at?: number | null;
+    challenge?: { target: number; bonus: number; visits: number; done: boolean } | null;
     history?: { type: 'enroll' | 'stamp' | 'redeem' | 'adjust' | 'bonus'; delta: number; created_at: string }[];
   } | null>(null);
   const [phone, setPhone] = useState('');
@@ -916,6 +922,40 @@ export function LoyaltyCard() {
         <p className="text-sm font-semibold text-gray-800 mb-2">
           {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
+        {card.tier && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                card.tier === 'gold' ? 'bg-amber-100 text-amber-800' : card.tier === 'silver' ? 'bg-slate-200 text-slate-700' : 'bg-orange-50 text-orange-800'
+              }`}
+            >
+              {t(card.tier === 'gold' ? 'tierGold' : card.tier === 'silver' ? 'tierSilver' : 'tierBronze')}
+            </span>
+            {card.tier_perk && <span className="text-xs text-gray-600">{card.tier_perk}</span>}
+            <span className="w-full text-xs text-gray-500">
+              {card.next_tier && card.next_tier_at != null
+                ? t('tierNext')
+                    .replace('{n}', String(Math.max(1, card.next_tier_at - (card.visits_year ?? 0))))
+                    .replace('{t}', t(card.next_tier === 'gold' ? 'tierGold' : 'tierSilver'))
+                : t('tierTopReached')}
+            </span>
+          </div>
+        )}
+        {card.challenge && (
+          <div className="mb-3 rounded border border-brand-100 bg-brand-50 p-2">
+            <p className="text-xs font-semibold text-brand-800">{t('challengeTitle')}</p>
+            <p className="text-xs text-gray-700">
+              {card.challenge.done
+                ? t('challengeDone')
+                : t('challengeText').replace('{n}', String(card.challenge.target)).replace('{b}', String(card.challenge.bonus))}
+            </p>
+            <div className="mt-1.5 flex gap-1" aria-label={`${card.challenge.visits} / ${card.challenge.target}`}>
+              {Array.from({ length: card.challenge.target }, (_, i) => (
+                <span key={i} className={`h-2 flex-1 rounded-full ${i < card.challenge!.visits ? 'bg-copper-500' : 'bg-white border border-brand-100'}`} />
+              ))}
+            </div>
+          </div>
+        )}
         {stampNote && (
           <p role="status" className={`mb-2 rounded p-2 text-sm font-semibold ${stampNote.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
             {stampNote.text}

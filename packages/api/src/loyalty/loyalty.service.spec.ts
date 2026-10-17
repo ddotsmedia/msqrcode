@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { COUNTER_WINDOW_MS, LoyaltyService, counterCode, dubaiNow, isDoubleNow, nearBirthday, parseBirthday, type Rules } from './loyalty.service';
+import { COUNTER_WINDOW_MS, LoyaltyService, counterCode, dubaiNow, isDoubleNow, nearBirthday, parseBirthday, tierFor, weekStart, type Rules } from './loyalty.service';
 
 process.env.JWT_SECRET = 'test-secret';
 
@@ -10,6 +10,7 @@ type Opts = {
   settings?: Record<string, unknown>;
   card?: Record<string, unknown>;
   referrer?: Record<string, unknown>;
+  count?: (where: any) => number;
 };
 
 // In-memory stand-ins for the TypeORM repositories the service uses.
@@ -32,7 +33,7 @@ function setup(opts: Opts = {}) {
       return e;
     }),
     findOne: jest.fn(async () => (opts.lastStampMsAgo === undefined ? null : { created_at: new Date(Date.now() - opts.lastStampMsAgo) })),
-    count: jest.fn(async () => opts.stampsToday ?? 0),
+    count: jest.fn(async ({ where }: any) => (opts.count ? opts.count(where) : (opts.stampsToday ?? 0))),
   };
   const settings = {
     findOne: jest.fn(async () => (opts.settings ? { id: 1, stamps_target: 10, reward_name: 'Free drink', ...opts.settings } : null)),
@@ -129,6 +130,44 @@ describe('LoyaltyService', () => {
   });
 });
 
+describe('tiers and weekly challenge', () => {
+  it('gives the challenge bonus once when the weekly target is reached', async () => {
+    // 3rd stamp this week, no challenge bonus yet
+    const { svc, saved } = setup({ settings: { challenge_visits: 3, challenge_bonus: 2, daily_stamp_limit: 10 }, count: (w) => (w.type === 'stamp' ? 3 : 0) });
+    const res = await svc.addStamp({ token: 't' });
+    expect(res).toMatchObject({ ok: true, stamps: 3, bonuses: ['challenge'] });
+    expect(saved[1]).toMatchObject({ type: 'bonus', delta: 2, note: 'Weekly challenge' });
+  });
+
+  it('does not repeat the challenge bonus in the same week', async () => {
+    const { svc } = setup({ settings: { challenge_visits: 3, daily_stamp_limit: 10 }, count: (w) => (w.type === 'stamp' ? 4 : 1) });
+    expect(await svc.addStamp({ token: 't' })).toMatchObject({ ok: true, bonuses: [] });
+  });
+
+  it('reports the tier and perk with each stamp', async () => {
+    const { svc } = setup({ settings: { gold_perk: 'Free size upgrade', daily_stamp_limit: 50 }, count: (w) => (w.type === 'stamp' ? 31 : 0) });
+    expect(await svc.addStamp({ token: 't' })).toMatchObject({ tier: 'gold', tier_perk: 'Free size upgrade' });
+  });
+
+  it('works out tiers from yearly visits', () => {
+    const r = { silver_visits: 10, gold_visits: 30 };
+    expect([tierFor(0, r), tierFor(10, r), tierFor(29, r), tierFor(30, r)]).toEqual(['bronze', 'silver', 'silver', 'gold']);
+  });
+
+  it('starts the week on Monday in Dubai time', () => {
+    // Sunday 2026-10-18 21:00 UTC = Monday 01:00 in Dubai -> week starts Monday 00:00 Dubai = Sunday 20:00 UTC
+    expect(weekStart(Date.UTC(2026, 9, 18, 21, 0)).toISOString()).toBe('2026-10-18T20:00:00.000Z');
+    // Sunday 2026-10-18 10:00 UTC = Sunday 14:00 Dubai -> previous Monday 00:00 Dubai
+    expect(weekStart(Date.UTC(2026, 9, 18, 10, 0)).toISOString()).toBe('2026-10-11T20:00:00.000Z');
+  });
+
+  it('validates tier and challenge settings', async () => {
+    const { svc } = setup();
+    await expect(svc.updateSettings({ silver_visits: 20, gold_visits: 20 })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(svc.updateSettings({ challenge_visits: 8 })).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
 describe('counter self-stamp', () => {
   const code = (offset = 0) => `b1b1b1b1.${counterCode('test-secret', 'b1b1b1b1', Math.floor(Date.now() / COUNTER_WINDOW_MS) + offset)}`;
   const on = { settings: { self_stamp: true } };
@@ -164,7 +203,7 @@ describe('counter self-stamp', () => {
 });
 
 describe('loyalty helpers', () => {
-  const rules: Rules = { stamps_target: 10, reward_name: 'x', daily_stamp_limit: 3, birthday_bonus: 1, referral_bonus: 1, double_days: [1], double_from: '14:00', double_to: '17:00', self_stamp: false };
+  const rules: Rules = { stamps_target: 10, reward_name: 'x', daily_stamp_limit: 3, birthday_bonus: 1, referral_bonus: 1, double_days: [1], double_from: '14:00', double_to: '17:00', self_stamp: false, silver_visits: 10, gold_visits: 30, silver_perk: '', gold_perk: '', challenge_visits: 0, challenge_bonus: 1 };
 
   it('checks double-stamp hours in Dubai time', () => {
     // Monday 2026-10-12 11:00 UTC = 15:00 in Dubai
