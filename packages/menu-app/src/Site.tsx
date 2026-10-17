@@ -30,6 +30,7 @@ export interface SiteBranch {
   google_maps_url?: string | null;
   google_review_url?: string | null;
   delivery_links?: Record<string, string> | null;
+  pickup_enabled?: boolean;
 }
 
 function useBranches() {
@@ -748,13 +749,45 @@ function BranchesPage() {
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [params, setParams] = useSearchParams();
   const view = params.get('view') === 'map' ? 'map' : 'list';
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState<'idle' | 'busy' | 'denied'>('idle');
+  const [waits, setWaits] = useState<Record<string, number>>({});
   setPageTitle('Find a Branch');
 
-  const list = (branches ?? []).filter((b) => {
-    if (query && !`${b.name} ${b.address}`.toLowerCase().includes(query.toLowerCase())) return false;
-    if (onlyOpen && isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) !== true) return false;
-    return true;
-  });
+  // Order-ahead branches: show the current wait so customers can pick the quickest.
+  useEffect(() => {
+    (branches ?? [])
+      .filter((b) => b.pickup_enabled)
+      .forEach((b) =>
+        axios
+          .get(`${API}/orders/wait`, { params: { branch_id: b.id } })
+          .then((r) => setWaits((w) => ({ ...w, [b.id]: Number(r.data?.minutes) })))
+          .catch(() => undefined),
+      );
+  }, [branches]);
+
+  function locate() {
+    if (!navigator.geolocation) return setLocating('denied');
+    setLocating('busy');
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        setCoords({ lat: p.coords.latitude, lng: p.coords.longitude });
+        setLocating('idle');
+      },
+      () => setLocating('denied'),
+      { timeout: 8000 },
+    );
+  }
+
+  const kmTo = (b: SiteBranch) =>
+    coords && typeof b.latitude === 'number' && typeof b.longitude === 'number' ? distanceKm(coords.lat, coords.lng, b.latitude, b.longitude) : null;
+  const list = (branches ?? [])
+    .filter((b) => {
+      if (query && !`${b.name} ${b.address}`.toLowerCase().includes(query.toLowerCase())) return false;
+      if (onlyOpen && isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) !== true) return false;
+      return true;
+    })
+    .sort((a, b) => (kmTo(a) ?? Infinity) - (kmTo(b) ?? Infinity));
 
   return (
     <div className="space-y-4">
@@ -788,17 +821,38 @@ function BranchesPage() {
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} /> Open now
         </label>
+        <button
+          type="button"
+          onClick={locate}
+          disabled={locating === 'busy'}
+          aria-pressed={!!coords}
+          className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${coords ? 'bg-brand-700 text-white' : 'border border-brand-100 bg-white text-brand-700'}`}
+        >
+          <Icon name="nav" className="h-4 w-4" />
+          {locating === 'busy' ? 'Finding you…' : coords ? 'Nearest first' : 'Near me'}
+        </button>
       </div>
+      {locating === 'denied' && <p className="text-sm text-slate-500">Location is off, so branches are shown in the usual order.</p>}
       {error && <p className="text-red-600">Could not load branches. Try again later.</p>}
       {!branches && !error && <p className="text-gray-500">Loading…</p>}
       <ul className="grid md:grid-cols-2 gap-4">
         {list.map((b) => (
           <li key={b.id} className="bg-white rounded-xl p-4 shadow-sm space-y-2">
             <Link to={`/branches/${b.id}`} className="text-lg font-bold text-brand-800">{b.name}</Link>
-            <p className="text-sm text-gray-600">{b.address}</p>
+            <p className="text-sm text-gray-600">
+              {b.address}
+              {kmTo(b) !== null && <span className="font-semibold text-brand-700"> · {kmTo(b)!.toFixed(1)} km</span>}
+            </p>
             <HoursLine branch={b} />
             <ContactButtons branch={b as any} />
-            <Link to={`/menu/${b.id}`} className="inline-block text-sm font-semibold text-brand-700">View menu →</Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link to={`/menu/${b.id}`} className="inline-block text-sm font-semibold text-brand-700">View menu →</Link>
+              {b.pickup_enabled && isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) !== false && (
+                <Link to={`/menu/${b.id}`} className="rounded-full bg-copper-500 px-3 py-1 text-xs font-semibold text-white hover:bg-copper-700">
+                  Order ahead{waits[b.id] ? ` · ready in ~${waits[b.id]} min` : ''}
+                </Link>
+              )}
+            </div>
           </li>
         ))}
       </ul>

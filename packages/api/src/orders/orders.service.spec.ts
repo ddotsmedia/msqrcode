@@ -215,6 +215,15 @@ describe('OrdersService', () => {
     });
   });
 
+  it('estimates the wait from the queue', async () => {
+    const { svc, orders } = setup() as any;
+    orders.count.mockResolvedValueOnce(4);
+    expect(await svc.wait(B1)).toEqual({ queued: 4, minutes: 17 });
+    orders.count.mockResolvedValueOnce(30);
+    expect((await svc.wait(B1)).minutes).toBe(45);
+    await expect(svc.wait('x')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('switches table ordering on and off', async () => {
     const { svc, branch } = setup({ enabled: false });
     expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' })).toEqual({ ordering_enabled: true, pickup_enabled: true });
