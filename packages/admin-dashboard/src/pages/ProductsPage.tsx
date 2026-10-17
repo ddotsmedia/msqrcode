@@ -30,9 +30,18 @@ export interface Product {
   is_seasonal: boolean;
   dietary_tags: string[] | null;
   allergens: string[] | null;
+  nutritional_info?: Partial<Record<Nutrient, number>> | null;
   variants: ChoiceGroup[];
   option_groups: ChoiceGroup[];
 }
+
+type Nutrient = 'calories' | 'caffeine_mg' | 'sugar_g' | 'protein_g';
+const NUTRIENTS: [Nutrient, string][] = [
+  ['calories', 'Calories (kcal)'],
+  ['caffeine_mg', 'Caffeine (mg)'],
+  ['sugar_g', 'Sugar (g)'],
+  ['protein_g', 'Protein (g)'],
+];
 
 // "Small:-0.5, Medium:0, Large:0.5" -> [{name, price_adjustment}]
 export function parseChoices(text: string): Choice[] {
@@ -153,6 +162,7 @@ function ProductForm({
     is_seasonal: initial?.is_seasonal ?? false,
     dietary_tags: listToText(initial?.dietary_tags ?? null),
     allergens: listToText(initial?.allergens ?? null),
+    nutrition: Object.fromEntries(NUTRIENTS.map(([k]) => [k, initial?.nutritional_info?.[k] != null ? String(initial.nutritional_info[k]) : ''])) as Record<Nutrient, string>,
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -180,6 +190,7 @@ function ProductForm({
         is_seasonal: form.is_seasonal,
         dietary_tags: textToList(form.dietary_tags),
         allergens: textToList(form.allergens),
+        nutritional_info: Object.fromEntries(NUTRIENTS.filter(([k]) => form.nutrition[k] !== '').map(([k]) => [k, Number(form.nutrition[k])])),
       };
       if (initial) await api(`/admin/products/${initial.id}`, token, { method: 'PUT', body: jsonBody(body) });
       else await api('/admin/products', token, { method: 'POST', body: jsonBody(body) });
@@ -231,6 +242,19 @@ function ProductForm({
         <Field label="Allergens (comma separated)">
           <input className="input" placeholder="dairy, nuts" value={form.allergens} onChange={(e) => set('allergens', e.target.value)} />
         </Field>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {NUTRIENTS.map(([k, label]) => (
+            <Field key={k} label={label}>
+              <input
+                type="number"
+                min={0}
+                className="input"
+                value={form.nutrition[k]}
+                onChange={(e) => set('nutrition', { ...form.nutrition, [k]: e.target.value })}
+              />
+            </Field>
+          ))}
+        </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button disabled={busy} className="w-full bg-brand-600 text-white rounded py-2 font-semibold disabled:opacity-60">
           {busy ? 'Saving…' : 'Save product'}
