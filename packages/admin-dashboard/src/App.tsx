@@ -6,6 +6,7 @@ import QrCodesPage from './pages/QrCodesPage';
 import BranchesPage from './pages/BranchesPage';
 import MenuImportPage from './pages/MenuImportPage';
 import DashboardPage from './pages/DashboardPage';
+import InsightsPage from './pages/InsightsPage';
 import KitchenPage from './pages/KitchenPage';
 import PromotionsPage from './pages/PromotionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
@@ -21,7 +22,7 @@ const TAB_LABELS: Record<Tab, string> = {
   qr: 'QR codes',
   branches: 'Branches',
   'menu-import': 'Menu import',
-  dashboard: 'Dashboard',
+  dashboard: 'Insights',
   kitchen: 'Kitchen',
   promotions: 'Offers',
   loyalty: 'Loyalty',
@@ -197,7 +198,13 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
       </nav>
 
       {tab === 'dashboard' && me.role === 'admin' && (
-        <main className="max-w-4xl mx-auto p-4"><DashboardPage token={token} /></main>
+        <main className="max-w-6xl mx-auto p-4 space-y-6">
+          <InsightsPage token={token} />
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">Branch status</h2>
+            <DashboardPage token={token} />
+          </div>
+        </main>
       )}
       {tab === 'promotions' && (
         <PromotionsPage token={token} />
