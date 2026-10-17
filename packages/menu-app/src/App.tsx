@@ -186,6 +186,18 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   );
 }
 
+// Nutrition to show for a product, e.g. [['Calories', '190 kcal'], ...]; only values the cafe has entered.
+function nutritionOf(p: Product): [string, string][] {
+  const n = p.nutritional_info ?? {};
+  const rows: [string, unknown, string][] = [
+    ['Calories', n.calories, ' kcal'],
+    ['Caffeine', n.caffeine_mg, ' mg'],
+    ['Sugar', n.sugar_g, ' g'],
+    ['Protein', n.protein_g, ' g'],
+  ];
+  return rows.filter(([, v]) => typeof v === 'number').map(([label, v, unit]) => [label, `${v}${unit}`]);
+}
+
 function ProductDetailsModal({
   product,
   onClose,
@@ -236,6 +248,11 @@ function ProductDetailsModal({
                   Popular
                 </span>
               )}
+              {product.is_seasonal && (
+                <span className="inline-block mt-2 ml-2 px-3 py-1 bg-copper-500 text-white text-xs font-semibold rounded-full">
+                  Limited time
+                </span>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -265,6 +282,17 @@ function ProductDetailsModal({
               <p className="text-sm font-semibold text-red-800 mb-1">Allergens:</p>
               <p className="text-xs text-red-700">{product.allergens.join(', ')}</p>
             </div>
+          )}
+
+          {nutritionOf(product).length > 0 && (
+            <dl className="mb-4 grid grid-cols-4 gap-2 rounded-lg bg-cream p-3 text-center" aria-label="Nutrition per serving">
+              {nutritionOf(product).map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</dt>
+                  <dd className="font-semibold text-brand-900">{value}</dd>
+                </div>
+              ))}
+            </dl>
           )}
 
           <div className="mb-6">
@@ -320,6 +348,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [showDietary, setShowDietary] = useState<string | null>(null);
+  const [showFlag, setShowFlag] = useState<'new' | 'seasonal' | null>(null);
   const [sortBy, setSortBy] = useState<'menu' | 'price_asc' | 'price_desc'>('menu');
   const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
@@ -441,6 +470,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
     if (showOnlyAvailable) {
       filtered = filtered.filter((p) => availability[p.id] !== false);
     }
+
+    if (showFlag === 'new') filtered = filtered.filter((p) => p.is_new);
+    if (showFlag === 'seasonal') filtered = filtered.filter((p) => p.is_seasonal);
 
     // Filter by dietary tags
     if (showDietary) {
@@ -581,6 +613,27 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
               <span className="text-sm font-medium text-gray-700">{t('availableOnly')}</span>
             </label>
 
+            {(
+              [
+                ['new', 'New'],
+                ['seasonal', 'Limited time'],
+              ] as const
+            )
+              .filter(([flag]) => products.some((p) => (flag === 'new' ? p.is_new : p.is_seasonal)))
+              .map(([flag, label]) => (
+                <button
+                  key={flag}
+                  type="button"
+                  aria-pressed={showFlag === flag}
+                  onClick={() => setShowFlag(showFlag === flag ? null : flag)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                    showFlag === flag ? 'bg-copper-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+
             {['Vegan', 'Gluten-Free', 'Dairy-Free'].map((dietary) => (
               <button
                 key={dietary}
@@ -680,7 +733,13 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                   )}
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <h3 className="font-bold text-gray-900">{product.name}</h3>
+                      <h3 className="font-bold text-gray-900">
+                        {product.name}
+                        {product.is_new && <span className="ml-2 align-middle rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800">New</span>}
+                        {product.is_seasonal && (
+                          <span className="ml-2 align-middle rounded-full bg-copper-500 px-2 py-0.5 text-[11px] font-semibold text-white">Limited time</span>
+                        )}
+                      </h3>
                       <button
                         type="button"
                         aria-label={favs.includes(product.id) ? 'Remove from favourites' : 'Add to favourites'}
@@ -695,6 +754,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                       </button>
                     </div>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                    {typeof product.nutritional_info?.calories === 'number' && (
+                      <p className="-mt-2 mb-3 text-xs text-gray-500">{product.nutritional_info.calories} kcal</p>
+                    )}
                     <div className="flex items-center justify-between">
                       {dealFor(product) ? (
                         <span className="text-lg font-bold text-copper-700">

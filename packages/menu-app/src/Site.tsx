@@ -293,6 +293,7 @@ interface FeaturedProduct {
   image_url?: string;
   status: string;
   is_popular?: boolean;
+  is_seasonal?: boolean;
   display_order?: number;
 }
 
@@ -335,7 +336,8 @@ function SectionHead({ eyebrow, title, to, cta }: { eyebrow: string; title: stri
   );
 }
 
-function FeaturedMenu() {
+// Home page product row: bestsellers, or (pick="seasonal") the limited-time items — hidden when there are none.
+function FeaturedMenu({ pick = 'popular' }: { pick?: 'popular' | 'seasonal' }) {
   const [items, setItems] = useState<FeaturedProduct[]>([]);
 
   useEffect(() => {
@@ -345,21 +347,27 @@ function FeaturedMenu() {
       .then((res) => {
         if (cancelled || !Array.isArray(res.data)) return;
         const active = (res.data as FeaturedProduct[]).filter((p) => p.status === 'active');
+        const byOrder = (a: FeaturedProduct, b: FeaturedProduct) => (a.display_order ?? 0) - (b.display_order ?? 0);
+        if (pick === 'seasonal') return setItems(active.filter((p) => p.is_seasonal).sort(byOrder).slice(0, 4));
         const popular = active.filter((p) => p.is_popular);
-        setItems((popular.length ? popular : active).sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)).slice(0, 4));
+        setItems((popular.length ? popular : active).sort(byOrder).slice(0, 4));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pick]);
 
   if (items.length === 0) return null;
 
   return (
     <section className="py-16 md:py-24">
       <div className="max-w-6xl mx-auto px-4">
-        <SectionHead eyebrow="Customer favourites" title="Loved by our regulars" to="/menu" cta="See full menu" />
+        {pick === 'seasonal' ? (
+          <SectionHead eyebrow="Limited time" title="New this season" to="/menu" cta="See full menu" />
+        ) : (
+          <SectionHead eyebrow="Customer favourites" title="Loved by our regulars" to="/menu" cta="See full menu" />
+        )}
         <ul className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
           {items.map((p, i) => (
             <li key={p.id} className="h-full">
@@ -369,8 +377,10 @@ function FeaturedMenu() {
                     {p.image_url && <img src={p.image_url} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
                   </div>
                   <div className="flex flex-1 flex-col p-3 sm:p-5">
-                    {p.is_popular && (
-                      <span className="self-start rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-500">Bestseller</span>
+                    {pick === 'seasonal' ? (
+                      <span className="self-start rounded-full bg-copper-500 px-2.5 py-1 text-xs font-semibold text-white">Limited time</span>
+                    ) : (
+                      p.is_popular && <span className="self-start rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-500">Bestseller</span>
                     )}
                     <p className="mt-2 font-display text-base sm:text-xl text-brand-900">{p.name}</p>
                     {p.description && <p className="mt-1 text-xs sm:text-sm text-slate-600 line-clamp-2">{p.description}</p>}
@@ -694,6 +704,7 @@ function HomePage() {
         </div>
       </section>
 
+      <FeaturedMenu pick="seasonal" />
       <FeaturedMenu />
       <OfferBand />
       <LoyaltyBand />
