@@ -14,6 +14,11 @@ export class OrdersController {
     return this.orders.create(body);
   }
 
+  @Get('orders/wait')
+  wait(@Query('branch_id') branchId?: string) {
+    return this.orders.wait(branchId);
+  }
+
   @Get('orders/:id')
   track(@Param('id') id: string, @Query('token') token?: string) {
     return this.orders.track(id, token);

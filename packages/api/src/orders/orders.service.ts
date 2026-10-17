@@ -175,6 +175,14 @@ export class OrdersService {
     return { id: saved.id, access_token: token, order_no: saved.order_no, total };
   }
 
+  // Public: rough wait for a new order, from how many are queued or being made (5 to 45 minutes).
+  async wait(branchRaw: unknown) {
+    const branchId = typeof branchRaw === 'string' ? branchRaw : '';
+    if (!UUID.test(branchId)) throw new BadRequestException('Choose a branch');
+    const queued = await this.orders.count({ where: { branch_id: branchId, status: In(['placed', 'preparing']) } });
+    return { queued, minutes: Math.min(45, 5 + queued * 3) };
+  }
+
   private async own(id: string, token: unknown) {
     if (!UUID.test(id) || typeof token !== 'string' || !token) throw new NotFoundException('Order not found');
     const order = await this.orders.findOne({ where: { id }, relations: ['items'] });
