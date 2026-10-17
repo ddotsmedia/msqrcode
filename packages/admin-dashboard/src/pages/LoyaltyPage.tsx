@@ -42,6 +42,12 @@ interface Settings {
   double_from: string;
   double_to: string;
   self_stamp: boolean;
+  silver_visits: number;
+  gold_visits: number;
+  silver_perk: string;
+  gold_perk: string;
+  challenge_visits: number;
+  challenge_bonus: number;
   double_now?: boolean;
 }
 
@@ -52,6 +58,8 @@ type ActionResult = {
   earned?: number;
   double?: boolean;
   bonuses?: string[];
+  tier?: 'bronze' | 'silver' | 'gold';
+  tier_perk?: string;
   name?: string | null;
   phone?: string;
 };
@@ -61,7 +69,8 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Readable summary of a stamp result, e.g. "2 stamps added (double stamps) + birthday bonus. Now 7."
 function stampSummary(res: ActionResult) {
   const extra = (res.bonuses ?? []).map((b) => `${b} bonus`).join(', ');
-  return `${res.earned ?? 1} stamp${(res.earned ?? 1) === 1 ? '' : 's'} added${res.double ? ' (double stamps)' : ''}${extra ? ` + ${extra}` : ''}. Now ${res.stamps}.`;
+  const tier = res.tier && res.tier !== 'bronze' ? ` ${res.tier === 'gold' ? 'Gold' : 'Silver'} member${res.tier_perk ? `: ${res.tier_perk}` : ''}.` : '';
+  return `${res.earned ?? 1} stamp${(res.earned ?? 1) === 1 ? '' : 's'} added${res.double ? ' (double stamps)' : ''}${extra ? ` + ${extra}` : ''}. Now ${res.stamps}.${tier}`;
 }
 
 const EVENT_LABEL: Record<HistoryRow['type'], string> = {
@@ -109,7 +118,7 @@ function SettingsForm({ token, settings, onSaved }: { token: string; settings: S
   }, [settings]);
 
   if (!form) return null;
-  const num = (key: 'stamps_target' | 'daily_stamp_limit' | 'birthday_bonus' | 'referral_bonus') => (e: { target: { value: string } }) =>
+  const num = (key: 'stamps_target' | 'daily_stamp_limit' | 'birthday_bonus' | 'referral_bonus' | 'silver_visits' | 'gold_visits' | 'challenge_visits' | 'challenge_bonus') => (e: { target: { value: string } }) =>
     setForm({ ...form, [key]: Number(e.target.value) });
   const toggleDay = (d: number) =>
     setForm({ ...form, double_days: form.double_days.includes(d) ? form.double_days.filter((x) => x !== d) : [...form.double_days, d] });
@@ -132,6 +141,12 @@ function SettingsForm({ token, settings, onSaved }: { token: string; settings: S
           double_from: form.double_from,
           double_to: form.double_to,
           self_stamp: form.self_stamp,
+          silver_visits: form.silver_visits,
+          gold_visits: form.gold_visits,
+          silver_perk: form.silver_perk,
+          gold_perk: form.gold_perk,
+          challenge_visits: form.challenge_visits,
+          challenge_bonus: form.challenge_bonus,
         }),
       });
       setMsg('Saved.');
@@ -186,6 +201,37 @@ function SettingsForm({ token, settings, onSaved }: { token: string; settings: S
           <input type="time" value={form.double_from} onChange={(e) => setForm({ ...form, double_from: e.target.value })} className={inputClass} aria-label="Double stamps from" />
           <span className="text-sm text-gray-500">to</span>
           <input type="time" value={form.double_to} onChange={(e) => setForm({ ...form, double_to: e.target.value })} className={inputClass} aria-label="Double stamps until" />
+        </div>
+      </div>
+      <div>
+        <p className={label}>Member tiers (visits in the last 12 months). Perks show on the customer's card and on your screen when you stamp.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className={label}>Silver from</label>
+            <input type="number" min={2} max={200} value={form.silver_visits} onChange={num('silver_visits')} className={`${inputClass} w-24`} />
+          </div>
+          <div className="flex-1 min-w-[10rem]">
+            <label className={label}>Silver perk</label>
+            <input value={form.silver_perk} maxLength={60} placeholder="e.g. Free extra shot" onChange={(e) => setForm({ ...form, silver_perk: e.target.value })} className={`${inputClass} w-full`} />
+          </div>
+          <div>
+            <label className={label}>Gold from</label>
+            <input type="number" min={3} max={500} value={form.gold_visits} onChange={num('gold_visits')} className={`${inputClass} w-24`} />
+          </div>
+          <div className="flex-1 min-w-[10rem]">
+            <label className={label}>Gold perk</label>
+            <input value={form.gold_perk} maxLength={60} placeholder="e.g. Free size upgrade" onChange={(e) => setForm({ ...form, gold_perk: e.target.value })} className={`${inputClass} w-full`} />
+          </div>
+        </div>
+      </div>
+      <div>
+        <p className={label}>Weekly challenge (Mon–Sun, Dubai time){form.challenge_visits === 0 ? ': off' : ''}</p>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700">
+          Visit
+          <input type="number" min={0} max={7} value={form.challenge_visits} onChange={num('challenge_visits')} className={`${inputClass} w-20`} aria-label="Challenge visits (0 = off)" />
+          times in a week, get
+          <input type="number" min={1} max={5} value={form.challenge_bonus} onChange={num('challenge_bonus')} className={`${inputClass} w-20`} aria-label="Challenge bonus stamps" />
+          bonus stamp(s). Set visits to 0 to turn it off.
         </div>
       </div>
       <label className="flex items-start gap-2 text-sm text-gray-700">

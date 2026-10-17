@@ -20,6 +20,12 @@ const DEFAULTS = {
   double_from: '14:00',
   double_to: '17:00',
   self_stamp: false,
+  silver_visits: 10,
+  gold_visits: 30,
+  silver_perk: '',
+  gold_perk: '',
+  challenge_visits: 0,
+  challenge_bonus: 1,
 };
 export type Rules = typeof DEFAULTS;
 
@@ -46,6 +52,22 @@ export function dubaiNow(ms = Date.now()) {
     dayStart: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - DUBAI_OFFSET_MS),
   };
 }
+
+// Start of the current Monday-to-Sunday week in Dubai.
+export function weekStart(ms = Date.now()) {
+  const d = new Date(ms + DUBAI_OFFSET_MS);
+  const back = (d.getUTCDay() + 6) % 7;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - back) - DUBAI_OFFSET_MS);
+}
+
+export type Tier = 'bronze' | 'silver' | 'gold';
+export function tierFor(visits: number, rules: Pick<Rules, 'silver_visits' | 'gold_visits'>): Tier {
+  if (visits >= rules.gold_visits) return 'gold';
+  if (visits >= rules.silver_visits) return 'silver';
+  return 'bronze';
+}
+
+const CHALLENGE_NOTE = 'Weekly challenge';
 
 export function isDoubleNow(rules: Rules, ms = Date.now()) {
   const now = dubaiNow(ms);
@@ -172,6 +194,12 @@ export class LoyaltyService {
       double_from: s.double_from ?? DEFAULTS.double_from,
       double_to: s.double_to ?? DEFAULTS.double_to,
       self_stamp: s.self_stamp ?? DEFAULTS.self_stamp,
+      silver_visits: s.silver_visits ?? DEFAULTS.silver_visits,
+      gold_visits: s.gold_visits ?? DEFAULTS.gold_visits,
+      silver_perk: s.silver_perk ?? DEFAULTS.silver_perk,
+      gold_perk: s.gold_perk ?? DEFAULTS.gold_perk,
+      challenge_visits: s.challenge_visits ?? DEFAULTS.challenge_visits,
+      challenge_bonus: s.challenge_bonus ?? DEFAULTS.challenge_bonus,
     };
   }
 
@@ -208,6 +236,15 @@ export class LoyaltyService {
       throw new BadRequestException('Double-stamp hours must be HH:MM, with the start before the end');
     }
     const self_stamp = typeof body.self_stamp === 'boolean' ? body.self_stamp : cur.self_stamp;
+    const silver_visits = int('silver_visits', 2, 200, 'Silver tier visits');
+    const gold_visits = int('gold_visits', 3, 500, 'Gold tier visits');
+    if (gold_visits <= silver_visits) throw new BadRequestException('Gold tier must need more visits than Silver');
+    const perk = (key: 'silver_perk' | 'gold_perk') =>
+      body[key] === undefined ? cur[key] : typeof body[key] === 'string' ? (body[key] as string).trim().slice(0, 60) : '';
+    const silver_perk = perk('silver_perk');
+    const gold_perk = perk('gold_perk');
+    const challenge_visits = int('challenge_visits', 0, 7, 'Weekly challenge visits');
+    const challenge_bonus = int('challenge_bonus', 1, 5, 'Weekly challenge bonus');
 
     await this.settingsRepo.save({
       id: 1,
@@ -220,6 +257,12 @@ export class LoyaltyService {
       double_from,
       double_to,
       self_stamp,
+      silver_visits,
+      gold_visits,
+      silver_perk,
+      gold_perk,
+      challenge_visits,
+      challenge_bonus,
     });
     return this.getSettings();
   }
@@ -259,6 +302,34 @@ export class LoyaltyService {
     return { ok: true, token: card.token };
   }
 
+  // Tier from stamp visits in the last 12 months, plus this week's challenge progress.
+  private async status(cardId: string, rules: Rules) {
+    const yearAgo = new Date(Date.now() - 365 * 864e5);
+    const week = weekStart();
+    const [visits, weekVisits, challengeDone] = await Promise.all([
+      this.events.count({ where: { card_id: cardId, type: 'stamp', created_at: MoreThanOrEqual(yearAgo) } }),
+      rules.challenge_visits > 0
+        ? this.events.count({ where: { card_id: cardId, type: 'stamp', created_at: MoreThanOrEqual(week) } })
+        : Promise.resolve(0),
+      rules.challenge_visits > 0
+        ? this.events.count({ where: { card_id: cardId, type: 'bonus', note: CHALLENGE_NOTE, created_at: MoreThanOrEqual(week) } })
+        : Promise.resolve(0),
+    ]);
+    const tier = tierFor(visits, rules);
+    const next = tier === 'bronze' ? { tier: 'silver', at: rules.silver_visits } : tier === 'silver' ? { tier: 'gold', at: rules.gold_visits } : null;
+    return {
+      tier,
+      tier_perk: tier === 'gold' ? rules.gold_perk : tier === 'silver' ? rules.silver_perk : '',
+      visits_year: visits,
+      next_tier: next?.tier ?? null,
+      next_tier_at: next?.at ?? null,
+      challenge:
+        rules.challenge_visits > 0
+          ? { target: rules.challenge_visits, bonus: rules.challenge_bonus, visits: Math.min(weekVisits, rules.challenge_visits), done: challengeDone > 0 }
+          : null,
+    };
+  }
+
   // Public, by secret token only. History carries no staff notes.
   async getByToken(token: string) {
     const card = await this.cards.findOne({ where: { token } });
@@ -281,6 +352,7 @@ export class LoyaltyService {
       has_birthday: !!card.birthday,
       double_now: isDoubleNow(rules),
       history: history.map((e) => ({ type: e.type, delta: e.delta, created_at: e.created_at })),
+      ...(await this.status(card.id, rules)),
     };
   }
 
@@ -356,7 +428,20 @@ export class LoyaltyService {
         bonuses.push('referral');
       }
     }
-    return { ok: true, stamps: card.stamps, earned: card.stamps - before, double, bonuses, ...who };
+    if (rules.challenge_visits > 0) {
+      const week = weekStart();
+      const [weekVisits, already] = await Promise.all([
+        this.events.count({ where: { card_id: card.id, type: 'stamp', created_at: MoreThanOrEqual(week) } }),
+        this.events.count({ where: { card_id: card.id, type: 'bonus', note: CHALLENGE_NOTE, created_at: MoreThanOrEqual(week) } }),
+      ]);
+      if (weekVisits >= rules.challenge_visits && already === 0) {
+        if ((await this.bonus(card, rules.challenge_bonus, rules.stamps_target, CHALLENGE_NOTE, staff)) > 0) bonuses.push('challenge');
+      }
+    }
+    const visits = await this.events.count({ where: { card_id: card.id, type: 'stamp', created_at: MoreThanOrEqual(new Date(Date.now() - 365 * 864e5)) } });
+    const tier = tierFor(visits, rules);
+    const tier_perk = tier === 'gold' ? rules.gold_perk : tier === 'silver' ? rules.silver_perk : '';
+    return { ok: true, stamps: card.stamps, earned: card.stamps - before, double, bonuses, tier, tier_perk, ...who };
   }
 
   // Staff: the code currently shown on a branch's counter screen.
