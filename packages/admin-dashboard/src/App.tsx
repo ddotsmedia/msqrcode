@@ -9,10 +9,12 @@ import DashboardPage from './pages/DashboardPage';
 import KitchenPage from './pages/KitchenPage';
 import PromotionsPage from './pages/PromotionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
+import RequestsPage, { useServiceRequests } from './pages/RequestsPage';
 
-type Tab = 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty';
+type Tab = 'requests' | 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty';
 
 const TAB_LABELS: Record<Tab, string> = {
+  requests: 'Table requests',
   availability: 'Availability',
   products: 'Products',
   categories: 'Categories',
@@ -106,6 +108,7 @@ function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
 function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: () => void }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const requests = useServiceRequests(token, branchId);
   const [products, setProducts] = useState<Product[]>([]);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
@@ -176,7 +179,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
 
       <nav className="bg-white border-b">
         <div className="max-w-3xl mx-auto flex gap-1 px-4 overflow-x-auto">
-          {(['availability', 'kitchen', 'loyalty', ...(me.role === 'admin' ? ['dashboard', 'promotions', 'menu-import', 'products', 'categories', 'qr', 'branches'] : [])] as Tab[]).map((t) => (
+          {(['requests', 'availability', 'kitchen', 'loyalty', ...(me.role === 'admin' ? ['dashboard', 'promotions', 'menu-import', 'products', 'categories', 'qr', 'branches'] : [])] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -185,6 +188,9 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
               }`}
             >
               {TAB_LABELS[t]}
+              {t === 'requests' && requests.open.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-red-600 px-2 py-0.5 text-xs text-white">{requests.open.length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -215,6 +221,10 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
         <main className="max-w-3xl mx-auto p-4">
           <BranchesPage token={token} onQrCreated={() => undefined} />
         </main>
+      )}
+
+      {tab === 'requests' && (
+        <main className="max-w-3xl mx-auto p-4"><RequestsPage token={token} data={requests} branches={branches} branchId={branchId} onBranch={setBranchId} /></main>
       )}
 
       {tab === 'kitchen' && branchId && (

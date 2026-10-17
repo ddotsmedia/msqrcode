@@ -17,3 +17,4 @@ export { LoyaltyCard } from './loyalty-card.entity';
 export { Promotion } from './promotion.entity';
 export { LoyaltyEvent } from './loyalty-event.entity';
 export { LoyaltySettings } from './loyalty-settings.entity';
+export { ServiceRequest } from './service-request.entity';
