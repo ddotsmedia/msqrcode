@@ -10,7 +10,7 @@ import QRCode from 'qrcode';
 import { readFavs, toggleFav } from './lib/favorites';
 import { TableService } from './TableService';
 import { NotifyButton } from './NotifyButton';
-import { AddToOrder, TableOrder, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
+import { AddToOrder, TableOrder, groupsOf, unitPrice, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
 import { bestDiscount, discounted, isLive, type HappyHour } from './lib/happyHour';
 import { motion, useReducedMotion } from 'motion/react';
 
@@ -506,6 +506,18 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const filteredProducts = getFilteredProducts();
   const canOrder = !!(table && branchId && branch?.ordering_enabled);
   const canPickup = !!(!table && branchId && branch?.pickup_enabled);
+  // "Order again": rebuild a past line from today's menu, prices and happy hour; null if gone or sold out.
+  const reprice = (l: Omit<CartLine, 'key'>): Omit<CartLine, 'key'> | null => {
+    const p = products.find((x) => x.id === l.product_id);
+    if (!p || availability[p.id] === false) return null;
+    const groups = groupsOf(p);
+    const choices = Object.fromEntries(
+      groups.map((g) => [g.id, (g.options!.choices!.find((c) => c.name === l.choices[g.id]) ?? g.options!.choices![0]).name]),
+    );
+    const deal = dealFor(p);
+    const base = unitPrice(p, choices);
+    return { ...l, name: p.name, choices, labels: groups.map((g) => choices[g.id]), unit: deal ? discounted(base, deal.percent) : base };
+  };
 
   return (
     <div className="min-h-screen bg-brand-50">
@@ -732,7 +744,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
         <>
           <div className={canOrder ? 'h-44' : 'h-28'} aria-hidden="true" />
           <TableService
-            extra={canOrder ? <TableOrder branchId={branchId} table={table} cart={cart} /> : null}
+            extra={canOrder ? <TableOrder branchId={branchId} table={table} cart={cart} reprice={reprice} /> : null}
             branchId={branchId}
             branchName={branch.name}
             table={table}
@@ -747,7 +759,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           <div className="h-32" aria-hidden="true" />
           <div className="fixed inset-x-0 bottom-[72px] md:bottom-4 z-40 px-3">
             <div className="mx-auto max-w-md rounded-2xl border border-brand-100 bg-white p-3 pb-1 shadow-[0_12px_32px_rgba(10,26,51,0.18)]">
-              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} />
+              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} reprice={reprice} />
             </div>
           </div>
         </>
