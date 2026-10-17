@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, In, MoreThanOrEqual, Repository } from 'typeorm';
+import { Between, In, IsNull, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
@@ -9,6 +9,8 @@ import { Branch } from '../entities/branch.entity';
 import { BranchProductPrice } from '../entities/branch-product-price.entity';
 import { ProductAvailability } from '../entities/product-availability.entity';
 import { dubaiNow } from '../loyalty/loyalty.service';
+import { Promotion } from '../entities/promotion.entity';
+import { bestDiscount, discounted } from '../promotions/happy-hour';
 
 export interface StaffUser {
   id: string;
@@ -49,6 +51,7 @@ export class OrdersService {
     @InjectRepository(Branch) private branches: Repository<Branch>,
     @InjectRepository(BranchProductPrice) private prices: Repository<BranchProductPrice>,
     @InjectRepository(ProductAvailability) private availability: Repository<ProductAvailability>,
+    @InjectRepository(Promotion) private promotions: Repository<Promotion>,
   ) {}
 
   // Public: a customer sends an order from their table, or orders ahead for pickup. Prices come from the database only.
@@ -98,16 +101,23 @@ export class OrdersService {
     if (openAtBranch >= MAX_OPEN_PER_BRANCH) throw new BadRequestException('We are very busy right now. Please order at the counter.');
 
     const ids = [...new Set(lines.map((l: any) => (typeof l?.product_id === 'string' ? l.product_id : '')).filter((id) => UUID.test(id)))];
-    const [products, soldOut, branchPrices] = await Promise.all([
+    const [products, soldOut, branchPrices, happyHours] = await Promise.all([
       ids.length ? this.products.find({ where: { id: In(ids) }, relations: ['variants', 'option_groups'] }) : [],
       ids.length ? this.availability.find({ where: { branch_id: branchId, product_id: In(ids), is_available: false } }) : [],
       ids.length ? this.prices.find({ where: { branch_id: branchId, product_id: In(ids) } }) : [],
+      this.promotions.find({
+        where: [
+          { is_active: true, branch_id: IsNull(), discount_percent: Not(IsNull()) },
+          { is_active: true, branch_id: branchId, discount_percent: Not(IsNull()) },
+        ],
+      }),
     ]);
     const byId = new Map(products.map((p) => [p.id, p]));
     const unavailable = new Set(soldOut.map((a) => a.product_id));
     const priceOf = new Map(branchPrices.map((p) => [p.product_id, Number(p.price_aed)]));
 
     let total = 0;
+    let full = 0;
     const items: OrderItem[] = [];
     for (const raw of lines as any[]) {
       const product = byId.get(raw?.product_id);
@@ -126,12 +136,20 @@ export class OrdersService {
         choices.push({ group: g.name, choice: c.name, price_adjustment: Number(c.price_adjustment) || 0 });
       }
       const unit = Math.max(0, (priceOf.get(product.id) ?? Number(product.base_price)) + choices.reduce((s, c) => s + c.price_adjustment, 0));
-      const unitPrice = Math.round(unit * 100) / 100;
+      const listPrice = Math.round(unit * 100) / 100;
+      // Happy hour: the biggest live discount for this product's category.
+      const deal = bestDiscount(happyHours, product.category_id);
+      const unitPrice = deal ? discounted(listPrice, deal.percent) : listPrice;
+      full += listPrice * qty;
       total += unitPrice * qty;
       const note = clean(raw.note, 140);
-      items.push(this.items.create({ product_id: product.id, name_snapshot: product.name, unit_price: unitPrice, qty, options: { choices, note: note || null } }));
+      const discount = deal ? { title: deal.title, percent: deal.percent, list_price: listPrice } : null;
+      items.push(
+        this.items.create({ product_id: product.id, name_snapshot: product.name, unit_price: unitPrice, qty, options: { choices, note: note || null, discount } }),
+      );
     }
     total = Math.round(total * 100) / 100;
+    full = Math.round(full * 100) / 100;
 
     const today = await this.orders.count({ where: { branch_id: branchId, created_at: MoreThanOrEqual(dubaiNow().dayStart) } });
     const token = randomBytes(24).toString('hex');
@@ -144,7 +162,7 @@ export class OrdersService {
         type: pickup ? 'pickup' : 'dine_in',
         table_number: pickup ? null : table,
         pickup_at: pickupAt,
-        subtotal: total,
+        subtotal: full,
         total,
         status: 'placed',
         payment_status: 'unpaid',

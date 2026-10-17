@@ -4,6 +4,8 @@ import { IsNull, Repository } from 'typeorm';
 import { Promotion } from '../entities/promotion.entity';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function today(): string {
   // en-CA formats as YYYY-MM-DD
@@ -44,7 +46,22 @@ export class PromotionsService {
       throw new BadRequestException('Dates must be YYYY-MM-DD');
     }
     if (starts && ends && ends < starts) throw new BadRequestException('End date is before start date');
+
+    // Optional happy-hour pricing.
+    let pricing: Partial<Promotion> = {};
+    if (body.discount_percent !== undefined && body.discount_percent !== null && body.discount_percent !== '') {
+      const pct = Number(body.discount_percent);
+      if (!Number.isInteger(pct) || pct < 1 || pct > 90) throw new BadRequestException('Discount must be a whole number from 1 to 90');
+      const start = typeof body.start_time === 'string' && body.start_time ? body.start_time : null;
+      const end = typeof body.end_time === 'string' && body.end_time ? body.end_time : null;
+      if ((start && !TIME_RE.test(start)) || (end && !TIME_RE.test(end))) throw new BadRequestException('Times must be HH:MM');
+      if (start && end && start === end) throw new BadRequestException('Start and end time are the same');
+      const days = Array.isArray(body.days) ? [...new Set(body.days.map(String).filter((d) => /^[0-6]$/.test(d)))].sort() : [];
+      const cats = Array.isArray(body.category_ids) ? [...new Set(body.category_ids.map(String).filter((c) => UUID.test(c)))].slice(0, 50) : [];
+      pricing = { discount_percent: pct, start_time: start, end_time: end, days: days.length ? days : null, category_ids: cats.length ? cats : null };
+    }
     const row = this.promos.create({
+      ...pricing,
       title,
       body: typeof body.body === 'string' && body.body.trim() ? body.body.trim().slice(0, 500) : null,
       branch_id: typeof body.branch_id === 'string' && body.branch_id ? body.branch_id : null,

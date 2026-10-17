@@ -10,14 +10,15 @@ const O1 = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 const latte = {
   id: P1,
   name: 'Latte',
+  category_id: 'coffee',
   status: 'active',
   base_price: '18.00',
   variants: [{ id: 'g-size', name: 'Size', options: { choices: [{ name: 'Regular', price_adjustment: 0 }, { name: 'Large', price_adjustment: 3 }] } }],
   option_groups: [{ id: 'g-milk', name: 'Milk', options: { choices: [{ name: 'Full fat', price_adjustment: 0 }, { name: 'Oat', price_adjustment: 2.5 }] } }],
 };
-const cake = { id: P2, name: 'Cake', status: 'active', base_price: 22, variants: [], option_groups: [] };
+const cake = { id: P2, name: 'Cake', category_id: 'food', status: 'active', base_price: 22, variants: [], option_groups: [] };
 
-function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; openPhone?: number; inSlot?: number; soldOut?: string[]; branchPrice?: number; order?: any } = {}) {
+function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; openPhone?: number; inSlot?: number; deals?: any[]; soldOut?: string[]; branchPrice?: number; order?: any } = {}) {
   const saved: any[] = [];
   const counts = { table: opts.openTable ?? 0 };
   const orders = {
@@ -38,7 +39,8 @@ function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; 
   const branches = { findOne: jest.fn(async ({ where }: any) => (where.id === B1 ? branch : null)), save: jest.fn(async (x: any) => x) };
   const prices = { find: jest.fn(async () => (opts.branchPrice ? [{ product_id: P2, price_aed: opts.branchPrice }] : [])) };
   const availability = { find: jest.fn(async () => (opts.soldOut ?? []).map((product_id) => ({ product_id }))) };
-  const svc = new OrdersService(orders as any, items as any, products as any, branches as any, prices as any, availability as any);
+  const promotions = { find: jest.fn(async () => opts.deals ?? []) };
+  const svc = new OrdersService(orders as any, items as any, products as any, branches as any, prices as any, availability as any, promotions as any);
   return { svc, saved, items, branch };
 }
 
@@ -69,7 +71,19 @@ describe('OrdersService', () => {
         { group: 'Milk', choice: 'Oat', price_adjustment: 2.5 },
       ],
       note: 'less sugar',
+      discount: null,
     });
+  });
+
+  it('takes happy-hour discounts off matching items only and keeps the full price as subtotal', async () => {
+    const deal = { title: 'Coffee hour', discount_percent: 20, category_ids: ['coffee'], is_active: true };
+    const { svc, saved, items } = setup({ deals: [deal, { ...deal, title: 'Small', discount_percent: 10 }] });
+    // Latte 23.5 -> 18.8 x 2 = 37.6, cake 22 (not coffee)
+    const res = await svc.create(body());
+    expect(res.total).toBe(59.6);
+    expect(saved[0]).toMatchObject({ subtotal: 69, total: 59.6 });
+    expect(items.save.mock.calls[0][0][0]).toMatchObject({ unit_price: 18.8, options: { discount: { title: 'Coffee hour', percent: 20, list_price: 23.5 } } });
+    expect(items.save.mock.calls[0][0][1].options.discount).toBeNull();
   });
 
   it('falls back to the first choice when a choice is missing or unknown', async () => {
