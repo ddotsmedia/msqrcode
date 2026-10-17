@@ -71,6 +71,10 @@ export class Branch {
   @Column({ type: 'boolean', default: false })
   ordering_enabled: boolean;
 
+  // Customers can order ahead from the branch menu and pick up at a chosen time. Off until staff switch it on.
+  @Column({ type: 'boolean', default: false })
+  pickup_enabled: boolean;
+
   @CreateDateColumn()
   created_at: Date;
 

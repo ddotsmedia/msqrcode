@@ -8,7 +8,7 @@ import { OrdersService, StaffUser } from './orders.service';
 export class OrdersController {
   constructor(private orders: OrdersService) {}
 
-  // Customer at a table: send an order to the counter (pay at the counter).
+  // Customer: order from the table or order ahead for pickup (pay at the counter).
   @Post('orders')
   create(@Body() body: Record<string, unknown>) {
     return this.orders.create(body);
@@ -41,7 +41,7 @@ export class OrdersController {
   @Patch('admin/orders/ordering')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'branch_manager')
-  setOrdering(@Body() body: { branch_id?: unknown; enabled?: unknown }, @Req() req: { user: StaffUser }) {
-    return this.orders.setOrdering(body?.branch_id, body?.enabled, req.user);
+  setOrdering(@Body() body: { branch_id?: unknown; enabled?: unknown; kind?: unknown }, @Req() req: { user: StaffUser }) {
+    return this.orders.setOrdering(body?.branch_id, body?.enabled, req.user, body?.kind);
   }
 }

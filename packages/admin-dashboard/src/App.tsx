@@ -23,7 +23,7 @@ const TAB_LABELS: Record<Tab, string> = {
   branches: 'Branches',
   'menu-import': 'Menu import',
   dashboard: 'Insights',
-  kitchen: 'Table orders',
+  kitchen: 'Orders',
   promotions: 'Offers',
   loyalty: 'Loyalty',
 };

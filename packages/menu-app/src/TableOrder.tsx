@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useLang } from './i18n';
+import { pickupSlots } from './lib/hours';
 
 // Ordering from the table QR menu: cart, "send to the counter" and live status. Payment is at the counter.
 
@@ -39,6 +40,7 @@ interface Placed {
   at: number;
   status?: string;
   seen?: boolean;
+  pickup?: string; // pickup time label, for order-ahead
 }
 interface Tracked {
   order_no: string;
@@ -231,9 +233,27 @@ const STATUS_KEY: Record<string, string> = {
 };
 const STEPS = ['placed', 'preparing', 'ready'];
 
-// The order bar shown inside the table card: placed orders with live status, then the cart.
-export function TableOrder({ branchId, table, cart }: { branchId: string; table: string; cart: Cart }) {
+// The order bar: placed orders with live status, then the cart. With a table it orders to the table;
+// without one it is order-ahead with a pickup time from the branch's opening hours.
+export function TableOrder({
+  branchId,
+  table,
+  cart,
+  hours,
+  timezone = 'Asia/Dubai',
+}: {
+  branchId: string;
+  table: string | null;
+  cart: Cart;
+  hours?: Record<string, { open: string; close: string }> | null;
+  timezone?: string;
+}) {
   const { t } = useLang();
+  const pickup = !table;
+  const slots = pickup ? pickupSlots(hours, timezone, new Date()) : [];
+  const [pickupAt, setPickupAt] = useState('');
+  const slot = slots.find((x) => x.at === pickupAt) ?? slots[0];
+  const where = pickup ? t('orderPickupAt').replace('{t}', slot?.label ?? '') : t('orderTable').replace('{t}', table ?? '');
   const ordersKey = `msq_orders_${branchId}`;
   const [placed, setPlaced] = useState<Placed[]>(() => read<Placed[]>(ordersKey, []).filter((o) => Date.now() - o.at < 6 * 3600_000));
   const [sheet, setSheet] = useState<'cart' | string | null>(null); // 'cart' or an order id
@@ -294,6 +314,14 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
       setError(t('orderNameNeeded'));
       return;
     }
+    if (pickup && phone.replace(/\D/g, '').length < 7) {
+      setError(t('orderPhoneNeeded'));
+      return;
+    }
+    if (pickup && !slot) {
+      setError(t('orderPickupClosed'));
+      return;
+    }
     setBusy(true);
     setError(null);
     write('msq_order_name', name.trim());
@@ -301,7 +329,7 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
     try {
       const r = await axios.post('/api/orders', {
         branch_id: branchId,
-        table,
+        ...(pickup ? { type: 'pickup', pickup_at: slot!.at } : { table }),
         customer_name: name.trim(),
         phone: phone.trim() || undefined,
         items: cart.lines.map((l) => ({
@@ -318,6 +346,7 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
           order_no: r.data.order_no,
           at: Date.now(),
           status: 'placed',
+          ...(pickup ? { pickup: slot!.label } : {}),
         },
         ...prev,
       ]);
@@ -370,7 +399,11 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
           ))}
         </ul>
       )}
-      {cart.count === 0 && shown.length === 0 && <p className="mb-2 rounded-xl bg-cream px-3 py-2 text-sm font-medium text-brand-900">{t('orderHint')}</p>}
+      {cart.count === 0 && shown.length === 0 && (
+        <p className="mb-2 rounded-xl bg-cream px-3 py-2 text-sm font-medium text-brand-900">
+          {!pickup ? t('orderHint') : slots.length ? t('orderPickupHint').replace('{t}', slots[0].label) : t('orderPickupClosed')}
+        </p>
+      )}
       {cart.count > 0 && (
         <button
           type="button"
@@ -400,7 +433,7 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
                 <>
                   <div className="mb-4 flex items-baseline justify-between">
                     <h2 className="font-display text-2xl text-brand-900">{t('orderYour')}</h2>
-                    <span className="text-sm font-semibold text-slate-500">{t('orderTable').replace('{t}', table)}</span>
+                    <span className="text-sm font-semibold text-slate-500">{where}</span>
                   </div>
                   {cart.lines.length === 0 ? (
                     <p className="py-6 text-center text-slate-500">{t('orderEmpty')}</p>
@@ -437,12 +470,32 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
                           maxLength={20}
                           inputMode="tel"
                           onChange={(e) => setPhone(e.target.value)}
-                          placeholder={t('orderPhone')}
-                          aria-label={t('orderPhone')}
+                          placeholder={t(pickup ? 'orderMobile' : 'orderPhone')}
+                          aria-label={t(pickup ? 'orderMobile' : 'orderPhone')}
                           autoComplete="tel"
                           className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none"
                         />
                       </div>
+                      {pickup && (
+                        <label className="mt-3 block">
+                          <span className="mb-1 block text-sm font-semibold text-slate-700">{t('orderPickupTime')}</span>
+                          {slots.length ? (
+                            <select
+                              value={slot?.at ?? ''}
+                              onChange={(e) => setPickupAt(e.target.value)}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none"
+                            >
+                              {slots.map((x, i) => (
+                                <option key={x.at} value={x.at}>
+                                  {i === 0 ? t('orderPickupEarliest').replace('{t}', x.label) : x.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <p className="rounded-xl bg-slate-100 px-3 py-2.5 text-sm text-slate-600">{t('orderPickupClosed')}</p>
+                          )}
+                        </label>
+                      )}
                       <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-3">
                         <span className="font-semibold text-slate-700">{t('orderTotal')}</span>
                         <span className="text-xl font-bold text-brand-900">{money(cart.total)}</span>
@@ -452,7 +505,7 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
                       <button
                         type="button"
                         onClick={send}
-                        disabled={busy}
+                        disabled={busy || (pickup && !slot)}
                         className="mt-4 w-full rounded-xl bg-brand-700 py-3.5 font-semibold text-white hover:bg-brand-900 disabled:opacity-60"
                       >
                         {busy ? t('orderSending') : `${t('orderSend')} · ${money(cart.total)}`}
@@ -467,7 +520,9 @@ export function TableOrder({ branchId, table, cart }: { branchId: string; table:
                 <>
                   <div className="mb-4 flex items-baseline justify-between">
                     <h2 className="font-display text-2xl text-brand-900">{t('orderNo').replace('{n}', current.order_no)}</h2>
-                    <span className="text-sm font-semibold text-slate-500">{t('orderTable').replace('{t}', table)}</span>
+                    <span className="text-sm font-semibold text-slate-500">
+                      {current.pickup ? t('orderPickupAt').replace('{t}', current.pickup) : t('orderTable').replace('{t}', table ?? '')}
+                    </span>
                   </div>
                   {['completed', 'cancelled'].includes(current.status ?? '') ? (
                     <p className="mb-4 rounded-xl bg-slate-100 p-3 text-center font-semibold text-slate-600">{t(STATUS_KEY[current.status!])}</p>

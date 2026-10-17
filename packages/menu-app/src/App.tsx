@@ -29,6 +29,7 @@ interface Branch {
   operating_hours?: Record<string, any>;
   whatsapp_number?: string;
   ordering_enabled?: boolean;
+  pickup_enabled?: boolean;
   google_maps_url?: string;
   google_review_url?: string;
   delivery_links?: Record<string, string>;
@@ -311,7 +312,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
   const [showText, setShowText] = useState(false);
-  const cart = useCart(branchId ?? '', table ?? '');
+  const cart = useCart(branchId ?? '', table ?? 'pickup');
 
   useEffect(() => {
     const loadMenuData = async () => {
@@ -478,6 +479,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
   const filteredProducts = getFilteredProducts();
   const canOrder = !!(table && branchId && branch?.ordering_enabled);
+  const canPickup = !!(!table && branchId && branch?.pickup_enabled);
 
   return (
     <div className="min-h-screen bg-brand-50">
@@ -689,6 +691,17 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
         </>
       )}
 
+      {canPickup && (
+        <>
+          <div className="h-32" aria-hidden="true" />
+          <div className="fixed inset-x-0 bottom-[72px] md:bottom-4 z-40 px-3">
+            <div className="mx-auto max-w-md rounded-2xl border border-brand-100 bg-white p-3 pb-1 shadow-[0_12px_32px_rgba(10,26,51,0.18)]">
+              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} />
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Product Details Modal */}
       {selectedProduct && (
         <ProductDetailsModal
@@ -696,7 +709,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           onClose={() => setSelectedProduct(null)}
           availability={availability[selectedProduct.id] !== false}
           branchId={branchId}
-          onAdd={canOrder ? cart.add : undefined}
+          onAdd={canOrder || canPickup ? cart.add : undefined}
         />
       )}
     </div>

@@ -13,6 +13,8 @@ interface Order {
   customer_name: string;
   phone: string;
   table: string | null;
+  type?: 'pickup' | 'dine_in';
+  pickup_at?: string | null;
   status: 'placed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   total: number;
   created_at: string;
@@ -20,6 +22,7 @@ interface Order {
 }
 interface Board {
   ordering_enabled: boolean;
+  pickup_enabled: boolean;
   open: Order[];
   finished: Order[];
 }
@@ -29,6 +32,10 @@ const COLUMNS: { status: Order['status']; title: string; next?: { to: Order['sta
   { status: 'preparing', title: 'Preparing', next: { to: 'ready', label: 'Ready' } },
   { status: 'ready', title: 'Ready', next: { to: 'completed', label: 'Collected' } },
 ];
+
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' });
+// "Table 5" or "Pickup 18:30"
+const where = (o: Order) => (o.type === 'pickup' && o.pickup_at ? `Pickup ${hhmm(o.pickup_at)}` : o.table ? `Table ${o.table}` : '');
 
 const ago = (iso: string) => {
   const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -86,15 +93,15 @@ export default function KitchenPage({
     }
   }
 
-  async function toggleOrdering() {
+  async function toggleOrdering(kind: 'table' | 'pickup') {
     if (!board) return;
     setBusy('switch');
     try {
-      const res = await api<{ ordering_enabled: boolean }>(`/admin/orders/ordering`, token, {
+      const res = await api<{ ordering_enabled: boolean; pickup_enabled: boolean }>(`/admin/orders/ordering`, token, {
         method: 'PATCH',
-        body: JSON.stringify({ branch_id: branchId, enabled: !board.ordering_enabled }),
+        body: JSON.stringify({ branch_id: branchId, kind, enabled: kind === 'pickup' ? !board.pickup_enabled : !board.ordering_enabled }),
       });
-      setBoard({ ...board, ordering_enabled: res.ordering_enabled });
+      setBoard({ ...board, ...res });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -114,26 +121,25 @@ export default function KitchenPage({
             ))}
           </select>
         )}
-        <div className="flex-1 min-w-[12rem]">
-          <p className="font-semibold text-gray-800">Table ordering {board?.ordering_enabled ? 'is on' : 'is off'}</p>
-          <p className="text-sm text-gray-500">
-            {board?.ordering_enabled
-              ? 'Customers can order from the menu on their table QR and pay at the counter. New orders chime; keep this screen open.'
-              : 'Switch on to let customers order from the menu on their table QR.'}
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!!board?.ordering_enabled}
-          disabled={!board || busy === 'switch'}
-          onClick={toggleOrdering}
-          className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${
-            board?.ordering_enabled ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'
-          }`}
-        >
-          {board?.ordering_enabled ? 'On — turn off' : 'Turn on'}
-        </button>
+        <div className="flex-1 min-w-[12rem] text-sm text-gray-500">New orders chime; keep this screen open. Customers pay at the counter.</div>
+        {(
+          [
+            ['table', 'Order from table QR', board?.ordering_enabled],
+            ['pickup', 'Order ahead & pickup', board?.pickup_enabled],
+          ] as const
+        ).map(([kind, label, on]) => (
+          <button
+            key={kind}
+            type="button"
+            role="switch"
+            aria-checked={!!on}
+            disabled={!board || busy === 'switch'}
+            onClick={() => toggleOrdering(kind)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${on ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+          >
+            {label}: {on ? 'On' : 'Off'}
+          </button>
+        ))}
       </div>
 
       {error && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{error}</p>}
@@ -153,7 +159,7 @@ export default function KitchenPage({
                   <article key={o.id} className={`rounded-lg bg-white p-3 shadow-sm ${col.status === 'placed' ? 'ring-2 ring-amber-400' : ''}`}>
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-lg font-bold text-gray-900">
-                        #{o.order_no} {o.table && <span className="text-brand-700">· Table {o.table}</span>}
+                        #{o.order_no} {where(o) && <span className={o.type === 'pickup' ? 'text-amber-700' : 'text-brand-700'}>· {where(o)}</span>}
                       </p>
                       <span className="text-xs text-gray-500">{ago(o.created_at)}</span>
                     </div>
@@ -209,7 +215,7 @@ export default function KitchenPage({
             {board.finished.map((o) => (
               <li key={o.id} className="flex justify-between gap-3 py-2">
                 <span>
-                  #{o.order_no} · {o.customer_name} {o.table && `· Table ${o.table}`}
+                  #{o.order_no} · {o.customer_name} {where(o) && `· ${where(o)}`}
                 </span>
                 <span className={o.status === 'cancelled' ? 'text-red-600' : 'text-green-700'}>
                   {o.status === 'cancelled' ? 'Cancelled' : 'Collected'} · AED {o.total.toFixed(2)}

@@ -118,3 +118,36 @@ export function getNextOpenTime(operatingHours: OperatingHours | null | undefine
 
   return null;
 }
+
+// Pickup times for order-ahead: every 15 minutes from `lead` minutes after now until 15 minutes before
+// today's closing, at most `ahead` minutes away. Without opening hours, the next 2 hours.
+export function pickupSlots(
+  operatingHours: OperatingHours | null | undefined,
+  timezone: string,
+  now: Date,
+  lead = 15,
+  ahead = 240,
+): { at: string; label: string }[] {
+  const cur = getCurrentTimeInMinutes(timezone, now);
+  let open = 0;
+  let close = cur + 120 + 15;
+  if (operatingHours) {
+    const today = operatingHours[DAYS[getCurrentDayIndex(timezone, now)]];
+    if (!today) return [];
+    open = timeToMinutes(today.open);
+    close = timeToMinutes(today.close);
+    if (close <= open) close += 24 * 60; // closes after midnight
+  }
+  const base = now.getTime() - (now.getSeconds() * 1000 + now.getMilliseconds());
+  const first = Math.ceil(Math.max(cur + lead, open) / 15) * 15;
+  const last = Math.min(close - 15, cur + ahead);
+  const out: { at: string; label: string }[] = [];
+  for (let m = first; m <= last; m += 15) {
+    const day = m % (24 * 60);
+    out.push({
+      at: new Date(base + (m - cur) * 60_000).toISOString(),
+      label: `${String(Math.floor(day / 60)).padStart(2, '0')}:${String(day % 60).padStart(2, '0')}`,
+    });
+  }
+  return out;
+}

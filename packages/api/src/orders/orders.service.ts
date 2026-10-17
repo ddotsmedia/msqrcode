@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, MoreThanOrEqual, Repository } from 'typeorm';
+import { Between, In, MoreThanOrEqual, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
@@ -30,6 +30,10 @@ const MAX_QTY = 20;
 // Limits so a script (or a bored child) cannot flood the counter screen.
 const MAX_OPEN_PER_TABLE = 3;
 const MAX_OPEN_PER_BRANCH = 60;
+const MAX_OPEN_PER_PHONE = 3;
+// Pickup orders per 15-minute slot, so the bar is not swamped at one time.
+const MAX_PER_SLOT = 10;
+const SLOT_MS = 15 * 60_000;
 
 type Choice = { name: string; price_adjustment: number };
 type Group = { id: string; name: string; options?: { choices?: Choice[] } | null };
@@ -47,27 +51,50 @@ export class OrdersService {
     @InjectRepository(ProductAvailability) private availability: Repository<ProductAvailability>,
   ) {}
 
-  // Public: a customer at a table sends their order to the counter. Prices come from the database only.
+  // Public: a customer sends an order from their table, or orders ahead for pickup. Prices come from the database only.
   async create(body: Record<string, unknown>) {
+    const pickup = body.type === 'pickup';
     const branchId = typeof body.branch_id === 'string' ? body.branch_id : '';
-    const table = clean(body.table, 20);
-    if (!UUID.test(branchId) || !TABLE.test(table)) throw new BadRequestException('Scan the QR code on your table to order');
+    const table = pickup ? '' : clean(body.table, 20);
+    const where = pickup ? 'Choose a branch to order from' : 'Scan the QR code on your table to order';
+    if (!UUID.test(branchId) || (!pickup && !TABLE.test(table))) throw new BadRequestException(where);
     const branch = await this.branches.findOne({ where: { id: branchId } });
-    if (!branch || branch.status !== 'active') throw new BadRequestException('Scan the QR code on your table to order');
-    if (!branch.ordering_enabled) throw new BadRequestException('Ordering from the table is not available at this branch right now');
+    if (!branch || branch.status !== 'active') throw new BadRequestException(where);
+    if (pickup ? !branch.pickup_enabled : !branch.ordering_enabled) {
+      throw new BadRequestException(`${pickup ? 'Order ahead' : 'Ordering from the table'} is not available at this branch right now`);
+    }
 
     const name = clean(body.customer_name, 60);
     const phone = clean(body.phone, 20).replace(/[^\d+]/g, '');
     if (!name) throw new BadRequestException('Please enter your name');
+    if (pickup && phone.replace(/\D/g, '').length < 7) throw new BadRequestException('Please enter your mobile number so we can reach you');
     const lines = Array.isArray(body.items) ? body.items.slice(0, MAX_LINES + 1) : [];
     if (!lines.length) throw new BadRequestException('Your order is empty');
     if (lines.length > MAX_LINES) throw new BadRequestException('Too many items in one order');
 
-    const [openAtTable, openAtBranch] = await Promise.all([
-      this.orders.count({ where: { branch_id: branchId, table_number: table, status: In([...OPEN]) } }),
+    let pickupAt: Date | null = null;
+    if (pickup) {
+      const ms = typeof body.pickup_at === 'string' ? Date.parse(body.pickup_at) : NaN;
+      if (!(ms >= Date.now() - 5 * 60_000 && ms <= Date.now() + 12 * 3600_000)) throw new BadRequestException('Choose a pickup time today');
+      pickupAt = new Date(ms);
+      const slot = Math.floor(ms / SLOT_MS) * SLOT_MS;
+      const inSlot = await this.orders.count({
+        where: { branch_id: branchId, type: 'pickup', status: In([...OPEN]), pickup_at: Between(new Date(slot), new Date(slot + SLOT_MS - 1)) },
+      });
+      if (inSlot >= MAX_PER_SLOT) throw new BadRequestException('That pickup time is fully booked. Please choose another time.');
+    }
+
+    const [openForCustomer, openAtBranch] = await Promise.all([
+      this.orders.count({
+        where: pickup
+          ? { branch_id: branchId, phone, status: In([...OPEN]) }
+          : { branch_id: branchId, table_number: table, status: In([...OPEN]) },
+      }),
       this.orders.count({ where: { branch_id: branchId, status: In([...OPEN]) } }),
     ]);
-    if (openAtTable >= MAX_OPEN_PER_TABLE) throw new BadRequestException('This table already has orders on the way. Please wait for them or ask a team member.');
+    if (openForCustomer >= (pickup ? MAX_OPEN_PER_PHONE : MAX_OPEN_PER_TABLE)) {
+      throw new BadRequestException(pickup ? 'You already have orders on the way. Please wait for them first.' : 'This table already has orders on the way. Please wait for them or ask a team member.');
+    }
     if (openAtBranch >= MAX_OPEN_PER_BRANCH) throw new BadRequestException('We are very busy right now. Please order at the counter.');
 
     const ids = [...new Set(lines.map((l: any) => (typeof l?.product_id === 'string' ? l.product_id : '')).filter((id) => UUID.test(id)))];
@@ -114,8 +141,9 @@ export class OrdersService {
         order_no: String(today + 1).padStart(3, '0'),
         customer_name: name,
         phone,
-        type: 'dine_in',
-        table_number: table,
+        type: pickup ? 'pickup' : 'dine_in',
+        table_number: pickup ? null : table,
+        pickup_at: pickupAt,
         subtotal: total,
         total,
         status: 'placed',
@@ -143,7 +171,9 @@ export class OrdersService {
       id: o.id,
       order_no: o.order_no,
       status: o.status,
+      type: o.type,
       table: o.table_number,
+      pickup_at: o.pickup_at,
       total: Number(o.total),
       created_at: o.created_at,
       items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
@@ -186,13 +216,15 @@ export class OrdersService {
       order_no: o.order_no,
       customer_name: o.customer_name,
       phone: o.phone,
+      type: o.type,
       table: o.table_number,
+      pickup_at: o.pickup_at,
       status: o.status,
       total: Number(o.total),
       created_at: o.created_at,
       items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, options: i.options })),
     });
-    return { ordering_enabled: !!branch?.ordering_enabled, open: open.map(row), finished: finished.map(row) };
+    return { ordering_enabled: !!branch?.ordering_enabled, pickup_enabled: !!branch?.pickup_enabled, open: open.map(row), finished: finished.map(row) };
   }
 
   async setStatus(id: string, statusRaw: unknown, staff: StaffUser) {
@@ -207,12 +239,14 @@ export class OrdersService {
     return { ok: true, status };
   }
 
-  async setOrdering(branchRaw: unknown, enabled: unknown, staff: StaffUser) {
+  // kind 'table' = order from the table QR, 'pickup' = order ahead and collect.
+  async setOrdering(branchRaw: unknown, enabled: unknown, staff: StaffUser, kind: unknown = 'table') {
     const branchId = this.branchFor(branchRaw, staff);
     const branch = await this.branches.findOne({ where: { id: branchId } });
     if (!branch) throw new NotFoundException('Branch not found');
-    branch.ordering_enabled = enabled === true;
+    if (kind === 'pickup') branch.pickup_enabled = enabled === true;
+    else branch.ordering_enabled = enabled === true;
     await this.branches.save(branch);
-    return { ordering_enabled: branch.ordering_enabled };
+    return { ordering_enabled: !!branch.ordering_enabled, pickup_enabled: !!branch.pickup_enabled };
   }
 }
