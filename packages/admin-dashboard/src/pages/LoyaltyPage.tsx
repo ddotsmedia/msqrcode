@@ -288,6 +288,57 @@ function ScanStamp({ token, onDone }: { token: string; onDone: (msg: string, ok:
   return <div id="loyalty-qr-reader" className="bg-white rounded-xl border shadow-sm p-2 max-w-sm" />;
 }
 
+// Admin: send one message to every customer who turned on reminders (at most once an hour).
+function Broadcast({ token }: { token: string }) {
+  const [count, setCount] = useState<number | null>(null);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api<{ subscribers: number }>('/admin/push/stats', token).then((r) => setCount(r.subscribers)).catch(() => undefined);
+  }, [token]);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api<{ ok: boolean; sent?: number; message?: string }>('/admin/push/broadcast', token, { method: 'POST', body: JSON.stringify({ title, body }) });
+      setMsg(r.ok ? `Sent to ${r.sent} phone${r.sent === 1 ? '' : 's'}.` : (r.message ?? 'Not sent.'));
+      if (r.ok) {
+        setTitle('');
+        setBody('');
+      }
+    } catch (err) {
+      setMsg((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={send} className="bg-white rounded-xl border shadow-sm p-4 space-y-3">
+      <div>
+        <p className="font-semibold text-gray-800">Send a notification</p>
+        <p className="text-sm text-gray-500">
+          {count === null ? '…' : `${count} customer phone${count === 1 ? ' has' : 's have'} reminders on.`} Stamp reminders, double-stamp hours and "we miss you" messages go out
+          automatically. You can send one extra message an hour.
+        </p>
+      </div>
+      <input value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} placeholder="Title, e.g. New pistachio latte" className={`${inputClass} w-full`} />
+      <textarea value={body} maxLength={160} onChange={(e) => setBody(e.target.value)} placeholder="Message (up to 160 characters)" rows={2} className={`${inputClass} w-full`} />
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={busy || title.trim().length < 2 || body.trim().length < 2 || !count} className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-60">
+          {busy ? 'Sending…' : 'Send to all'}
+        </button>
+        {msg && <p className="text-sm text-gray-600">{msg}</p>}
+      </div>
+    </form>
+  );
+}
+
 const MENU_URL = ((import.meta.env.VITE_MENU_URL as string | undefined) ?? 'https://coffeesales.ae').replace(/\/$/, '');
 
 // Full-screen QR for a counter tablet. Customers scan it with their phone to stamp their own card.
@@ -526,6 +577,7 @@ export default function LoyaltyPage({ token, role, branchId }: { token: string; 
 
       <StatsRow stats={stats} />
       {isAdmin && <SettingsForm token={token} settings={settings} onSaved={() => { loadSettings(); loadStats(); }} />}
+      {isAdmin && <Broadcast token={token} />}
 
       {settings?.double_now && (
         <p className="bg-amber-50 text-amber-800 rounded p-3 text-sm font-semibold">Double-stamp hours are on now: each visit earns 2 stamps.</p>

@@ -11,6 +11,7 @@ type Opts = {
   card?: Record<string, unknown>;
   referrer?: Record<string, unknown>;
   count?: (where: any) => number;
+  push?: any;
 };
 
 // In-memory stand-ins for the TypeORM repositories the service uses.
@@ -42,7 +43,7 @@ function setup(opts: Opts = {}) {
   const branches = {
     findOne: jest.fn(async ({ where }: any) => (where.id === 'b1b1b1b1' ? { id: 'b1b1b1b1', name: 'Khalidiya', status: 'active' } : null)),
   };
-  const svc = new LoyaltyService(cards as any, events as any, settings as any, {} as any, branches as any);
+  const svc = new LoyaltyService(cards as any, events as any, settings as any, {} as any, branches as any, opts.push);
   return { svc, card, referrer, saved };
 }
 
@@ -127,6 +128,19 @@ describe('LoyaltyService', () => {
     await expect(svc.updateSettings({ reward_name: '' })).rejects.toBeInstanceOf(BadRequestException);
     await expect(svc.updateSettings({ double_days: [7] })).rejects.toBeInstanceOf(BadRequestException);
     await expect(svc.updateSettings({ double_from: '17:00', double_to: '14:00' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('stamp notifications', () => {
+  it('tells the customer when one stamp is left and when the reward is ready', async () => {
+    const push = { sendToCard: jest.fn(async () => undefined) };
+    await setup({ stamps: 8, push }).svc.addStamp({ token: 't' });
+    expect(push.sendToCard).toHaveBeenLastCalledWith('c1', expect.objectContaining({ title: '1 stamp to go' }));
+    await setup({ stamps: 9, push }).svc.addStamp({ token: 't' });
+    expect(push.sendToCard).toHaveBeenLastCalledWith('c1', expect.objectContaining({ title: 'Your free drink is ready' }));
+    push.sendToCard.mockClear();
+    await setup({ stamps: 2, push }).svc.addStamp({ token: 't' });
+    expect(push.sendToCard).not.toHaveBeenCalled();
   });
 });
 

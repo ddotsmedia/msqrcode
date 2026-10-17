@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
@@ -7,6 +7,7 @@ import { LoyaltyEvent, LoyaltyEventType } from '../entities/loyalty-event.entity
 import { LoyaltySettings } from '../entities/loyalty-settings.entity';
 import { User } from '../entities/user.entity';
 import { Branch } from '../entities/branch.entity';
+import { PushService } from '../push/push.service';
 
 // Defaults used until an admin saves the settings.
 export const STAMPS_TARGET = 10;
@@ -117,14 +118,44 @@ export interface StaffUser {
 type CardRef = { phone?: unknown; token?: unknown };
 
 @Injectable()
-export class LoyaltyService {
+export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
+  private timer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     @InjectRepository(LoyaltyCard) private cards: Repository<LoyaltyCard>,
     @InjectRepository(LoyaltyEvent) private events: Repository<LoyaltyEvent>,
     @InjectRepository(LoyaltySettings) private settingsRepo: Repository<LoyaltySettings>,
     @InjectRepository(User) private users: Repository<User>,
     @InjectRepository(Branch) private branches: Repository<Branch>,
+    @Optional() private push?: PushService,
   ) {}
+
+  // Every 10 minutes: announce double-stamp hours once a day when they start, and send
+  // "we miss you" messages once a day from 11:00 Dubai time.
+  onModuleInit() {
+    if (!this.push || process.env.NODE_ENV === 'test') return;
+    this.timer = setInterval(() => this.tick().catch(() => undefined), 10 * 60_000);
+    this.timer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  async tick() {
+    if (!this.push) return;
+    const rules = await this.getSettings();
+    const now = dubaiNow();
+    const today = `${now.year}-${now.md}`;
+    if (isDoubleNow(rules) && (await this.push.getSecret('double_notified')) !== today) {
+      await this.push.setSecret('double_notified', today);
+      await this.push.sendToAll({ title: 'Double stamps are on now', body: `Every drink earns 2 stamps until ${rules.double_to}.` });
+    }
+    if (now.hm >= '11:00' && (await this.push.getSecret('winback_day')) !== today) {
+      await this.push.setSecret('winback_day', today);
+      await this.push.winBack({ title: 'We miss you at Milestones', body: 'Your stamps are waiting. Come by for your next coffee.' });
+    }
+  }
 
   private normalizePhone(raw: unknown): string {
     const digits = String(raw ?? '').replace(/\D/g, '');
@@ -437,6 +468,16 @@ export class LoyaltyService {
       if (weekVisits >= rules.challenge_visits && already === 0) {
         if ((await this.bonus(card, rules.challenge_bonus, rules.stamps_target, CHALLENGE_NOTE, staff)) > 0) bonuses.push('challenge');
       }
+    }
+    if (this.push) {
+      const left = rules.stamps_target - card.stamps;
+      const msg =
+        left <= 0
+          ? { title: `Your ${rules.reward_name.toLowerCase()} is ready`, body: 'Show your card at the counter to claim it.' }
+          : left === 1
+            ? { title: '1 stamp to go', body: `One more visit for your ${rules.reward_name.toLowerCase()}.` }
+            : null;
+      if (msg) this.push.sendToCard(card.id, msg).catch(() => undefined);
     }
     const visits = await this.events.count({ where: { card_id: card.id, type: 'stamp', created_at: MoreThanOrEqual(new Date(Date.now() - 365 * 864e5)) } });
     const tier = tierFor(visits, rules);
