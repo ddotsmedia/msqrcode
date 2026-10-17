@@ -8,6 +8,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import QRCode from 'qrcode';
 import { readFavs, toggleFav } from './lib/favorites';
 import { TableService } from './TableService';
+import { NotifyButton } from './NotifyButton';
 import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
@@ -1019,6 +1020,7 @@ export function LoyaltyCard() {
             {message && <p className="mt-1 text-xs text-amber-700">{message}</p>}
           </div>
         )}
+        <NotifyButton token={token} />
         {card.referral_code && (card.referral_bonus ?? 0) > 0 && (
           <div className="mt-3 border-t pt-2">
             <p className="text-xs font-semibold text-gray-700">{t('loyaltyInvite')}</p>

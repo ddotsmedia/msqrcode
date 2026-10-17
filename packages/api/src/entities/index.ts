@@ -18,3 +18,5 @@ export { Promotion } from './promotion.entity';
 export { LoyaltyEvent } from './loyalty-event.entity';
 export { LoyaltySettings } from './loyalty-settings.entity';
 export { ServiceRequest } from './service-request.entity';
+export { PushSubscription } from './push-subscription.entity';
+export { AppSecret } from './app-secret.entity';
