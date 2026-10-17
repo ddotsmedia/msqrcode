@@ -96,6 +96,13 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
     scanner.render(
       (decodedText) => {
         // Accepts the menu link (?branch=<id>&table=<n>) and the older branch:<id> text format
+        // Counter self-stamp code: open the rewards card, which adds the stamp.
+        const stamp = decodedText.match(/[?&]stamp=([a-f0-9-]{8,64}(?:\.|%2E)[A-Z2-9]{8})\b/i);
+        if (stamp) {
+          scanner.clear().catch(() => {});
+          window.location.href = `/loyalty?stamp=${stamp[1]}`;
+          return;
+        }
         const link = decodedText.match(/[?&]branch=([a-f0-9-]+)/i);
         const legacy = decodedText.match(/branch:([a-f0-9-]+)/i);
         const branchMatch = link ?? legacy;
@@ -772,6 +779,43 @@ export function LoyaltyCard() {
     }
   });
 
+  // Counter code from /loyalty?stamp=<branch>.<code>, scanned at the till.
+  const [stampCode, setStampCode] = useState(() => {
+    try {
+      const v = decodeURIComponent(new URLSearchParams(window.location.search).get('stamp') ?? '');
+      return /^[a-f0-9-]{8,64}\.[A-Z2-9]{8}$/i.test(v) ? v : '';
+    } catch {
+      return '';
+    }
+  });
+  const [stampNote, setStampNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!token || !stampCode) return;
+    const code = stampCode;
+    setStampCode('');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('stamp');
+      window.history.replaceState(null, '', url.pathname + url.search);
+    } catch {
+      /* keep the URL as is */
+    }
+    setStampNote({ ok: true, text: t('loyaltySelfAdding') });
+    axios
+      .post(`${API_BASE_URL}/loyalty/self-stamp`, { token, code })
+      .then((r) => {
+        setStampNote(
+          r.data.ok
+            ? { ok: true, text: t('loyaltySelfAdded').replace('{n}', String(r.data.earned ?? 1)).replace('{b}', r.data.branch_name ?? 'Milestones') }
+            : { ok: false, text: r.data.message ?? 'Could not add your stamp.' },
+        );
+        loadCard();
+      })
+      .catch((err) => setStampNote({ ok: false, text: err?.response?.data?.message || 'Could not add your stamp. Please ask our staff.' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, stampCode]);
+
   // QR that staff scan to add a stamp. Encodes the card's secret token.
   useEffect(() => {
     if (!token) return;
@@ -858,6 +902,11 @@ export function LoyaltyCard() {
         <p className="text-sm font-semibold text-gray-800 mb-2">
           {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
+        {stampNote && (
+          <p role="status" className={`mb-2 rounded p-2 text-sm font-semibold ${stampNote.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
+            {stampNote.text}
+          </p>
+        )}
         {card.double_now && (
           <p className="mb-2 rounded bg-amber-50 p-2 text-xs font-semibold text-amber-800">{t('loyaltyDoubleNow')}</p>
         )}
@@ -985,6 +1034,7 @@ export function LoyaltyCard() {
           className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
         />
       </label>
+      {stampCode && <p className="rounded bg-amber-50 p-2 text-xs font-semibold text-amber-800">{t('loyaltySelfJoin')}</p>}
       {ref && <p className="text-xs text-green-700">{t('loyaltyJoinedRef')}</p>}
       {message && <p className="text-xs text-amber-700">{message}</p>}
       <button

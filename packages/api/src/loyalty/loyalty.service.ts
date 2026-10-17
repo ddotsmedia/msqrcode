@@ -1,7 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, MoreThanOrEqual, Repository } from 'typeorm';
-import { randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { LoyaltyCard } from '../entities/loyalty-card.entity';
 import { LoyaltyEvent, LoyaltyEventType } from '../entities/loyalty-event.entity';
 import { LoyaltySettings } from '../entities/loyalty-settings.entity';
@@ -19,6 +19,7 @@ const DEFAULTS = {
   double_days: [] as number[],
   double_from: '14:00',
   double_to: '17:00',
+  self_stamp: false,
 };
 export type Rules = typeof DEFAULTS;
 
@@ -27,6 +28,9 @@ const STAMP_COOLDOWN_MS = 60_000;
 // Days either side of the birthday that count as the birthday week.
 const BIRTHDAY_WINDOW_DAYS = 3;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// The counter code changes every 30 seconds; the previous code is still accepted, so each lasts up to a minute.
+export const COUNTER_WINDOW_MS = 30_000;
+const BRANCH_ID = /^[a-f0-9-]{8,64}$/i;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // UAE has no daylight saving, so Asia/Dubai is always UTC+4.
@@ -70,8 +74,20 @@ export function parseBirthday(raw: unknown): string | null {
   return `${m[1]}-${m[2]}`;
 }
 
+// 8-character code for one branch and one 30-second window, signed with the server secret.
+export function counterCode(secret: string, branchId: string, window: number) {
+  const h = createHmac('sha256', secret).update(`counter:${branchId}:${window}`).digest();
+  return Array.from(h.subarray(0, 8), (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
+}
+
+function counterSecret() {
+  const s = process.env.LOYALTY_COUNTER_SECRET || process.env.JWT_SECRET;
+  if (!s) throw new Error('JWT_SECRET is not set');
+  return s;
+}
+
 export interface StaffUser {
-  id: string;
+  id: string | null;
   role: string;
   assigned_branch_id?: string | null;
 }
@@ -155,6 +171,7 @@ export class LoyaltyService {
         .map(Number),
       double_from: s.double_from ?? DEFAULTS.double_from,
       double_to: s.double_to ?? DEFAULTS.double_to,
+      self_stamp: s.self_stamp ?? DEFAULTS.self_stamp,
     };
   }
 
@@ -190,6 +207,7 @@ export class LoyaltyService {
     if (!HHMM.test(double_from) || !HHMM.test(double_to) || double_from >= double_to) {
       throw new BadRequestException('Double-stamp hours must be HH:MM, with the start before the end');
     }
+    const self_stamp = typeof body.self_stamp === 'boolean' ? body.self_stamp : cur.self_stamp;
 
     await this.settingsRepo.save({
       id: 1,
@@ -201,6 +219,7 @@ export class LoyaltyService {
       double_days: double_days.join(','),
       double_from,
       double_to,
+      self_stamp,
     });
     return this.getSettings();
   }
@@ -318,7 +337,8 @@ export class LoyaltyService {
     const before = card.stamps;
     card.stamps = Math.min(rules.stamps_target, card.stamps + (double ? 2 : 1));
     await this.cards.save(card);
-    await this.log(card, 'stamp', card.stamps - before, staff, double ? 'Double stamps' : undefined);
+    const note = [staff?.role === 'self' ? 'Self-stamp at counter' : '', double ? 'Double stamps' : ''].filter(Boolean).join(' · ');
+    await this.log(card, 'stamp', card.stamps - before, staff, note || undefined);
 
     const bonuses: string[] = [];
     if (card.birthday && rules.birthday_bonus > 0 && card.birthday_rewarded_year !== now.year && nearBirthday(card.birthday, now.md)) {
@@ -337,6 +357,45 @@ export class LoyaltyService {
       }
     }
     return { ok: true, stamps: card.stamps, earned: card.stamps - before, double, bonuses, ...who };
+  }
+
+  // Staff: the code currently shown on a branch's counter screen.
+  async counter(branchId: unknown, staff: StaffUser) {
+    const { self_stamp } = await this.getSettings();
+    if (!self_stamp) throw new BadRequestException('Turn on counter self-stamp in the programme rules first');
+    if (typeof branchId !== 'string' || !BRANCH_ID.test(branchId)) throw new BadRequestException('Choose a branch');
+    if (staff.role !== 'admin' && staff.assigned_branch_id && staff.assigned_branch_id !== branchId) {
+      throw new ForbiddenException('You can only show the code for your own branch');
+    }
+    const branch = await this.branches.findOne({ where: { id: branchId } });
+    if (!branch) throw new NotFoundException('Branch not found');
+    const now = Date.now();
+    const window = Math.floor(now / COUNTER_WINDOW_MS);
+    return {
+      branch_id: branch.id,
+      branch_name: branch.name,
+      code: `${branch.id}.${counterCode(counterSecret(), branch.id, window)}`,
+      expires_in_ms: COUNTER_WINDOW_MS - (now % COUNTER_WINDOW_MS),
+    };
+  }
+
+  // Public: the customer scanned the counter code with their card open. Same rules as a staff stamp.
+  async selfStamp(body: { token?: unknown; code?: unknown }) {
+    const { self_stamp } = await this.getSettings();
+    if (!self_stamp) return { ok: false, message: 'Counter stamps are off right now. Please ask our staff.' };
+    if (typeof body.token !== 'string' || !body.token.trim()) throw new BadRequestException('Open your rewards card first');
+    const m = typeof body.code === 'string' ? body.code.trim().match(/^([a-f0-9-]{8,64})\.([A-Z2-9]{8})$/i) : null;
+    if (!m) return { ok: false, message: 'That is not a Milestones counter code.' };
+    const branch = await this.branches.findOne({ where: { id: m[1] } });
+    if (!branch || branch.status !== 'active') return { ok: false, message: 'That is not a Milestones counter code.' };
+    const given = Buffer.from(m[2].toUpperCase());
+    const window = Math.floor(Date.now() / COUNTER_WINDOW_MS);
+    const valid = [window, window - 1].some((w) => timingSafeEqual(given, Buffer.from(counterCode(counterSecret(), branch.id, w))));
+    if (!valid) return { ok: false, message: 'This code has expired. Scan the code on the counter screen again.' };
+    const res = await this.addStamp({ token: body.token }, { id: null, role: 'self', assigned_branch_id: branch.id });
+    const out: Record<string, unknown> = { ...res, branch_name: branch.name };
+    delete out.phone; // the customer already knows it; keep it out of public responses
+    return out;
   }
 
   // Staff: redeem a full card and reset it.
