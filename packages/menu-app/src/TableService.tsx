@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import axios from 'axios';
 import { useLang } from './i18n';
 
@@ -11,12 +11,14 @@ export function TableService({
   table,
   whatsapp,
   picks,
+  extra,
 }: {
   branchId: string;
   branchName: string;
   table: string;
   whatsapp?: string | null;
   picks: string[];
+  extra?: ReactNode;
 }) {
   const { t } = useLang();
   const [sent, setSent] = useState<{ kind: Kind; id: string; done: boolean } | null>(null);
@@ -58,6 +60,7 @@ export function TableService({
   return (
     <div className="fixed inset-x-0 bottom-[72px] md:bottom-4 z-40 px-3">
       <div className="mx-auto max-w-md rounded-2xl border border-brand-100 bg-white p-3 shadow-[0_12px_32px_rgba(10,26,51,0.18)]">
+        {extra}
         {sent ? (
           <div role="status" className="flex items-center justify-between gap-3">
             <p className={`text-sm font-semibold ${sent.done ? 'text-green-700' : 'text-brand-800'}`}>

@@ -13,7 +13,7 @@ export interface ServiceRequestRow {
 type Lists = { open: ServiceRequestRow[]; done: ServiceRequestRow[] };
 
 // Short two-tone chime so staff hear a new request from across the counter.
-function chime() {
+export function chime() {
   try {
     const ctx = new AudioContext();
     [880, 1320].forEach((f, i) => {

@@ -1,13 +1,40 @@
-import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
+import { In, MoreThanOrEqual, Repository } from 'typeorm';
+import { randomBytes } from 'crypto';
 import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { Product } from '../entities/product.entity';
+import { Branch } from '../entities/branch.entity';
 import { BranchProductPrice } from '../entities/branch-product-price.entity';
-import { IPaymentProvider } from '../payments/payment-provider.interface';
-import { OrdersStreamService } from './orders-stream.service';
+import { ProductAvailability } from '../entities/product-availability.entity';
+import { dubaiNow } from '../loyalty/loyalty.service';
+
+export interface StaffUser {
+  id: string;
+  role: string;
+  assigned_branch_id?: string | null;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TABLE = /^[\w-]{1,20}$/;
+const OPEN = ['placed', 'preparing', 'ready'] as const;
+// Staff move an order forward one step at a time (or cancel it).
+const NEXT: Record<string, string[]> = {
+  placed: ['preparing', 'ready', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+};
+const MAX_LINES = 30;
+const MAX_QTY = 20;
+// Limits so a script (or a bored child) cannot flood the counter screen.
+const MAX_OPEN_PER_TABLE = 3;
+const MAX_OPEN_PER_BRANCH = 60;
+
+type Choice = { name: string; price_adjustment: number };
+type Group = { id: string; name: string; options?: { choices?: Choice[] } | null };
+
+const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
 @Injectable()
 export class OrdersService {
@@ -15,133 +42,177 @@ export class OrdersService {
     @InjectRepository(Order) private orders: Repository<Order>,
     @InjectRepository(OrderItem) private items: Repository<OrderItem>,
     @InjectRepository(Product) private products: Repository<Product>,
+    @InjectRepository(Branch) private branches: Repository<Branch>,
     @InjectRepository(BranchProductPrice) private prices: Repository<BranchProductPrice>,
-    @Inject('PaymentProvider') private paymentProvider: IPaymentProvider,
-    private stream: OrdersStreamService,
+    @InjectRepository(ProductAvailability) private availability: Repository<ProductAvailability>,
   ) {}
 
-  async create(branchId: string, body: Record<string, unknown>): Promise<any> {
-    const customerName = String(body.customer_name || '').trim();
-    const phone = String(body.phone || '').trim();
-    const type = body.type === 'dine_in' ? 'dine_in' : 'pickup';
-    const tableNumber = type === 'dine_in' ? String(body.table_number || '').trim() || null : null;
-    const cartItems = Array.isArray(body.items) ? body.items : [];
+  // Public: a customer at a table sends their order to the counter. Prices come from the database only.
+  async create(body: Record<string, unknown>) {
+    const branchId = typeof body.branch_id === 'string' ? body.branch_id : '';
+    const table = clean(body.table, 20);
+    if (!UUID.test(branchId) || !TABLE.test(table)) throw new BadRequestException('Scan the QR code on your table to order');
+    const branch = await this.branches.findOne({ where: { id: branchId } });
+    if (!branch || branch.status !== 'active') throw new BadRequestException('Scan the QR code on your table to order');
+    if (!branch.ordering_enabled) throw new BadRequestException('Ordering from the table is not available at this branch right now');
 
-    if (!customerName || !phone) throw new BadRequestException('Customer name and phone are required');
-    if (cartItems.length === 0) throw new BadRequestException('Cart cannot be empty');
+    const name = clean(body.customer_name, 60);
+    const phone = clean(body.phone, 20).replace(/[^\d+]/g, '');
+    if (!name) throw new BadRequestException('Please enter your name');
+    const lines = Array.isArray(body.items) ? body.items.slice(0, MAX_LINES + 1) : [];
+    if (!lines.length) throw new BadRequestException('Your order is empty');
+    if (lines.length > MAX_LINES) throw new BadRequestException('Too many items in one order');
 
-    // Calculate total from database prices only
-    let subtotal = 0;
-    const orderItems: OrderItem[] = [];
+    const [openAtTable, openAtBranch] = await Promise.all([
+      this.orders.count({ where: { branch_id: branchId, table_number: table, status: In([...OPEN]) } }),
+      this.orders.count({ where: { branch_id: branchId, status: In([...OPEN]) } }),
+    ]);
+    if (openAtTable >= MAX_OPEN_PER_TABLE) throw new BadRequestException('This table already has orders on the way. Please wait for them or ask a team member.');
+    if (openAtBranch >= MAX_OPEN_PER_BRANCH) throw new BadRequestException('We are very busy right now. Please order at the counter.');
 
-    for (const item of cartItems) {
-      const productId = String(item.product_id).trim();
-      const qty = Number(item.qty);
-      if (!productId || qty < 1) continue;
+    const ids = [...new Set(lines.map((l: any) => (typeof l?.product_id === 'string' ? l.product_id : '')).filter((id) => UUID.test(id)))];
+    const [products, soldOut, branchPrices] = await Promise.all([
+      ids.length ? this.products.find({ where: { id: In(ids) }, relations: ['variants', 'option_groups'] }) : [],
+      ids.length ? this.availability.find({ where: { branch_id: branchId, product_id: In(ids), is_available: false } }) : [],
+      ids.length ? this.prices.find({ where: { branch_id: branchId, product_id: In(ids) } }) : [],
+    ]);
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const unavailable = new Set(soldOut.map((a) => a.product_id));
+    const priceOf = new Map(branchPrices.map((p) => [p.product_id, Number(p.price_aed)]));
 
-      const product = await this.products.findOne({ where: { id: productId } });
-      if (!product) throw new NotFoundException(`Product ${productId} not found`);
+    let total = 0;
+    const items: OrderItem[] = [];
+    for (const raw of lines as any[]) {
+      const product = byId.get(raw?.product_id);
+      if (!product || product.status !== 'active') throw new BadRequestException('An item in your order is no longer on the menu');
+      if (unavailable.has(product.id)) throw new BadRequestException(`${product.name} is sold out right now`);
+      const qty = Math.floor(Number(raw.qty));
+      if (!(qty >= 1 && qty <= MAX_QTY)) throw new BadRequestException(`Choose between 1 and ${MAX_QTY} of ${product.name}`);
 
-      // Check for branch price override, fallback to base price
-      const branchPrice = await this.prices.findOne({ where: { branch_id: branchId, product_id: productId } });
-      const unitPrice = branchPrice ? Number(branchPrice.price_aed) : Number(product.base_price);
-
-      subtotal += unitPrice * qty;
-      orderItems.push(
-        this.items.create({
-          product_id: productId,
-          name_snapshot: product.name,
-          unit_price: unitPrice,
-          qty,
-          options: item.options ?? null,
-        }),
-      );
+      // One choice per size/option group; a missing or unknown choice falls back to the group's first one.
+      const picked = raw.choices && typeof raw.choices === 'object' ? (raw.choices as Record<string, unknown>) : {};
+      const choices: { group: string; choice: string; price_adjustment: number }[] = [];
+      for (const g of [...(product.variants ?? []), ...(product.option_groups ?? [])] as Group[]) {
+        const list = (g.options?.choices ?? []).filter((c) => c && typeof c.name === 'string');
+        if (!list.length) continue;
+        const c = list.find((x) => x.name === picked[g.id]) ?? list[0];
+        choices.push({ group: g.name, choice: c.name, price_adjustment: Number(c.price_adjustment) || 0 });
+      }
+      const unit = Math.max(0, (priceOf.get(product.id) ?? Number(product.base_price)) + choices.reduce((s, c) => s + c.price_adjustment, 0));
+      const unitPrice = Math.round(unit * 100) / 100;
+      total += unitPrice * qty;
+      const note = clean(raw.note, 140);
+      items.push(this.items.create({ product_id: product.id, name_snapshot: product.name, unit_price: unitPrice, qty, options: { choices, note: note || null } }));
     }
+    total = Math.round(total * 100) / 100;
 
-    const accessToken = uuidv4();
-    const order = this.orders.create({
-      branch_id: branchId,
-      order_no: new Date().toISOString().slice(0, 10) + '-' + Math.random().toString(36).slice(2, 8).toUpperCase(),
-      customer_name: customerName,
-      phone,
-      type,
-      table_number: tableNumber,
-      subtotal,
-      total: subtotal,
-      status: 'placed',
-      access_token: accessToken,
-    });
-
-    const savedOrder = await this.orders.save(order);
-    orderItems.forEach((item) => (item.order_id = savedOrder.id));
-    await this.items.save(orderItems);
-
-    // Emit stream update
-    this.stream.emitOrderUpdate({
-      id: savedOrder.id,
-      status: savedOrder.status,
-      customer_name: savedOrder.customer_name,
-      order_no: savedOrder.order_no,
-      branch_id: branchId,
-      type: savedOrder.type,
-      table_number: savedOrder.table_number || undefined,
-    });
-
-    // Create checkout
-    const checkout = await this.paymentProvider.createCheckout({
-      id: savedOrder.id,
-      branch_id: branchId,
-      customer_name: customerName,
-      phone,
-      total: subtotal,
-    });
-
-    return {
-      id: savedOrder.id,
-      access_token: accessToken,
-      order_no: savedOrder.order_no,
-      redirect_url: checkout.redirect_url,
-    };
+    const today = await this.orders.count({ where: { branch_id: branchId, created_at: MoreThanOrEqual(dubaiNow().dayStart) } });
+    const token = randomBytes(24).toString('hex');
+    const saved = await this.orders.save(
+      this.orders.create({
+        branch_id: branchId,
+        order_no: String(today + 1).padStart(3, '0'),
+        customer_name: name,
+        phone,
+        type: 'dine_in',
+        table_number: table,
+        subtotal: total,
+        total,
+        status: 'placed',
+        payment_status: 'unpaid',
+        payment_provider: 'counter',
+        access_token: token,
+      }),
+    );
+    items.forEach((i) => (i.order_id = saved.id));
+    await this.items.save(items);
+    return { id: saved.id, access_token: token, order_no: saved.order_no, total };
   }
 
-  async getById(id: string, accessToken?: string): Promise<any> {
-    const order = await this.orders.findOne({
-      where: { id },
-      relations: ['items'],
-    });
-    if (!order) throw new NotFoundException('Order not found');
-    if (accessToken && order.access_token !== accessToken) throw new BadRequestException('Invalid access token');
+  private async own(id: string, token: unknown) {
+    if (!UUID.test(id) || typeof token !== 'string' || !token) throw new NotFoundException('Order not found');
+    const order = await this.orders.findOne({ where: { id }, relations: ['items'] });
+    if (!order || order.access_token !== token) throw new NotFoundException('Order not found');
     return order;
   }
 
-  async updateStatus(id: string, status: string): Promise<any> {
-    const validStatuses = ['placed', 'paid', 'preparing', 'ready', 'completed', 'cancelled'];
-    if (!validStatuses.includes(status)) throw new BadRequestException('Invalid status');
-    const order = await this.orders.findOne({ where: { id } });
-    if (!order) throw new NotFoundException('Order not found');
-    order.status = status as any;
-    const saved = await this.orders.save(order);
-
-    // Emit stream update
-    this.stream.emitOrderUpdate({
-      id: saved.id,
-      status: saved.status,
-      customer_name: saved.customer_name,
-      order_no: saved.order_no,
-      branch_id: saved.branch_id,
-      type: saved.type,
-      table_number: saved.table_number || undefined,
-    });
-
-    return saved;
+  // Public: the customer's phone checks progress. Needs the private token returned when ordering.
+  async track(id: string, token: unknown) {
+    const o = await this.own(id, token);
+    return {
+      id: o.id,
+      order_no: o.order_no,
+      status: o.status,
+      table: o.table_number,
+      total: Number(o.total),
+      created_at: o.created_at,
+      items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
+    };
   }
 
-  async listByBranch(branchId: string, limit = 50): Promise<any[]> {
-    return this.orders.find({
-      where: { branch_id: branchId },
-      relations: ['items'],
-      order: { created_at: 'DESC' },
-      take: limit,
+  // Public: the customer can cancel until staff start making it.
+  async cancel(id: string, token: unknown) {
+    const o = await this.own(id, token);
+    if (o.status !== 'placed') throw new BadRequestException('Your order is already being prepared. Please ask a team member.');
+    o.status = 'cancelled';
+    await this.orders.save(o);
+    return { ok: true };
+  }
+
+  private branchFor(raw: unknown, staff: StaffUser) {
+    const branchId = typeof raw === 'string' ? raw : '';
+    if (!UUID.test(branchId)) throw new BadRequestException('Choose a branch');
+    if (staff.role !== 'admin' && staff.assigned_branch_id && staff.assigned_branch_id !== branchId) {
+      throw new ForbiddenException('You can only see your own branch');
+    }
+    return branchId;
+  }
+
+  // Staff: open orders (oldest first) plus the last two hours of finished ones.
+  async list(branchRaw: unknown, staff: StaffUser) {
+    const branchId = this.branchFor(branchRaw, staff);
+    const [branch, open, finished] = await Promise.all([
+      this.branches.findOne({ where: { id: branchId } }),
+      this.orders.find({ where: { branch_id: branchId, status: In([...OPEN]) }, relations: ['items'], order: { created_at: 'ASC' }, take: MAX_OPEN_PER_BRANCH }),
+      this.orders.find({
+        where: { branch_id: branchId, status: In(['completed', 'cancelled']), created_at: MoreThanOrEqual(new Date(Date.now() - 2 * 3600_000)) },
+        relations: ['items'],
+        order: { created_at: 'DESC' },
+        take: 30,
+      }),
+    ]);
+    const row = (o: Order) => ({
+      id: o.id,
+      order_no: o.order_no,
+      customer_name: o.customer_name,
+      phone: o.phone,
+      table: o.table_number,
+      status: o.status,
+      total: Number(o.total),
+      created_at: o.created_at,
+      items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, options: i.options })),
     });
+    return { ordering_enabled: !!branch?.ordering_enabled, open: open.map(row), finished: finished.map(row) };
+  }
+
+  async setStatus(id: string, statusRaw: unknown, staff: StaffUser) {
+    if (!UUID.test(id)) throw new NotFoundException('Order not found');
+    const order = await this.orders.findOne({ where: { id } });
+    if (!order) throw new NotFoundException('Order not found');
+    this.branchFor(order.branch_id, staff);
+    const status = String(statusRaw);
+    if (!(NEXT[order.status] ?? []).includes(status)) throw new BadRequestException(`Cannot move an order from ${order.status} to ${status}`);
+    order.status = status as Order['status'];
+    await this.orders.save(order);
+    return { ok: true, status };
+  }
+
+  async setOrdering(branchRaw: unknown, enabled: unknown, staff: StaffUser) {
+    const branchId = this.branchFor(branchRaw, staff);
+    const branch = await this.branches.findOne({ where: { id: branchId } });
+    if (!branch) throw new NotFoundException('Branch not found');
+    branch.ordering_enabled = enabled === true;
+    await this.branches.save(branch);
+    return { ordering_enabled: branch.ordering_enabled };
   }
 }

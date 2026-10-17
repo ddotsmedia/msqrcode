@@ -23,7 +23,7 @@ const TAB_LABELS: Record<Tab, string> = {
   branches: 'Branches',
   'menu-import': 'Menu import',
   dashboard: 'Insights',
-  kitchen: 'Kitchen',
+  kitchen: 'Table orders',
   promotions: 'Offers',
   loyalty: 'Loyalty',
 };
@@ -304,7 +304,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
       )}
 
       {tab === 'kitchen' && branchId && (
-        <main className="max-w-full p-0"><KitchenPage token={token} branchId={branchId} /></main>
+        <main className="max-w-6xl mx-auto"><KitchenPage token={token} branchId={branchId} branches={branches} onBranch={setBranchId} /></main>
       )}
 
       {tab === 'availability' && (
