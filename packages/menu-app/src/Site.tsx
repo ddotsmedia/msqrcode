@@ -14,6 +14,7 @@ import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
+import CareersPage from './CareersPage';
 import { BrewGuidePage, BrewGuidesPage } from './BrewGuides';
 import { Crescent, useRamadan } from './lib/season';
 import { AMENITIES, amenityList } from './lib/amenities';
@@ -113,6 +114,7 @@ const NAV: [string, string][] = [
 const MORE: [string, string][] = [
   ['/brew', 'Brew guides'],
   ['/catering', 'Catering'],
+  ['/careers', 'Careers'],
   ['/about', 'About'],
   ['/gallery', 'Gallery'],
   ['/faq', 'FAQ'],
@@ -170,7 +172,7 @@ function SiteFooter() {
         </div>
         <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/branches', 'Branches'], ['/brew', 'Brew guides'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
         <FooterCol title="Rewards" links={[['/loyalty', 'My card'], ['/scan', 'Scan a QR'], ['/faq', 'FAQ']]} />
-        <FooterCol title="Company" links={[['/about', 'About'], ['/catering', 'Catering'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
+        <FooterCol title="Company" links={[['/about', 'About'], ['/catering', 'Catering'], ['/careers', 'Careers'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
       </div>
       <div className="max-w-6xl mx-auto px-4 border-t border-brand-700 py-6 flex justify-between text-[13px] text-brand-300">
         <span>© {new Date().getFullYear()} Milestones Coffee</span>
@@ -1093,6 +1095,7 @@ export function SiteRoutes() {
         <Route path="blog" element={<Navigate to="/news" replace />} />
         <Route path="faq" element={<FaqPage />} />
         <Route path="catering" element={<CateringPage />} />
+        <Route path="careers" element={<CareersPage />} />
         <Route path="brew" element={<BrewGuidesPage />} />
         <Route path="brew/:slug" element={<BrewGuidePage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />
