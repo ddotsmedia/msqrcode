@@ -10,6 +10,8 @@ export interface Offer extends HappyHour {
   promo_code?: string | null;
   featured?: boolean;
   theme?: string | null; // national_day | ramadan | eid | new_year
+  combo_product_ids?: string[] | null; // combo deal: these items together…
+  combo_price?: number | string | null; // …for this price (AED)
   created_at?: string;
 }
 

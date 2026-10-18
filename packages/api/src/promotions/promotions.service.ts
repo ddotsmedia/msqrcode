@@ -66,8 +66,18 @@ export class PromotionsService {
     if (image && !/^https:\/\/[^\s"'<>]{4,490}$/.test(image)) throw new BadRequestException('Image must be an https:// link');
     const code = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
     if (code && !CODE_RE.test(code)) throw new BadRequestException('Code must be 3 to 20 letters, numbers or dashes');
+    // Optional combo: 2 to 4 different products sold together for one price.
+    let combo: Partial<Promotion> = {};
+    if (Array.isArray(body.combo_product_ids) && body.combo_product_ids.length) {
+      const ids = [...new Set(body.combo_product_ids.map(String).filter((c) => UUID.test(c)))];
+      const price = Number(body.combo_price);
+      if (ids.length < 2 || ids.length > 4) throw new BadRequestException('A combo needs 2 to 4 different items');
+      if (!(price > 0 && price < 1000)) throw new BadRequestException('Combo price must be between 1 and 999 AED');
+      combo = { combo_product_ids: ids, combo_price: Math.round(price * 100) / 100 };
+    }
     const row = this.promos.create({
       ...pricing,
+      ...combo,
       image_url: image || null,
       promo_code: code || null,
       featured: body.featured === true,

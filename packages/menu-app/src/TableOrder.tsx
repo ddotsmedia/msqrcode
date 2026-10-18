@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { useLang } from './i18n';
 import { pickupSlots } from './lib/hours';
+import { comboSavings, type Combo } from './lib/combos';
 
 // Ordering from the table QR menu: cart, "send to the counter" and live status. Payment is at the counter.
 
@@ -50,6 +51,7 @@ interface Tracked {
   order_no: string;
   status: string;
   total: number;
+  discounts?: { title: string; sets: number; amount: number }[];
   loyalty?: 'linked' | 'stamped' | null;
   items: {
     product_id?: string;
@@ -266,6 +268,7 @@ export function TableOrder({
   hours,
   timezone = 'Asia/Dubai',
   reprice,
+  combos = [],
 }: {
   branchId: string;
   table: string | null;
@@ -274,8 +277,12 @@ export function TableOrder({
   timezone?: string;
   // Re-prices a past line from today's menu (null when it is gone or sold out).
   reprice?: (line: Omit<CartLine, 'key'>) => Omit<CartLine, 'key'> | null;
+  // Combo deals valid at this branch (the server applies the same rule).
+  combos?: Combo[];
 }) {
   const { t } = useLang();
+  const combo = comboSavings(cart.lines, combos);
+  const payable = Math.round((cart.total - combo.amount) * 100) / 100;
   const pickup = !table;
   // Live wait estimate from the branch's queue; pickup times start no earlier than this.
   const [wait, setWait] = useState<number | null>(null);
@@ -519,7 +526,7 @@ export function TableOrder({
           className="mb-2 flex w-full items-center justify-between rounded-xl bg-copper-500 px-4 py-3 text-sm font-semibold text-white hover:bg-copper-700"
         >
           <span>
-            {cart.count === 1 ? t('orderItem') : t('orderItems').replace('{n}', String(cart.count))} · {money(cart.total)}
+            {cart.count === 1 ? t('orderItem') : t('orderItems').replace('{n}', String(cart.count))} · {money(payable)}
           </span>
           <span>{t('orderReview')} →</span>
         </button>
@@ -613,9 +620,18 @@ export function TableOrder({
                           />
                         </label>
                       )}
+                      {combo.applied.map((c) => (
+                        <p key={c.title} className="mt-3 flex justify-between rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+                          <span>
+                            🎁 {c.title}
+                            {c.sets > 1 ? ` ×${c.sets}` : ''}
+                          </span>
+                          <span>−{money(c.amount)}</span>
+                        </p>
+                      ))}
                       <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-3">
                         <span className="font-semibold text-slate-700">{t('orderTotal')}</span>
-                        <span className="text-xl font-bold text-brand-900">{money(cart.total)}</span>
+                        <span className="text-xl font-bold text-brand-900">{money(payable)}</span>
                       </div>
                       <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>
                       {rewardsToken() ? (
@@ -632,7 +648,7 @@ export function TableOrder({
                         disabled={busy || (pickup && !slot)}
                         className="mt-4 w-full rounded-xl bg-brand-700 py-3.5 font-semibold text-white hover:bg-brand-900 disabled:opacity-60"
                       >
-                        {busy ? t('orderSending') : `${t('orderSend')} · ${money(cart.total)}`}
+                        {busy ? t('orderSending') : `${t('orderSend')} · ${money(payable)}`}
                       </button>
                     </>
                   )}
@@ -685,6 +701,12 @@ export function TableOrder({
                           </li>
                         ))}
                       </ul>
+                      {(detail.discounts ?? []).map((c) => (
+                        <p key={c.title} className="mt-2 flex justify-between text-sm font-semibold text-green-800">
+                          <span>🎁 {c.title}</span>
+                          <span>−{money(c.amount)}</span>
+                        </p>
+                      ))}
                       <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-semibold">
                         <span>{t('orderTotal')}</span>
                         <span>{money(detail.total)}</span>

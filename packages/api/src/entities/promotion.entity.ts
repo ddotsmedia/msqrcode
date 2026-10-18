@@ -55,6 +55,13 @@ export class Promotion {
   @Column({ type: 'varchar', length: 20, nullable: true })
   theme: string | null;
 
+  // Combo deal: these 2–4 products together for combo_price (AED).
+  @Column({ type: 'simple-array', nullable: true })
+  combo_product_ids: string[] | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  combo_price: number | null;
+
   @CreateDateColumn()
   created_at: Date;
 }

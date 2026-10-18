@@ -13,6 +13,7 @@ import { NotifyButton } from './NotifyButton';
 import { AddToOrder, TableOrder, groupsOf, unitPrice, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
 import { bestDiscount, discounted, isLive, type HappyHour } from './lib/happyHour';
 import { timing, whenLabel } from './lib/offers';
+import type { Combo } from './lib/combos';
 import { Crescent, useRamadan } from './lib/season';
 import { motion, useReducedMotion } from 'motion/react';
 
@@ -366,6 +367,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [showText, setShowText] = useState(false);
   // Happy-hour deals for this branch; re-checked every minute so prices change on time.
   const [deals, setDeals] = useState<HappyHour[]>([]);
+  const [combos, setCombos] = useState<(Combo & { id: string })[]>([]);
+  const [comboNote, setComboNote] = useState<string | null>(null);
   // "Most loved": items guests rated thumbs up after collecting their order.
   const [loved, setLoved] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -382,7 +385,11 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   useEffect(() => {
     axios
       .get(`${API_BASE_URL}/promotions`, { params: branchId ? { branch_id: branchId } : {} })
-      .then((r) => setDeals(Array.isArray(r.data) ? r.data.filter((p: HappyHour) => p.discount_percent) : []))
+      .then((r) => {
+        const list = Array.isArray(r.data) ? r.data : [];
+        setDeals(list.filter((p: HappyHour) => p.discount_percent));
+        setCombos(list.filter((p: Combo) => p.combo_price && (p.combo_product_ids ?? []).length >= 2));
+      })
       .catch(() => setDeals([]));
   }, [branchId]);
   const dealFor = (p: Product) => bestDiscount(deals, p.category_id, new Date(now));
@@ -394,6 +401,21 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
     if (dealId) window.scrollTo(0, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // From the Offers page: /menu/<branch>?combo=<offer id> puts the combo's items in the order once.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('combo');
+    const c = id ? combos.find((x) => x.id === id) : undefined;
+    // Same rules as canOrder / canPickup below; wait until the menu has loaded.
+    const ordering = table ? !!branch?.ordering_enabled : !!branch?.pickup_enabled;
+    if (loading || !c || !products.length || !branchId || !ordering) return;
+    const lines = (c.combo_product_ids ?? []).map((pid) => reprice({ product_id: pid, name: '', qty: 1, unit: 0, choices: {}, labels: [], note: '' }));
+    lines.forEach((l) => l && cart.add(l));
+    setComboNote(lines.every(Boolean) ? t('comboAdded').replace('{t}', c.title) : t('comboSomeMissing'));
+    const url = new URL(window.location.href);
+    url.searchParams.delete('combo');
+    window.history.replaceState(null, '', url.toString());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combos, products, branch, loading]);
   const pickCategory = (id: string | null) => {
     setDealId(null);
     setSelectedCategory(id);
@@ -762,6 +784,15 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           </div>
         )}
 
+        {comboNote && (
+          <p role="status" className="mb-6 flex items-center justify-between gap-3 rounded-2xl bg-green-50 px-5 py-4 font-semibold text-green-800">
+            🎁 {comboNote}
+            <button type="button" onClick={() => setComboNote(null)} aria-label="Close" className="text-green-700">
+              ✕
+            </button>
+          </p>
+        )}
+
         {focus && (() => {
           const at = timing(focus, new Date(now));
           return (
@@ -893,7 +924,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
         <>
           <div className={canOrder ? 'h-44' : 'h-28'} aria-hidden="true" />
           <TableService
-            extra={canOrder ? <TableOrder branchId={branchId} table={table} cart={cart} reprice={reprice} /> : null}
+            extra={canOrder ? <TableOrder branchId={branchId} table={table} cart={cart} reprice={reprice} combos={combos} /> : null}
             branchId={branchId}
             branchName={branch.name}
             table={table}
@@ -908,7 +939,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           <div className="h-32" aria-hidden="true" />
           <div className="fixed inset-x-0 bottom-[72px] md:bottom-4 z-40 px-3">
             <div className="mx-auto max-w-md rounded-2xl border border-brand-100 bg-white p-3 pb-1 shadow-[0_12px_32px_rgba(10,26,51,0.18)]">
-              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} reprice={reprice} />
+              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} reprice={reprice} combos={combos} />
             </div>
           </div>
         </>

@@ -20,6 +20,8 @@ interface Promotion {
   promo_code?: string | null;
   featured?: boolean;
   theme?: string | null;
+  combo_product_ids?: string[] | null;
+  combo_price?: number | string | null;
 }
 
 // Occasion looks for the website's Offers page. Templates fill the form; check the dates before saving.
@@ -41,7 +43,7 @@ const THEMES: { id: string; label: string; icon: string; template: { title: stri
 ];
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false, theme: '' };
+const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false, theme: '', combo: false, combo_product_ids: [] as string[], combo_price: '' };
 
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
@@ -51,6 +53,7 @@ export default function PromotionsPage({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; base_price: number | string; category_id: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   function load() {
@@ -61,6 +64,7 @@ export default function PromotionsPage({ token }: { token: string }) {
     load();
     api<BranchRow[]>('/admin/branches', token).then(setBranches).catch(() => undefined);
     api<{ id: string; name: string }[]>('/categories', token).then(setCategories).catch(() => undefined);
+    api<{ id: string; name: string; base_price: number | string; category_id: string }[]>('/products', token).then(setProducts).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
@@ -81,6 +85,7 @@ export default function PromotionsPage({ token }: { token: string }) {
           promo_code: form.promo_code.trim() || null,
           featured: form.featured,
           theme: form.theme || null,
+          ...(form.combo ? { combo_product_ids: form.combo_product_ids, combo_price: Number(form.combo_price) } : {}),
           ...(form.happy
             ? { discount_percent: Number(form.discount_percent), start_time: form.start_time || null, end_time: form.end_time || null, days: form.days, category_ids: form.category_ids }
             : {}),
@@ -104,7 +109,7 @@ export default function PromotionsPage({ token }: { token: string }) {
     }
   }
 
-  const toggleIn = (key: 'days' | 'category_ids', v: string) =>
+  const toggleIn = (key: 'days' | 'category_ids' | 'combo_product_ids', v: string) =>
     setForm((f) => ({ ...f, [key]: f[key].includes(v) ? f[key].filter((x) => x !== v) : [...f[key], v] }));
   const chip = (on: boolean) => `rounded-full border px-3 py-1 text-sm ${on ? 'border-brand-600 bg-brand-600 text-white' : 'border-gray-300 text-gray-700'}`;
   const happyText = (p: Promotion) =>
@@ -179,6 +184,42 @@ export default function PromotionsPage({ token }: { token: string }) {
           Feature in the big slider at the top of the website's Offers page
         </label>
         <label className="md:col-span-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <input type="checkbox" checked={form.combo} onChange={(e) => setForm({ ...form, combo: e.target.checked })} />
+          Combo deal — 2 to 4 items together for one price (taken off table and pickup orders automatically)
+        </label>
+        {form.combo && (
+          <div className="md:col-span-2 space-y-3 rounded-lg border border-gray-200 p-3">
+            <p className="text-sm text-gray-600">Items in the combo ({form.combo_product_ids.length}/4)</p>
+            <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
+              {products.map((p) => {
+                const on = form.combo_product_ids.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={on}
+                    disabled={!on && form.combo_product_ids.length >= 4}
+                    onClick={() => toggleIn('combo_product_ids', p.id)}
+                    className={`${chip(on)} disabled:opacity-40`}
+                  >
+                    {p.name} · {Number(p.base_price).toFixed(2)}
+                  </button>
+                );
+              })}
+            </div>
+            {(() => {
+              const normal = form.combo_product_ids.reduce((s, id) => s + Number(products.find((p) => p.id === id)?.base_price ?? 0), 0);
+              const price = Number(form.combo_price);
+              return (
+                <label className="block text-sm text-gray-600">
+                  Combo price (AED){normal > 0 && <span className="ml-2 text-gray-500">— normally {normal.toFixed(2)}{price > 0 && price < normal ? `, customers save ${(normal - price).toFixed(2)}` : ''}</span>}
+                  <input type="number" min={1} max={999} step="0.5" required value={form.combo_price} onChange={(e) => setForm({ ...form, combo_price: e.target.value })} className={`${inputClass} max-w-[10rem]`} />
+                </label>
+              );
+            })()}
+          </div>
+        )}
+        <label className="md:col-span-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
           <input type="checkbox" checked={form.happy} onChange={(e) => setForm({ ...form, happy: e.target.checked })} />
           Happy hour price — take a % off the menu prices at set times (applies to table and pickup orders)
         </label>
@@ -226,6 +267,11 @@ export default function PromotionsPage({ token }: { token: string }) {
                 {p.promo_code && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">{p.promo_code}</span>}
               </p>
               {happyText(p) && <p className="text-sm font-semibold text-amber-700">Happy hour {happyText(p)}</p>}
+              {p.combo_price && (
+                <p className="text-sm font-semibold text-green-700">
+                  Combo AED {Number(p.combo_price).toFixed(2)}: {(p.combo_product_ids ?? []).map((id) => products.find((x) => x.id === id)?.name ?? '?').join(' + ')}
+                </p>
+              )}
               <p className="text-xs text-gray-500">{branchName(p.branch_id)}{p.starts_on || p.ends_on ? ` · ${p.starts_on ?? ''} → ${p.ends_on ?? ''}` : ''}</p>
             </div>
             <button type="button" onClick={() => toggle(p)} className="text-sm border rounded px-3 py-1">

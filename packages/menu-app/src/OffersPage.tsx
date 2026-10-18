@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
@@ -11,6 +11,7 @@ interface Branch {
   id: string;
   name: string;
   status?: string;
+  pickup_enabled?: boolean;
 }
 interface Category {
   id: string;
@@ -22,6 +23,7 @@ interface Product {
   category_id: string;
   base_price: number | string;
   status?: string;
+  image_url?: string | null;
 }
 interface Rules {
   stamps_target: number;
@@ -52,7 +54,7 @@ interface Card {
   challenge?: { target: number; bonus: number; visits: number; done: boolean } | null;
 }
 
-type Tab = 'all' | 'live' | 'happy' | 'limited';
+type Tab = 'all' | 'live' | 'happy' | 'combo' | 'limited';
 type Sort = 'smart' | 'discount' | 'ending';
 
 const GRADIENTS = [
@@ -76,6 +78,7 @@ const hhmm = (min: number) => `${String(Math.floor(min / 60) % 24).padStart(2, '
 const toMin = (s?: string | null, fallback = 0) => (s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : fallback);
 const ORDER = [1, 2, 3, 4, 5, 6, 0]; // schedule rows Monday first
 const SITE = 'https://coffeesales.ae/offers';
+const isCombo = (o: Offer) => !!o.combo_price && (o.combo_product_ids ?? []).filter(Boolean).length >= 2;
 // Order now: the branch menu (or the full menu), narrowed to a happy hour's items.
 const orderLink = (o: Offer) => `${o.branch_id ? `/menu/${o.branch_id}` : '/menu'}${isTimed(o) ? `?deal=${o.id}` : ''}`;
 
@@ -164,6 +167,7 @@ export default function OffersPage() {
       if (cat && (o.category_ids ?? []).filter(Boolean).length && !(o.category_ids ?? []).includes(cat)) return false;
       if (tab === 'live') return liveNow(o, now);
       if (tab === 'happy') return isTimed(o);
+      if (tab === 'combo') return isCombo(o);
       if (tab === 'limited') return !!o.ends_on;
       return true;
     });
@@ -261,9 +265,12 @@ export default function OffersPage() {
                   ['all', 'All'],
                   ['live', 'Live now'],
                   ['happy', 'Happy hours'],
+                  ['combo', 'Combos'],
                   ['limited', 'Limited time'],
                 ] as const
-              ).map(([id, label]) => (
+              )
+                .filter(([id]) => id !== 'combo' || all.some(isCombo))
+                .map(([id, label]) => (
                 <button
                   key={id}
                   role="tab"
@@ -316,7 +323,7 @@ export default function OffersPage() {
             <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((o) => (
                 <li key={o.id}>
-                  <OfferCard o={o} now={now} catName={catName} branchName={branchName} onCopy={copy} onShare={share} onCalendar={calendar} />
+                  <OfferCard o={o} now={now} catName={catName} branchName={branchName} onCopy={copy} onShare={share} onCalendar={calendar} products={products} branches={branches} />
                 </li>
               ))}
             </ul>
@@ -480,6 +487,8 @@ function OfferCard({
   onCopy,
   onShare,
   onCalendar,
+  products,
+  branches,
 }: {
   o: Offer;
   now: Date;
@@ -488,7 +497,16 @@ function OfferCard({
   onCopy: (code: string) => void;
   onShare: (o: Offer) => void;
   onCalendar: (o: Offer) => void;
+  products: Product[];
+  branches: Branch[];
 }) {
+  const navigate = useNavigate();
+  const [picking, setPicking] = useState(false);
+  const comboItems = isCombo(o) ? (o.combo_product_ids ?? []).map((id) => products.find((p) => p.id === id)).filter((p): p is Product => !!p) : [];
+  const normal = comboItems.reduce((s, p) => s + Number(p.base_price), 0);
+  // Combo: order from the offer's branch, the only branch taking orders, or let the visitor pick one.
+  const orderBranches = o.branch_id ? branches.filter((b) => b.id === o.branch_id) : branches.filter((b) => b.pickup_enabled);
+  const addCombo = (branchId: string) => navigate(`/menu/${branchId}?combo=${o.id}`);
   const cats = (o.category_ids ?? []).filter(Boolean).map(catName).filter(Boolean);
   const isNew = o.created_at && Date.now() - Date.parse(o.created_at) < 7 * 864e5;
   const live = liveNow(o, now);
@@ -534,6 +552,40 @@ function OfferCard({
             </span>
           )}
         </div>
+        {comboItems.length >= 2 && (
+          <div className="rounded-2xl bg-cream p-3">
+            <ul className="flex flex-wrap items-center gap-2">
+              {comboItems.map((p, k) => (
+                <li key={p.id} className="flex items-center gap-2">
+                  {k > 0 && (
+                    <span className="font-bold text-copper-700" aria-hidden="true">
+                      +
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1.5 rounded-full bg-white py-1 pl-1 pr-3 text-sm font-medium text-brand-900">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} className="h-7 w-7 rounded-full bg-brand-50 object-cover" />
+                    ) : (
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-brand-50 text-xs" aria-hidden="true">
+                        ☕
+                      </span>
+                    )}
+                    {p.name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 flex flex-wrap items-baseline gap-x-2">
+              <span className="text-2xl font-bold text-brand-900">{money(Number(o.combo_price))}</span>
+              {normal > Number(o.combo_price) && (
+                <>
+                  <s className="text-sm text-slate-500">{money(normal)}</s>
+                  <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white">Save {money(normal - Number(o.combo_price))}</span>
+                </>
+              )}
+            </p>
+          </div>
+        )}
         {o.promo_code && (
           <button
             type="button"
@@ -548,10 +600,32 @@ function OfferCard({
             <span className="text-xs font-semibold text-copper-700">Copy</span>
           </button>
         )}
+        {picking && (
+          <div className="rounded-2xl border border-brand-100 p-3">
+            <p className="mb-2 text-sm font-semibold text-brand-900">Pick up from</p>
+            <div className="flex flex-wrap gap-2">
+              {orderBranches.map((b) => (
+                <button key={b.id} type="button" onClick={() => addCombo(b.id)} className="rounded-full bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-800 hover:bg-brand-100">
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mt-auto flex items-center gap-2 pt-1">
-          <Link to={orderLink(o)} className="flex-1 rounded-full bg-brand-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-900">
-            Order now
-          </Link>
+          {comboItems.length >= 2 && orderBranches.length ? (
+            <button
+              type="button"
+              onClick={() => (orderBranches.length === 1 ? addCombo(orderBranches[0].id) : setPicking((x) => !x))}
+              className="flex-1 rounded-full bg-copper-500 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-copper-700"
+            >
+              Add combo to order
+            </button>
+          ) : (
+            <Link to={orderLink(o)} className="flex-1 rounded-full bg-brand-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-900">
+              {comboItems.length >= 2 ? 'See on menu' : 'Order now'}
+            </Link>
+          )}
           <button type="button" onClick={() => onShare(o)} aria-label={`Share ${o.title}`} className="grid h-10 w-10 place-items-center rounded-full border border-brand-100 text-brand-700 hover:bg-brand-50">
             <Icon name="nav" className="h-4 w-4" />
           </button>
