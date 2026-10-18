@@ -6,6 +6,7 @@ import { Promotion } from '../entities/promotion.entity';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const CODE_RE = /^[A-Z0-9-]{3,20}$/;
+export const THEMES = ['national_day', 'ramadan', 'eid', 'new_year'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function today(): string {
@@ -70,6 +71,7 @@ export class PromotionsService {
       image_url: image || null,
       promo_code: code || null,
       featured: body.featured === true,
+      theme: THEMES.find((t) => t === body.theme) ?? null,
       title,
       body: typeof body.body === 'string' && body.body.trim() ? body.body.trim().slice(0, 500) : null,
       branch_id: typeof body.branch_id === 'string' && body.branch_id ? body.branch_id : null,

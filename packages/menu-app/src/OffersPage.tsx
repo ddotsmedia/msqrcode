@@ -61,6 +61,15 @@ const GRADIENTS = [
   'from-[#1f4a7a] via-brand-700 to-brand-900',
   'from-copper-700 via-brand-700 to-[#0b1a33]',
 ];
+// Occasion looks set in admin → Offers.
+const THEMES: Record<string, { label: string; icon: string; gradient: string; marks: string[]; ribbon: string }> = {
+  national_day: { label: 'UAE National Day', icon: '🇦🇪', gradient: 'from-[#00732f] via-[#0b1a33] to-[#1f1f1f]', marks: ['🇦🇪', '✨', '🎉'], ribbon: 'Happy National Day! 🇦🇪' },
+  ramadan: { label: 'Ramadan', icon: '🌙', gradient: 'from-[#0b1a33] via-[#1d2f5c] to-[#3a2a5c]', marks: ['🌙', '✨', '⭐', '🏮'], ribbon: 'Ramadan Kareem 🌙' },
+  eid: { label: 'Eid', icon: '✨', gradient: 'from-[#7a5230] via-[#a87a50] to-[#d9b88f]', marks: ['✨', '🌙', '🎉'], ribbon: 'Eid Mubarak ✨' },
+  new_year: { label: 'New Year', icon: '🎆', gradient: 'from-[#0b1a33] via-[#3b1d5c] to-[#7a1f5c]', marks: ['🎆', '🎇', '✨'], ribbon: 'Happy New Year 🎆' },
+};
+const themeOf = (o: Offer) => (o.theme ? THEMES[o.theme] : undefined);
+
 const gradientFor = (id: string) => GRADIENTS[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % GRADIENTS.length];
 const money = (n: number) => `AED ${n.toFixed(2)}`;
 const hhmm = (min: number) => `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
@@ -175,7 +184,7 @@ export default function OffersPage() {
   const slides = useMemo(() => {
     // Featured first, then offers with pictures, then the biggest discounts.
     return [...all]
-      .sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(!!b.image_url) - Number(!!a.image_url) || (b.discount_percent ?? 0) - (a.discount_percent ?? 0))
+      .sort((a, b) => Number(!!b.featured) - Number(!!a.featured) || Number(!!b.theme) - Number(!!a.theme) || Number(!!b.image_url) - Number(!!a.image_url) || (b.discount_percent ?? 0) - (a.discount_percent ?? 0))
       .slice(0, 5);
   }, [offers]);
 
@@ -226,6 +235,15 @@ export default function OffersPage() {
           </span>
         )}
       </header>
+
+      {(() => {
+        // Festive ribbon while an occasion offer is on.
+        const o = [...all].sort((a, b) => Number(!!b.featured) - Number(!!a.featured)).find((x) => themeOf(x) && liveNow(x, now));
+        const look = o && themeOf(o);
+        return look ? (
+          <p className={`-mt-4 rounded-2xl bg-gradient-to-r ${look.gradient} px-5 py-3 text-center font-display text-xl text-white`}>{look.ribbon}</p>
+        ) : null;
+      })()}
 
       {error && <p className="rounded-xl bg-red-50 p-3 text-red-700">Could not load offers. Please try again.</p>}
       {!error && offers === null && <div className="h-64 animate-pulse rounded-[28px] bg-brand-100/60" aria-label="Loading offers" />}
@@ -421,10 +439,28 @@ function TimeBar({ o, now }: { o: Offer; now: Date }) {
 
 function Visual({ o, className, children }: { o: Offer; className: string; children?: React.ReactNode }) {
   const [broken, setBroken] = useState(false);
+  const look = themeOf(o);
   return (
-    <div className={`relative overflow-hidden bg-gradient-to-br ${gradientFor(o.id)} ${className}`}>
+    <div className={`relative overflow-hidden bg-gradient-to-br ${look?.gradient ?? gradientFor(o.id)} ${className}`}>
+      {o.theme === 'national_day' && (
+        // UAE flag colours along the bottom edge.
+        <span aria-hidden="true" className="absolute inset-x-0 bottom-0 z-10 flex h-1.5">
+          <span className="w-1/4 bg-[#c8102e]" />
+          <span className="flex-1 bg-[#00732f]" />
+          <span className="flex-1 bg-white" />
+          <span className="flex-1 bg-black" />
+        </span>
+      )}
       {o.image_url && !broken ? (
         <img src={o.image_url} alt="" loading="lazy" onError={() => setBroken(true)} className="absolute inset-0 h-full w-full object-cover" />
+      ) : look ? (
+        <span aria-hidden="true" className="absolute inset-0 select-none">
+          {look.marks.concat(look.marks).map((m, k) => (
+            <span key={k} className="absolute text-3xl opacity-40" style={{ left: `${(k * 37 + 8) % 92}%`, top: `${(k * 53 + 6) % 80}%`, transform: `rotate(${(k * 29) % 40 - 20}deg)` }}>
+              {m}
+            </span>
+          ))}
+        </span>
       ) : (
         <span aria-hidden="true" className="absolute -right-6 -top-8 select-none text-[9rem] leading-none opacity-15">
           ☕
@@ -463,6 +499,11 @@ function OfferCard({
           <div className="flex flex-wrap gap-1.5">
             {isNew && <span className="rounded-full bg-yellow-300 px-2.5 py-0.5 text-[11px] font-bold text-yellow-950">NEW</span>}
             {o.featured && <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-bold text-brand-900">★ Featured</span>}
+            {themeOf(o) && (
+              <span className="rounded-full bg-white/90 px-2.5 py-0.5 text-[11px] font-bold text-brand-900">
+                {themeOf(o)!.icon} {themeOf(o)!.label}
+              </span>
+            )}
           </div>
           <DiscountBadge o={o} />
         </div>
@@ -557,7 +598,7 @@ function Slider({ slides, now }: { slides: Offer[]; now: Date }) {
       <Visual key={o.id} o={o} className="min-h-[300px] rounded-[28px] md:min-h-[360px]">
         <div className="relative flex h-full min-h-[300px] flex-col justify-end gap-4 p-6 text-white md:min-h-[360px] md:flex-row md:items-end md:justify-between md:p-10">
           <div className="max-w-xl animate-[fadein_.5s_ease]">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-copper-300">{o.featured ? 'Featured offer' : 'Top offer'}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-copper-300">{themeOf(o) ? `${themeOf(o)!.icon} ${themeOf(o)!.label}` : o.featured ? 'Featured offer' : 'Top offer'}</p>
             <h2 className="mt-2 font-display text-3xl leading-tight md:text-5xl">{o.title}</h2>
             {o.body && <p className="mt-2 line-clamp-2 text-white/85 md:text-lg">{o.body}</p>}
             <div className="mt-4 flex flex-wrap items-center gap-3">

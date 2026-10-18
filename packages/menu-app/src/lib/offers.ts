@@ -9,6 +9,7 @@ export interface Offer extends HappyHour {
   image_url?: string | null;
   promo_code?: string | null;
   featured?: boolean;
+  theme?: string | null; // national_day | ramadan | eid | new_year
   created_at?: string;
 }
 

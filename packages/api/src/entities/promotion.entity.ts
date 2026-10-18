@@ -51,6 +51,10 @@ export class Promotion {
   @Column({ type: 'boolean', default: false })
   featured: boolean;
 
+  // Occasion look on the Offers page: national_day, ramadan, eid, new_year (null = normal).
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  theme: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 }
