@@ -49,6 +49,8 @@ const hhmm = (min: number) => `${String(Math.floor(min / 60) % 24).padStart(2, '
 const toMin = (s?: string | null, fallback = 0) => (s ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : fallback);
 const ORDER = [1, 2, 3, 4, 5, 6, 0]; // schedule rows Monday first
 const SITE = 'https://coffeesales.ae/offers';
+// Order now: the branch menu (or the full menu), narrowed to a happy hour's items.
+const orderLink = (o: Offer) => `${o.branch_id ? `/menu/${o.branch_id}` : '/menu'}${isTimed(o) ? `?deal=${o.id}` : ''}`;
 
 function readToken() {
   try {
@@ -486,7 +488,7 @@ function OfferCard({
           </button>
         )}
         <div className="mt-auto flex items-center gap-2 pt-1">
-          <Link to={o.branch_id ? `/menu/${o.branch_id}` : '/menu'} className="flex-1 rounded-full bg-brand-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-900">
+          <Link to={orderLink(o)} className="flex-1 rounded-full bg-brand-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-900">
             Order now
           </Link>
           <button type="button" onClick={() => onShare(o)} aria-label={`Share ${o.title}`} className="grid h-10 w-10 place-items-center rounded-full border border-brand-100 text-brand-700 hover:bg-brand-50">
@@ -540,7 +542,7 @@ function Slider({ slides, now }: { slides: Offer[]; now: Date }) {
             {o.body && <p className="mt-2 line-clamp-2 text-white/85 md:text-lg">{o.body}</p>}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Status o={o} now={now} light />
-              <Link to={o.branch_id ? `/menu/${o.branch_id}` : '/menu'} className="rounded-full bg-copper-500 px-5 py-2.5 font-semibold hover:bg-copper-700">
+              <Link to={orderLink(o)} className="rounded-full bg-copper-500 px-5 py-2.5 font-semibold hover:bg-copper-700">
                 Order now
               </Link>
             </div>
