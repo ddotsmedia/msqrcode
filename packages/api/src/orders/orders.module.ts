@@ -16,6 +16,7 @@ import { OrdersController } from './orders.controller';
 @Module({
   imports: [TypeOrmModule.forFeature([Order, OrderItem, Product, Branch, BranchProductPrice, ProductAvailability, Promotion, LoyaltyCard]), LoyaltyModule, CorporateModule],
   providers: [OrdersService],
+  exports: [OrdersService],
   controllers: [OrdersController],
 })
 export class OrdersModule {}
