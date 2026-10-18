@@ -3,7 +3,7 @@ import { POSTS } from './lib/posts';
 import { setMetaDescription, setPageTitle } from './lib/seo';
 
 const fmt = (d: string) =>
-  new Date(`${d}T00:00:00+04:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  new Date(`${d}T00:00:00+04:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Dubai' });
 
 export function BlogListPage() {
   setPageTitle('Blog');

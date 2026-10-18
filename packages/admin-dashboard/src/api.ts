@@ -32,6 +32,11 @@ export async function api<T>(path: string, token: string | null, init: RequestIn
     ...init,
     headers: { ...headers, ...((init.headers as Record<string, string>) ?? {}) },
   });
+  if (res.status === 401 && token) {
+    // Expired or revoked sign-in: drop it and go back to the login screen.
+    saveToken(null);
+    location.reload();
+  }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {

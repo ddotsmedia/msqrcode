@@ -13,7 +13,7 @@ export class MenuImportController {
   constructor(private import_: MenuImportService) {}
 
   @Post('import')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5_000_000 } }))
   async importMenu(
     @UploadedFile() file: any,
     @Query('dry_run') dryRun: string = 'true',

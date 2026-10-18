@@ -1,3 +1,4 @@
+import { knownTable } from '../branches/known-table';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
@@ -33,6 +34,7 @@ export class ServiceRequestsService {
     if (!UUID.test(branchId) || !TABLE.test(table) || !type) throw new BadRequestException('Scan the QR code on your table');
     const branch = await this.branches.findOne({ where: { id: branchId } });
     if (!branch || branch.status !== 'active') throw new BadRequestException('Scan the QR code on your table');
+    if (!(await knownTable(this.branches.manager, branchId, table))) throw new BadRequestException('Scan the QR code on your table');
 
     const recent = await this.requests.findOne({
       where: { branch_id: branchId, table_number: table, type, status: 'open', created_at: MoreThanOrEqual(new Date(Date.now() - REPEAT_MS)) },
@@ -57,7 +59,7 @@ export class ServiceRequestsService {
   private branchFor(raw: unknown, staff: StaffUser) {
     const branchId = typeof raw === 'string' ? raw : '';
     if (!UUID.test(branchId)) throw new BadRequestException('Choose a branch');
-    if (staff.role !== 'admin' && staff.assigned_branch_id && staff.assigned_branch_id !== branchId) {
+    if (staff.role !== 'admin' && staff.assigned_branch_id !== branchId) {
       throw new ForbiddenException('You can only see your own branch');
     }
     return branchId;

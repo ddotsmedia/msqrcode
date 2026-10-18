@@ -77,7 +77,10 @@ export class CouponsService {
     if (row.expires_at.getTime() < Date.now()) throw new BadRequestException('This coupon has expired. Ask the customer to open it again.');
     const p = await this.promos.findOne({ where: { id: row.promotion_id } });
     if (!p || !p.is_active) throw new BadRequestException('This offer has ended');
-    const branchId = typeof body?.branch_id === 'string' && UUID.test(body.branch_id) ? body.branch_id : (staff.assigned_branch_id ?? null);
+    // Admins may say which branch; everyone else redeems for their own branch only.
+    const branchId =
+      staff.role === 'admin' ? (typeof body?.branch_id === 'string' && UUID.test(body.branch_id) ? body.branch_id : null) : (staff.assigned_branch_id ?? null);
+    if (staff.role !== 'admin' && !branchId) throw new BadRequestException('Your account has no branch');
     if (p.branch_id && branchId && p.branch_id !== branchId) throw new BadRequestException('This offer is for another branch');
     row.redeemed_at = new Date();
     row.redeemed_branch_id = branchId;

@@ -18,7 +18,26 @@ env:
   IMAGE_NAME_ADMIN: ${{ github.repository }}/admin-dashboard
 
 jobs:
+  # Tests must pass before anything is built or deployed.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @milestones/api test
+      - run: pnpm --filter @milestones/api lint
+      - run: pnpm --filter @milestones/menu-app lint
+      - run: pnpm --filter @milestones/admin-dashboard lint
+
   build-and-deploy:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -78,8 +97,13 @@ jobs:
           echo "expected length=15 sha256=$(printf '%s' '194.164.151.202' | sha256sum | cut -c1-16)"
 
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         with:
+          envs: JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
@@ -89,7 +113,17 @@ jobs:
             git fetch --all
             git reset --hard origin/main
             umask 077
-            printf 'JWT_SECRET=%s\nADMIN_EMAIL=%s\nADMIN_PASSWORD=%s\n' "${{ secrets.JWT_SECRET }}" "${{ secrets.ADMIN_EMAIL }}" "${{ secrets.ADMIN_PASSWORD }}" > .env
+            # Secrets arrive as environment variables, not pasted into the script text.
+            printf 'JWT_SECRET=%s\nADMIN_EMAIL=%s\nADMIN_PASSWORD=%s\n' "$JWT_SECRET" "$ADMIN_EMAIL" "$ADMIN_PASSWORD" > .env
+            echo "--- database backup (keeps the newest 5) ---"
+            BK="$HOME/msqrcode-backups"; mkdir -p "$BK"
+            OUT="$BK/msqrcode-$(date +%Y%m%d-%H%M%S).sql.gz"
+            if (set -o pipefail; docker compose -f docker-compose.prod.yml exec -T postgres pg_dump -U postgres msqrcode | gzip > "$OUT"); then
+              ls -1t "$BK"/msqrcode-*.sql.gz | tail -n +6 | xargs -r rm -f
+              ls -lh "$OUT"
+            else
+              echo "WARNING: backup failed (deploy continues)"; rm -f "$OUT"
+            fi
             docker compose -f docker-compose.prod.yml pull postgres redis || true
             echo "--- disk ---"; df -h / | tail -1
             docker compose -f docker-compose.prod.yml build --no-cache api menu-app admin-dashboard

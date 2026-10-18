@@ -1,4 +1,4 @@
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -24,7 +24,7 @@ export class ProductsController {
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string): Promise<Product> {
+  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<Product> {
     return this.productsService.findById(id);
   }
 
@@ -39,7 +39,7 @@ export class ProductsController {
   @Roles('admin')
   @Put(':id')
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() productData: Partial<Product>,
   ): Promise<Product> {
     return this.productsService.update(id, productData);
@@ -48,7 +48,7 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Delete(':id')
-  async delete(@Param('id') id: string): Promise<void> {
+  async delete(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.productsService.delete(id);
   }
 }

@@ -12,6 +12,9 @@ export interface PushMessage {
   url?: string;
 }
 
+// Web push services used by Chrome/Edge/Android, Firefox, Windows and Apple browsers.
+const PUSH_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com', 'push.services.mozilla.com', 'notify.windows.com', 'push.apple.com'];
+
 const BROADCAST_GAP_MS = 60 * 60_000; // admins can send to everyone at most once an hour
 
 @Injectable()
@@ -59,9 +62,22 @@ export class PushService {
     if (!token || !/^https:\/\/[^\s]{10,590}$/.test(endpoint) || !p256dh || p256dh.length > 200 || !auth || auth.length > 100) {
       throw new BadRequestException('Could not turn on notifications');
     }
+    // Only the browsers' own push services, so the server never posts to arbitrary or internal URLs.
+    let host = '';
+    try {
+      host = new URL(endpoint).hostname;
+    } catch {
+      /* rejected below */
+    }
+    if (!PUSH_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) throw new BadRequestException('Could not turn on notifications');
     const card = await this.cards.findOne({ where: { token } });
     if (!card) throw new NotFoundException('Card not found');
     const existing = await this.subs.findOne({ where: { endpoint } });
+    if (!existing && (await this.subs.count({ where: { card_id: card.id } })) >= 5) {
+      // Keep the newest phones: drop the oldest subscription for this card.
+      const oldest = await this.subs.find({ where: { card_id: card.id }, order: { id: 'ASC' }, take: 1 });
+      if (oldest[0]) await this.subs.delete({ id: oldest[0].id });
+    }
     await this.subs.save({ ...(existing ?? {}), endpoint, p256dh, auth, card_id: card.id });
     return { ok: true };
   }

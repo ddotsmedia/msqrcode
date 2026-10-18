@@ -393,6 +393,18 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
       .catch(() => setDeals([]));
   }, [branchId]);
   const dealFor = (p: Product) => bestDiscount(deals, p.category_id, new Date(now));
+  // "Order again": rebuild a past line from today's menu, prices and happy hour; null if gone or sold out.
+  const reprice = (l: Omit<CartLine, 'key'>): Omit<CartLine, 'key'> | null => {
+    const p = products.find((x) => x.id === l.product_id);
+    if (!p || availability[p.id] === false) return null;
+    const groups = groupsOf(p);
+    const choices = Object.fromEntries(
+      groups.map((g) => [g.id, (g.options!.choices!.find((c) => c.name === l.choices[g.id]) ?? g.options!.choices![0]).name]),
+    );
+    const deal = dealFor(p);
+    const base = unitPrice(p, choices);
+    return { ...l, name: p.name, choices, labels: groups.map((g) => choices[g.id]), unit: deal ? discounted(base, deal.percent) : base };
+  };
   // From the Offers page: /menu?deal=<offer id> shows just that deal's items, with its banner.
   const [dealId, setDealId] = useState(() => new URLSearchParams(window.location.search).get('deal'));
   const focus = dealId ? (deals as (HappyHour & { id: string })[]).find((d) => d.id === dealId) : undefined;
@@ -542,8 +554,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
       );
     }
 
-    if (sortBy === 'price_asc') return filtered.sort((a, b) => Number(a.base_price) - Number(b.base_price));
-    if (sortBy === 'price_desc') return filtered.sort((a, b) => Number(b.base_price) - Number(a.base_price));
+    if (sortBy === 'price_asc') return [...filtered].sort((a, b) => Number(a.base_price) - Number(b.base_price));
+    if (sortBy === 'price_desc') return [...filtered].sort((a, b) => Number(b.base_price) - Number(a.base_price));
     // Hearted drinks first, then the menu order.
     const favRank = (id: string) => (favs.includes(id) ? 0 : 1);
     return [...filtered].sort((a, b) => favRank(a.id) - favRank(b.id) || a.display_order - b.display_order);
@@ -599,18 +611,6 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const filteredProducts = getFilteredProducts();
   const canOrder = !!(table && branchId && branch?.ordering_enabled);
   const canPickup = !!(!table && branchId && branch?.pickup_enabled);
-  // "Order again": rebuild a past line from today's menu, prices and happy hour; null if gone or sold out.
-  const reprice = (l: Omit<CartLine, 'key'>): Omit<CartLine, 'key'> | null => {
-    const p = products.find((x) => x.id === l.product_id);
-    if (!p || availability[p.id] === false) return null;
-    const groups = groupsOf(p);
-    const choices = Object.fromEntries(
-      groups.map((g) => [g.id, (g.options!.choices!.find((c) => c.name === l.choices[g.id]) ?? g.options!.choices![0]).name]),
-    );
-    const deal = dealFor(p);
-    const base = unitPrice(p, choices);
-    return { ...l, name: p.name, choices, labels: groups.map((g) => choices[g.id]), unit: deal ? discounted(base, deal.percent) : base };
-  };
 
   return (
     <div className="min-h-screen bg-brand-50">

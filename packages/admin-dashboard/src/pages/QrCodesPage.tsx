@@ -87,7 +87,7 @@ async function printSheet(rows: QrRow[]): Promise<void> {
   const cards = await Promise.all(
     rows.map(async (r) => {
       const svg = await QRCode.toString(r.payload, { type: 'svg', ...qrOptions(r.foreground, r.background) });
-      const where = r.kind === 'table' ? `${r.branch.name} · Table ${esc(r.table_number ?? '')}` : esc(r.branch.name);
+      const where = r.kind === 'table' ? `${esc(r.branch.name)} · Table ${esc(r.table_number ?? '')}` : esc(r.branch.name);
       return `<div class="card"><div class="qr">${svg}</div><h2>${esc(r.label)}</h2><p>${esc(r.caption)}</p><small>${where}</small></div>`;
     }),
   );

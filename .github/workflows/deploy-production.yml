@@ -1,12 +1,7 @@
 name: Deploy to Production
 
+# Manual only: this workflow is not set up for this server (production deploys run from deploy.yml).
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/**"
-      - "k8s/**"
-      - ".github/workflows/deploy-production.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AnalyticsEvent } from '../entities/analytics-event.entity';
 import { Branch } from '../entities/branch.entity';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EVENT_TYPES = ['page_view', 'product_view', 'product_selected', 'search', 'feedback'];
 
 @Injectable()
 export class AnalyticsService {
@@ -13,9 +16,29 @@ export class AnalyticsService {
     private branches: Repository<Branch>,
   ) {}
 
+  // Public: only known event types and fields, trimmed, so the body cannot set ids, dates or other columns.
   async logEvent(eventData: Partial<AnalyticsEvent>): Promise<AnalyticsEvent> {
-    const event = this.analyticsRepository.create(eventData);
-    return this.analyticsRepository.save(event);
+    const d = (eventData ?? {}) as Record<string, unknown>;
+    const uuid = (v: unknown) => (typeof v === 'string' && UUID.test(v) ? v : null);
+    const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+    const type = typeof d.event_type === 'string' && EVENT_TYPES.includes(d.event_type) ? d.event_type : null;
+    if (!type) throw new BadRequestException('Unknown event');
+    const rating = Number(d.feedback_rating);
+    const event = this.analyticsRepository.create({
+      event_type: type,
+      branch_id: uuid(d.branch_id),
+      product_id: uuid(d.product_id),
+      search_query: str(d.search_query, 200),
+      feedback_text: str(d.feedback_text, 1000),
+      feedback_rating: Number.isInteger(rating) && rating >= 1 && rating <= 5 ? rating : null,
+      user_agent: str(d.user_agent, 300),
+    } as Partial<AnalyticsEvent>);
+    try {
+      return await this.analyticsRepository.save(event);
+    } catch {
+      // Unknown branch or product id: ignore the event rather than fail the page.
+      throw new BadRequestException('Unknown branch or item');
+    }
   }
 
   async getViewStats(branchId?: string, startDate?: Date, endDate?: Date): Promise<any> {

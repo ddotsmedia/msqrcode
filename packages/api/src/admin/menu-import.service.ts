@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { parse } from 'csv-parse/sync';
-import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
 import { Category } from '../entities/category.entity';
 import { Product } from '../entities/product.entity';
 import { Branch } from '../entities/branch.entity';
@@ -33,18 +33,57 @@ export class MenuImportService {
     @InjectRepository(Branch) private branches: Repository<Branch>,
   ) {}
 
+  // Only these columns are read from an uploaded sheet; anything else (including "__proto__") is ignored.
+  private static readonly COLUMNS = ['category', 'name', 'description', 'price_aed', 'dietary_tags', 'display_order', 'branch_codes'];
+
+  private static pick(raw: Record<string, unknown>): ImportRow {
+    const row: Record<string, unknown> = {};
+    for (const c of MenuImportService.COLUMNS) if (Object.prototype.hasOwnProperty.call(raw, c)) row[c] = raw[c];
+    return row as unknown as ImportRow;
+  }
+
   private async parseFile(buffer: Buffer, filename: string): Promise<ImportRow[]> {
-    if (filename.endsWith('.csv')) {
-      return parse(buffer.toString('utf-8'), {
-        columns: true,
-        skip_empty_lines: true,
-      }) as ImportRow[];
-    } else if (filename.endsWith('.xlsx')) {
-      const workbook = XLSX.read(buffer);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      return XLSX.utils.sheet_to_json<ImportRow>(sheet);
+    const name = filename.toLowerCase();
+    if (name.endsWith('.csv')) {
+      try {
+        const rows = parse(buffer.toString('utf-8'), { columns: true, skip_empty_lines: true, bom: true }) as Record<string, unknown>[];
+        return rows.map(MenuImportService.pick);
+      } catch (e) {
+        throw new BadRequestException(`Could not read that CSV file: ${(e as Error).message}`.slice(0, 200));
+      }
+    }
+    if (name.endsWith('.xlsx')) {
+      const book = new ExcelJS.Workbook();
+      try {
+        await book.xlsx.load(buffer as any);
+      } catch {
+        throw new BadRequestException('Could not read that Excel file');
+      }
+      const sheet = book.worksheets[0];
+      if (!sheet) return [];
+      const header: string[] = [];
+      sheet.getRow(1).eachCell((cell, col) => (header[col] = String(cell.text ?? '').trim()));
+      const rows: ImportRow[] = [];
+      sheet.eachRow((r, n) => {
+        if (n === 1) return;
+        const raw: Record<string, unknown> = {};
+        r.eachCell((cell, col) => {
+          const key = header[col];
+          if (key) raw[key] = typeof cell.value === 'number' ? cell.value : cell.text;
+        });
+        rows.push(MenuImportService.pick(raw));
+      });
+      return rows;
     }
     throw new BadRequestException('Unsupported file format. Use .csv or .xlsx');
+  }
+
+  private static async sheet(data: Record<string, unknown>[]): Promise<Buffer> {
+    const book = new ExcelJS.Workbook();
+    const ws = book.addWorksheet('Menu');
+    ws.columns = MenuImportService.COLUMNS.map((key) => ({ header: key, key }));
+    data.forEach((d) => ws.addRow(d));
+    return Buffer.from(await book.xlsx.writeBuffer());
   }
 
   private parsePrice(price: string | number): number | null {
@@ -164,10 +203,7 @@ export class MenuImportService {
       branch_codes: 'ALL',
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Menu');
-    return Buffer.from(XLSX.write(workbook, { type: 'buffer' }));
+    return MenuImportService.sheet(data);
   }
 
   async template(): Promise<Buffer> {
@@ -182,9 +218,6 @@ export class MenuImportService {
         branch_codes: 'ALL',
       },
     ];
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Menu');
-    return Buffer.from(XLSX.write(workbook, { type: 'buffer' }));
+    return MenuImportService.sheet(data);
   }
 }

@@ -1,12 +1,8 @@
 name: Security Scan & Audit
 
+# Manual only: this workflow is not set up for this server (production deploys run from deploy.yml).
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: "0 0 * * *"  # Daily at midnight UTC
+  workflow_dispatch:
 
 permissions:
   contents: read

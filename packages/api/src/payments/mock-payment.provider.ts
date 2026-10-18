@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import { Injectable } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { IPaymentProvider, OrderForPayment, PaymentCheckout } from './payment-provider.interface';
 
 @Injectable()
@@ -8,7 +8,7 @@ export class MockPaymentProvider implements IPaymentProvider {
   name = 'mock';
 
   async createCheckout(order: OrderForPayment): Promise<PaymentCheckout> {
-    const paymentRef = `mock_${uuidv4()}`;
+    const paymentRef = `mock_${randomUUID()}`;
     const redirectUrl = `/order/${order.id}?payment_ref=${paymentRef}`;
     return { redirect_url: redirectUrl, payment_ref: paymentRef };
   }

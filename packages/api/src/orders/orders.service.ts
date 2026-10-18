@@ -1,3 +1,4 @@
+import { knownTable } from '../branches/known-table';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, MoreThanOrEqual, Not, Repository } from 'typeorm';
@@ -69,6 +70,7 @@ export class OrdersService {
     if (!UUID.test(branchId) || (!pickup && !TABLE.test(table))) throw new BadRequestException(where);
     const branch = await this.branches.findOne({ where: { id: branchId } });
     if (!branch || branch.status !== 'active') throw new BadRequestException(where);
+    if (!pickup && !(await knownTable(this.branches.manager, branchId, table))) throw new BadRequestException(where);
     if (pickup ? !branch.pickup_enabled : !branch.ordering_enabled) {
       throw new BadRequestException(`${pickup ? 'Order ahead' : 'Ordering from the table'} is not available at this branch right now`);
     }
@@ -262,7 +264,7 @@ export class OrdersService {
   private branchFor(raw: unknown, staff: StaffUser) {
     const branchId = typeof raw === 'string' ? raw : '';
     if (!UUID.test(branchId)) throw new BadRequestException('Choose a branch');
-    if (staff.role !== 'admin' && staff.assigned_branch_id && staff.assigned_branch_id !== branchId) {
+    if (staff.role !== 'admin' && staff.assigned_branch_id !== branchId) {
       throw new ForbiddenException('You can only see your own branch');
     }
     return branchId;

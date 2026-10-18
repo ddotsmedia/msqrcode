@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client (legacy database package)
+        run: pnpm --filter @milestones/database exec prisma generate
+
       - name: Run linters
         run: pnpm exec turbo lint
 

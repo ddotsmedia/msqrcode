@@ -12,6 +12,7 @@ export class FeedbackService {
   ) {}
 
   async submit(branchId: string, body: { rating?: unknown; comment?: unknown }) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branchId)) throw new NotFoundException('Branch not found');
     const rating = Number(body.rating);
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
       throw new BadRequestException('Rating must be a whole number from 1 to 5');

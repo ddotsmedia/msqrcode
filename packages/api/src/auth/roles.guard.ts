@@ -11,7 +11,8 @@ export class RolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (!roles || roles.length === 0) return true;
+    // A guarded route with no @Roles is a mistake: refuse rather than let every signed-in user in.
+    if (!roles || roles.length === 0) throw new ForbiddenException('Insufficient role');
     const { user } = context.switchToHttp().getRequest();
     if (!user || !roles.includes(user.role)) {
       throw new ForbiddenException('Insufficient role');
