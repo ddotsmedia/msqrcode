@@ -213,7 +213,7 @@ export class OrdersService {
       total: Number(o.total),
       created_at: o.created_at,
       loyalty: o.loyalty_card_id ? (o.loyalty_stamped ? 'stamped' : 'linked') : null,
-      items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
+      items: (o.items ?? []).map((i) => ({ product_id: i.product_id, name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
     };
   }
 

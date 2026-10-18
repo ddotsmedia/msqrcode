@@ -41,6 +41,7 @@ interface Placed {
   status?: string;
   seen?: boolean;
   pickup?: string; // pickup time label, for order-ahead
+  rated?: Record<string, boolean>; // product id -> thumbs up, after collecting
   lines?: Omit<CartLine, 'key'>[]; // what was ordered, for "Order again"
 }
 const HOUR = 3600_000;
@@ -50,6 +51,7 @@ interface Tracked {
   total: number;
   loyalty?: 'linked' | 'stamped' | null;
   items: {
+    product_id?: string;
     name: string;
     qty: number;
     unit_price: number;
@@ -399,6 +401,16 @@ export function TableOrder({
     }
   }
 
+  // After collecting: thumbs up/down per item (feeds "Most loved" on the menu).
+  async function rate(o: Placed, productId: string, up: boolean) {
+    setPlaced((prev) => prev.map((x) => (x.id === o.id ? { ...x, rated: { ...x.rated, [productId]: up } } : x)));
+    try {
+      await axios.post(`/api/orders/${o.id}/rate`, { token: o.token, product_id: productId, up });
+    } catch {
+      /* not critical: the vote just isn't counted */
+    }
+  }
+
   async function cancel(o: Placed) {
     setBusy(true);
     setError(null);
@@ -643,6 +655,35 @@ export function TableOrder({
                         <span>{money(detail.total)}</span>
                       </div>
                       {!['completed', 'cancelled'].includes(current.status ?? '') && <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>}
+                      {current.status === 'completed' && Date.now() - current.at < 7 * 24 * HOUR && (
+                        <div className="mt-4 rounded-xl bg-cream p-3">
+                          <p className="text-sm font-semibold text-brand-900">{t('rateTitle')}</p>
+                          <ul className="mt-2 space-y-1.5">
+                            {[...new Map(detail.items.filter((i) => i.product_id).map((i) => [i.product_id!, i.name])).entries()].map(([pid, name]) => (
+                              <li key={pid} className="flex items-center justify-between gap-2 text-sm">
+                                <span className="min-w-0 truncate">{name}</span>
+                                <span className="flex shrink-0 gap-1.5">
+                                  {([true, false] as const).map((up) => (
+                                    <button
+                                      key={String(up)}
+                                      type="button"
+                                      aria-label={`${name}: ${up ? 'liked it' : 'did not like it'}`}
+                                      aria-pressed={current.rated?.[pid] === up}
+                                      onClick={() => rate(current, pid, up)}
+                                      className={`grid h-9 w-9 place-items-center rounded-full border text-base ${
+                                        current.rated?.[pid] === up ? (up ? 'border-green-600 bg-green-600' : 'border-slate-500 bg-slate-500') : 'border-slate-200 bg-white'
+                                      }`}
+                                    >
+                                      {up ? '👍' : '👎'}
+                                    </button>
+                                  ))}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                          {current.rated && Object.keys(current.rated).length > 0 && <p className="mt-2 text-xs text-slate-600">{t('rateThanks')}</p>}
+                        </div>
+                      )}
                       {detail.loyalty && (
                         <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-xs font-medium text-brand-900">
                           ⭐ {t(detail.loyalty === 'stamped' ? 'orderStamped' : 'orderEarnsStamp')}

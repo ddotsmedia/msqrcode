@@ -206,6 +206,7 @@ function ProductDetailsModal({
   branchId,
   onAdd,
   deal,
+  loved,
 }: {
   product: Product;
   onClose: () => void;
@@ -213,7 +214,9 @@ function ProductDetailsModal({
   branchId: string | null;
   onAdd?: (line: Omit<CartLine, 'key'>) => void;
   deal?: { percent: number; title: string; until: string | null } | null;
+  loved?: number; // % thumbs up, when the item is "Most loved"
 }) {
+  const { t } = useLang();
   // Count the product as viewed (feeds "Top products" in the admin Insights page).
   useEffect(() => {
     fetch(`${API_BASE_URL}/analytics/events`, {
@@ -252,6 +255,11 @@ function ProductDetailsModal({
               {product.is_seasonal && (
                 <span className="inline-block mt-2 ml-2 px-3 py-1 bg-copper-500 text-white text-xs font-semibold rounded-full">
                   Limited time
+                </span>
+              )}
+              {loved && (
+                <span className="inline-block mt-2 ml-2 px-3 py-1 bg-rose-50 text-rose-700 text-xs font-semibold rounded-full">
+                  ❤ {t('lovedBadge')} · {t('lovedLiked').replace('{n}', String(loved))}
                 </span>
               )}
             </div>
@@ -357,6 +365,14 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [showText, setShowText] = useState(false);
   // Happy-hour deals for this branch; re-checked every minute so prices change on time.
   const [deals, setDeals] = useState<HappyHour[]>([]);
+  // "Most loved": items guests rated thumbs up after collecting their order.
+  const [loved, setLoved] = useState<Record<string, number>>({});
+  useEffect(() => {
+    axios
+      .get(`${API_BASE_URL}/ratings/loved`)
+      .then((r) => setLoved(Object.fromEntries((Array.isArray(r.data) ? r.data : []).map((x: { product_id: string; percent: number }) => [x.product_id, x.percent]))))
+      .catch(() => undefined);
+  }, []);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -767,6 +783,11 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                         {product.is_seasonal && (
                           <span className="ml-2 align-middle rounded-full bg-copper-500 px-2 py-0.5 text-[11px] font-semibold text-white">Limited time</span>
                         )}
+                        {loved[product.id] && (
+                          <span title={t('lovedLiked').replace('{n}', String(loved[product.id]))} className="ml-2 align-middle rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                            ❤ {t('lovedBadge')}
+                          </span>
+                        )}
                       </h3>
                       <button
                         type="button"
@@ -851,6 +872,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           availability={availability[selectedProduct.id] !== false}
           branchId={branchId}
           deal={dealFor(selectedProduct)}
+          loved={loved[selectedProduct.id]}
           onAdd={canOrder || canPickup ? cart.add : undefined}
         />
       )}
