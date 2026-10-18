@@ -48,6 +48,7 @@ async function bootstrap() {
     rateLimit({ windowMs: 24 * 3600 * 1000, max, skip: (req) => req.method !== 'POST', message: { message: 'Too many requests from this network today. Please call us instead.' } });
   app.use(['/loyalty/enroll', '/catering', '/careers', '/gift-cards/request', '/corporate/apply'], daily(10));
   app.use(/^\/branches\/[^/]+\/feedback$/, daily(10));
+  app.use(/^\/group-orders\/?$/, daily(20)); // starting a group; adding items is not limited here
 
   // Enable CORS
   // The sites call the API on their own domain (/api), so only these origins may call it cross-site.

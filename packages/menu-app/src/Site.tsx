@@ -17,6 +17,7 @@ import CateringPage from './CateringPage';
 import DrinkQuiz from './DrinkQuiz';
 import GiftCardsPage, { GiftCardPage } from './GiftCards';
 import BusinessPage, { BusinessInvoice, BusinessPortal } from './Business';
+import GroupOrderPage from './GroupOrder';
 import CareersPage from './CareersPage';
 import { BrewGuidePage, BrewGuidesPage } from './BrewGuides';
 import { Crescent, useRamadan } from './lib/season';
@@ -1113,6 +1114,7 @@ export function SiteRoutes() {
         <Route path="gift-cards" element={<GiftCardsPage />} />
         <Route path="gift/:code" element={<GiftCardPage />} />
         <Route path="business" element={<BusinessPage />} />
+        <Route path="group/:code" element={<GroupOrderPage />} />
         <Route path="business/:token" element={<BusinessPortal />} />
         <Route path="business/:token/invoice/:id" element={<BusinessInvoice />} />
         <Route path="brew" element={<BrewGuidesPage />} />

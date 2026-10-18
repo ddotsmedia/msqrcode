@@ -16,6 +16,7 @@ import { timing, whenLabel } from './lib/offers';
 import type { Combo } from './lib/combos';
 import { Crescent, useRamadan } from './lib/season';
 import { motion, useReducedMotion } from 'motion/react';
+import { GroupCartBar, StartGroup, groupCode } from './GroupOrder';
 
 // API Base URL - will work through nginx reverse proxy
 const API_BASE_URL = '/api';
@@ -432,7 +433,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
     setDealId(null);
     setSelectedCategory(id);
   };
-  const cart = useCart(branchId ?? '', table ?? 'pickup');
+  // Opened from a group order link: the cart holds this person's items for the group.
+  const [group] = useState(() => (table ? null : groupCode(new URLSearchParams(window.location.search).get('group'))));
+  const cart = useCart(branchId ?? '', group ? `group-${group}` : (table ?? 'pickup'));
 
   useEffect(() => {
     const loadMenuData = async () => {
@@ -939,7 +942,14 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           <div className="h-32" aria-hidden="true" />
           <div className="fixed inset-x-0 bottom-[72px] md:bottom-4 z-40 px-3">
             <div className="mx-auto max-w-md rounded-2xl border border-brand-100 bg-white p-3 pb-1 shadow-[0_12px_32px_rgba(10,26,51,0.18)]">
-              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} reprice={reprice} combos={combos} />
+              {group ? (
+                <GroupCartBar code={group} cart={cart} />
+              ) : (
+                <>
+                  {cart.count === 0 && <StartGroup branchId={branchId!} />}
+                  <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} reprice={reprice} combos={combos} />
+                </>
+              )}
             </div>
           </div>
         </>

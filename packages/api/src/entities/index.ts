@@ -31,3 +31,4 @@ export { GiftCard } from './gift-card.entity';
 export { GiftCardUse } from './gift-card-use.entity';
 export { CorporateAccount } from './corporate-account.entity';
 export { CorporateInvoice } from './corporate-invoice.entity';
+export { GroupOrder } from './group-order.entity';

@@ -24,6 +24,7 @@ import { CareersModule } from './careers/careers.module';
 import { SeasonModule } from './season/season.module';
 import { GiftCardsModule } from './gift-cards/gift-cards.module';
 import { CorporateModule } from './corporate/corporate.module';
+import { GroupOrdersModule } from './group-orders/group-orders.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { CorporateModule } from './corporate/corporate.module';
     SeasonModule,
     GiftCardsModule,
     CorporateModule,
+    GroupOrdersModule,
     OrdersModule,
   ],
   controllers: [],
