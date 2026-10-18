@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
+import { readFavs } from './lib/favorites';
+import { bestDiscount } from './lib/happyHour';
 import { countdown, DAY_NAMES, daysLeft, dubaiDate, icsFor, isTimed, liveNow, timing, weekGrid, whenLabel, type Offer } from './lib/offers';
 
 interface Branch {
@@ -32,6 +34,22 @@ interface Rules {
   double_now?: boolean;
   challenge_visits: number;
   challenge_bonus: number;
+}
+
+interface Card {
+  name: string | null;
+  stamps: number;
+  target: number;
+  reward_name: string;
+  has_birthday?: boolean;
+  birthday_week?: boolean;
+  double_now?: boolean;
+  tier?: 'bronze' | 'silver' | 'gold';
+  tier_perk?: string;
+  visits_year?: number;
+  next_tier?: string | null;
+  next_tier_at?: number | null;
+  challenge?: { target: number; bonus: number; visits: number; done: boolean } | null;
 }
 
 type Tab = 'all' | 'live' | 'happy' | 'limited';
@@ -68,7 +86,7 @@ export default function OffersPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [rules, setRules] = useState<Rules | null>(null);
-  const [card, setCard] = useState<{ stamps: number; target: number; reward_name: string } | null>(null);
+  const [card, setCard] = useState<Card | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [tab, setTab] = useState<Tab>('all');
   const [branch, setBranch] = useState('');
@@ -213,6 +231,8 @@ export default function OffersPage() {
       {!error && offers === null && <div className="h-64 animate-pulse rounded-[28px] bg-brand-100/60" aria-label="Loading offers" />}
 
       {slides.length > 0 && <Slider slides={slides} now={now} />}
+
+      {card && rules && <ForYou card={card} rules={rules} offers={all} products={products} now={now} />}
 
       {offers && offers.length > 0 && (
         <section aria-label="All offers" className="space-y-4">
@@ -707,7 +727,7 @@ function Savings({ offers, products, categories }: { offers: Offer[]; products: 
 }
 
 // Rewards perks from the live loyalty settings, with the visitor's own progress when they have a card on this phone.
-function Rewards({ rules, card }: { rules: Rules; card: { stamps: number; target: number; reward_name: string } | null }) {
+function Rewards({ rules, card }: { rules: Rules; card: Card | null }) {
   const perks = [
     { icon: '☕', title: `Buy ${rules.stamps_target - 1}, get 1 free`, text: `Collect ${rules.stamps_target} stamps for a ${rules.reward_name.toLowerCase()}.` },
     rules.double_days?.length
@@ -717,7 +737,6 @@ function Rewards({ rules, card }: { rules: Rules; card: { stamps: number; target
     rules.referral_bonus > 0 ? { icon: '🤝', title: 'Bring a friend', text: `You both get ${rules.referral_bonus} bonus stamp${rules.referral_bonus > 1 ? 's' : ''}.` } : null,
     rules.challenge_visits > 0 ? { icon: '🏆', title: 'Weekly challenge', text: `Visit ${rules.challenge_visits} times in a week for ${rules.challenge_bonus} extra stamp${rules.challenge_bonus > 1 ? 's' : ''}.` } : null,
   ].filter(Boolean) as { icon: string; title: string; text: string }[];
-  const pct = card ? Math.min(100, Math.round((card.stamps / card.target) * 100)) : 0;
   return (
     <section className="rounded-[28px] border border-brand-100 bg-white p-6 md:p-10">
       <div className="flex flex-wrap items-center justify-between gap-6">
@@ -726,18 +745,8 @@ function Rewards({ rules, card }: { rules: Rules; card: { stamps: number; target
           <h2 className="mt-1 font-display text-3xl text-brand-900">Rewards that add up</h2>
         </div>
         {card ? (
-          <Link to="/loyalty" className="flex items-center gap-4 rounded-2xl bg-cream p-4">
-            <span className="relative grid h-20 w-20 place-items-center rounded-full" style={{ background: `conic-gradient(#a87a50 ${pct * 3.6}deg, #e8eef7 0deg)` }}>
-              <span className="grid h-16 w-16 place-items-center rounded-full bg-white text-center text-sm font-bold text-brand-900">
-                {card.stamps}/{card.target}
-              </span>
-            </span>
-            <span>
-              <span className="block font-semibold text-brand-900">Your card</span>
-              <span className="text-sm text-slate-600">
-                {card.stamps >= card.target ? `${card.reward_name} ready!` : `${card.target - card.stamps} more for a ${card.reward_name.toLowerCase()}`}
-              </span>
-            </span>
+          <Link to="/loyalty" className="inline-flex items-center gap-2 rounded-full border border-brand-100 px-5 py-2.5 font-semibold text-brand-700 hover:bg-brand-50">
+            <Icon name="gift" className="h-4 w-4" /> Open my card
           </Link>
         ) : (
           <Link to="/loyalty" className="inline-flex items-center gap-2 rounded-full bg-copper-500 px-5 py-2.5 font-semibold text-white hover:bg-copper-700">
@@ -756,6 +765,98 @@ function Rewards({ rules, card }: { rules: Rules; card: { stamps: number; target
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function Ring({ value, of }: { value: number; of: number }) {
+  const pct = Math.min(100, Math.round((value / Math.max(1, of)) * 100));
+  return (
+    <span className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(#a87a50 ${pct * 3.6}deg, rgba(255,255,255,0.18) 0deg)` }} aria-label={`${value} of ${of} stamps`}>
+      <span className="grid h-16 w-16 place-items-center rounded-full bg-brand-900 text-center text-sm font-bold text-white">
+        {value}/{of}
+      </span>
+    </span>
+  );
+}
+
+function Bar({ value, of }: { value: number; of: number }) {
+  return (
+    <span className="mt-2 block h-2 overflow-hidden rounded-full bg-brand-100" aria-hidden="true">
+      <span className="block h-full rounded-full bg-copper-500" style={{ width: `${Math.min(100, (value / Math.max(1, of)) * 100)}%` }} />
+    </span>
+  );
+}
+
+const TIER = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' } as Record<string, string>;
+const TIER_ICON = { bronze: '🥉', silver: '🥈', gold: '🥇' } as Record<string, string>;
+
+// "For you": what this visitor's rewards card and hearted drinks mean today.
+function ForYou({ card, rules, offers, products, now }: { card: Card; rules: Rules; offers: Offer[]; products: Product[]; now: Date }) {
+  const tiles: { key: string; icon: string; title: string; text?: string; to?: string; bar?: [number, number]; hot?: boolean }[] = [];
+  if (card.stamps >= card.target) tiles.push({ key: 'reward', icon: '🎁', title: `Your ${card.reward_name.toLowerCase()} is ready`, text: 'Show your card at the counter.', to: '/loyalty', hot: true });
+  if (card.birthday_week)
+    tiles.push({ key: 'bday', icon: '🎂', title: `Happy birthday week${card.name ? `, ${card.name.split(' ')[0]}` : ''}!`, text: `${rules.birthday_bonus} bonus stamp${rules.birthday_bonus > 1 ? 's' : ''} on your next visit.`, hot: true });
+  else if (!card.has_birthday && rules.birthday_bonus > 0) tiles.push({ key: 'bday-add', icon: '🎂', title: 'Add your birthday', text: 'Get a birthday treat every year.', to: '/loyalty' });
+  if (card.double_now) tiles.push({ key: 'double', icon: '✨', title: 'Double stamps right now', text: `Until ${rules.double_to}.`, hot: true });
+  // Hearted drinks that are on a deal now (or later today).
+  const favs = readFavs();
+  for (const p of products.filter((x) => favs.includes(x.id)).slice(0, 12)) {
+    const live = bestDiscount(offers, p.category_id, now);
+    if (live) {
+      const o = offers.find((x) => x.title === live.title && isTimed(x));
+      tiles.push({ key: `fav-${p.id}`, icon: '❤', title: `Your ${p.name} is ${live.percent}% off now`, text: live.until ? `Until ${live.until}.` : undefined, to: o ? `/menu?deal=${o.id}` : '/menu', hot: true });
+      continue;
+    }
+    const later = offers
+      .filter((o) => isTimed(o) && (!(o.category_ids ?? []).filter(Boolean).length || (o.category_ids ?? []).includes(p.category_id)))
+      .map((o) => ({ o, t: timing(o, now) }))
+      .filter((x) => x.t.next && x.t.next.getTime() - now.getTime() < 24 * 3600_000)
+      .sort((a, b) => a.t.next!.getTime() - b.t.next!.getTime())[0];
+    if (later) tiles.push({ key: `fav-${p.id}`, icon: '❤', title: `Your ${p.name}: ${later.o.discount_percent}% off from ${whenLabel(later.t.next!, now)}`, to: `/menu?deal=${later.o.id}` });
+  }
+  if (card.tier && card.tier_perk) tiles.push({ key: 'tier', icon: TIER_ICON[card.tier] ?? '⭐', title: `${TIER[card.tier]} member`, text: card.tier_perk });
+  else if (card.next_tier && card.next_tier_at)
+    tiles.push({
+      key: 'tier',
+      icon: TIER_ICON[card.next_tier] ?? '⭐',
+      title: `${Math.max(0, card.next_tier_at - (card.visits_year ?? 0))} visits to ${TIER[card.next_tier] ?? card.next_tier}`,
+      bar: [card.visits_year ?? 0, card.next_tier_at],
+    });
+  if (card.challenge && !card.challenge.done)
+    tiles.push({ key: 'challenge', icon: '🏆', title: `Weekly challenge: ${card.challenge.visits}/${card.challenge.target} visits`, text: `+${card.challenge.bonus} stamp${card.challenge.bonus > 1 ? 's' : ''} when you finish.`, bar: [card.challenge.visits, card.challenge.target] });
+  const left = Math.max(0, card.target - card.stamps);
+  return (
+    <section aria-label="For you" className="rounded-[28px] bg-gradient-to-br from-brand-900 to-brand-700 p-5 text-white md:p-8">
+      <div className="flex items-center gap-4">
+        <Ring value={Math.min(card.stamps, card.target)} of={card.target} />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-copper-300">For you</p>
+          <h2 className="font-display text-2xl md:text-3xl">{card.name ? `Hi ${card.name.split(' ')[0]}` : 'Your rewards'}</h2>
+          <p className="text-sm text-brand-100">{left ? `${left} more stamp${left > 1 ? 's' : ''} for a ${card.reward_name.toLowerCase()}` : `${card.reward_name} ready to collect`}</p>
+        </div>
+      </div>
+      {tiles.length > 0 && (
+        <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {tiles.map((x) => {
+            const inner = (
+              <>
+                <span className="text-2xl" aria-hidden="true">
+                  {x.icon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{x.title}</span>
+                  {x.text && <span className="block text-sm text-brand-100">{x.text}</span>}
+                  {x.bar && <Bar value={x.bar[0]} of={x.bar[1]} />}
+                </span>
+                {x.to && <Icon name="arrow" className="h-4 w-4 shrink-0 opacity-70" />}
+              </>
+            );
+            const cls = `flex h-full items-start gap-3 rounded-2xl p-4 ${x.hot ? 'bg-copper-500/90' : 'bg-white/10'}`;
+            return <li key={x.key}>{x.to ? <Link to={x.to} className={`${cls} hover:brightness-110`}>{inner}</Link> : <div className={cls}>{inner}</div>}</li>;
+          })}
+        </ul>
+      )}
     </section>
   );
 }
