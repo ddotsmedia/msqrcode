@@ -12,6 +12,7 @@ import { TableService } from './TableService';
 import { NotifyButton } from './NotifyButton';
 import { AddToOrder, TableOrder, groupsOf, unitPrice, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
 import { bestDiscount, discounted, isLive, type HappyHour } from './lib/happyHour';
+import { timing, whenLabel } from './lib/offers';
 import { Crescent, useRamadan } from './lib/season';
 import { motion, useReducedMotion } from 'motion/react';
 
@@ -385,6 +386,18 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
       .catch(() => setDeals([]));
   }, [branchId]);
   const dealFor = (p: Product) => bestDiscount(deals, p.category_id, new Date(now));
+  // From the Offers page: /menu?deal=<offer id> shows just that deal's items, with its banner.
+  const [dealId, setDealId] = useState(() => new URLSearchParams(window.location.search).get('deal'));
+  const focus = dealId ? (deals as (HappyHour & { id: string })[]).find((d) => d.id === dealId) : undefined;
+  const focusCats = (focus?.category_ids ?? []).filter(Boolean);
+  useEffect(() => {
+    if (dealId) window.scrollTo(0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pickCategory = (id: string | null) => {
+    setDealId(null);
+    setSelectedCategory(id);
+  };
   const cart = useCart(branchId ?? '', table ?? 'pickup');
 
   useEffect(() => {
@@ -474,6 +487,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
   const getFilteredProducts = () => {
     let filtered = products;
+
+    if (focusCats.length) filtered = filtered.filter((p) => focusCats.includes(p.category_id));
 
     // Filter by category
     if (selectedCategory) {
@@ -711,7 +726,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           <div className="mb-8 overflow-x-auto">
             <div className="flex gap-2 pb-2">
               <button
-                onClick={() => setSelectedCategory(null)}
+                onClick={() => pickCategory(null)}
                 className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition ${
                   selectedCategory === null
                     ? 'bg-brand-600 text-white'
@@ -723,7 +738,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
               {categories.map((cat) => (
                 <button
                   key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
+                  onClick={() => pickCategory(cat.id)}
                   className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition ${
                     selectedCategory === cat.id
                       ? 'bg-brand-600 text-white'
@@ -747,7 +762,29 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           </div>
         )}
 
-        {(() => {
+        {focus && (() => {
+          const at = timing(focus, new Date(now));
+          return (
+            <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl bg-gradient-to-r from-copper-500 to-[#7a5230] px-5 py-4 text-white">
+              <span className="text-2xl font-bold">−{focus.discount_percent}%</span>
+              <div className="min-w-[12rem] flex-1">
+                <p className="font-semibold">{focus.title}</p>
+                <p className="text-sm text-cream/90">
+                  {at.live
+                    ? `${t('happyHourNow')}${focus.end_time ? ` · ${t('happyHourUntil').replace('{t}', focus.end_time)}` : ''}`
+                    : at.next
+                      ? t('dealStarts').replace('{t}', whenLabel(at.next, new Date(now)))
+                      : t('dealOver')}
+                </p>
+              </div>
+              <button type="button" onClick={() => setDealId(null)} className="w-full rounded-full bg-white/15 px-4 py-2 text-sm font-semibold hover:bg-white/25 sm:w-auto">
+                {t('dealShowAll')} ✕
+              </button>
+            </div>
+          );
+        })()}
+
+        {!focus && (() => {
           const live = deals.filter((d) => isLive(d, new Date(now)));
           if (!live.length) return null;
           const d = live.sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0))[0];
@@ -823,6 +860,11 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                       ) : (
                         <span className="text-lg font-bold text-brand-600">
                           {Number(product.base_price).toFixed(2)} AED
+                          {focus?.discount_percent && (
+                            <span className="block text-xs font-semibold text-copper-700">
+                              {discounted(Number(product.base_price), focus.discount_percent).toFixed(2)} AED {focus.start_time ? t('dealFrom').replace('{t}', focus.start_time) : ''}
+                            </span>
+                          )}
                         </span>
                       )}
                       <span
