@@ -19,10 +19,29 @@ interface Promotion {
   image_url?: string | null;
   promo_code?: string | null;
   featured?: boolean;
+  theme?: string | null;
 }
 
+// Occasion looks for the website's Offers page. Templates fill the form; check the dates before saving.
+const THEMES: { id: string; label: string; icon: string; template: { title: string; body: string; starts_on?: string; ends_on?: string } }[] = [
+  {
+    id: 'national_day',
+    label: 'UAE National Day',
+    icon: '🇦🇪',
+    template: { title: 'National Day celebration', body: 'Celebrate the UAE with us: a special treat on every order.', starts_on: '2026-11-30', ends_on: '2026-12-03' },
+  },
+  { id: 'ramadan', label: 'Ramadan', icon: '🌙', template: { title: 'Ramadan Kareem', body: 'Iftar and suhoor favourites, made for sharing.' } },
+  { id: 'eid', label: 'Eid', icon: '✨', template: { title: 'Eid Mubarak', body: 'Celebrate Eid with family and friends at Milestones.' } },
+  {
+    id: 'new_year',
+    label: 'New Year',
+    icon: '🎆',
+    template: { title: 'New Year treats', body: 'Start the year with your favourite coffee.', starts_on: '2026-12-31', ends_on: '2027-01-01' },
+  },
+];
+
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false };
+const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false, theme: '' };
 
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
@@ -61,6 +80,7 @@ export default function PromotionsPage({ token }: { token: string }) {
           image_url: form.image_url.trim() || null,
           promo_code: form.promo_code.trim() || null,
           featured: form.featured,
+          theme: form.theme || null,
           ...(form.happy
             ? { discount_percent: Number(form.discount_percent), start_time: form.start_time || null, end_time: form.end_time || null, days: form.days, category_ids: form.category_ids }
             : {}),
@@ -125,6 +145,35 @@ export default function PromotionsPage({ token }: { token: string }) {
           Code to show at the counter (optional)
           <input maxLength={20} placeholder="e.g. HAPPY20" value={form.promo_code} onChange={(e) => setForm({ ...form, promo_code: e.target.value.toUpperCase() })} className={`${inputClass} uppercase placeholder:normal-case`} />
         </label>
+        <div className="md:col-span-2">
+          <p className="mb-1 text-sm text-gray-600">Occasion look (optional) — tap one to start from a template</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" aria-pressed={!form.theme} onClick={() => setForm({ ...form, theme: '' })} className={chip(!form.theme)}>
+              Normal
+            </button>
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-pressed={form.theme === t.id}
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    theme: t.id,
+                    title: form.title || t.template.title,
+                    body: form.body || t.template.body,
+                    starts_on: form.starts_on || t.template.starts_on || '',
+                    ends_on: form.ends_on || t.template.ends_on || '',
+                    featured: true,
+                  })
+                }
+                className={chip(form.theme === t.id)}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} />
           Feature in the big slider at the top of the website's Offers page
@@ -172,6 +221,7 @@ export default function PromotionsPage({ token }: { token: string }) {
             <div className="flex-1">
               <p className="font-semibold">
                 {p.featured && <span title="Featured">⭐ </span>}
+                {p.theme && <span title={THEMES.find((t) => t.id === p.theme)?.label}>{THEMES.find((t) => t.id === p.theme)?.icon} </span>}
                 {p.title} {!p.is_active && <span className="text-xs text-gray-500">(hidden)</span>}
                 {p.promo_code && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">{p.promo_code}</span>}
               </p>

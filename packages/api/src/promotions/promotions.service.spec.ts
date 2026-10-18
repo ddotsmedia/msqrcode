@@ -12,8 +12,13 @@ describe('PromotionsService offer visuals', () => {
     expect(row).toMatchObject({ image_url: 'https://cdn.example.com/a.jpg', promo_code: 'BOGO-24', featured: true });
   });
 
-  it('defaults to no image, no code and not featured', async () => {
-    expect(await setup().create({ title: 'Plain' })).toMatchObject({ image_url: null, promo_code: null, featured: false });
+  it('defaults to no image, no code, not featured and no theme', async () => {
+    expect(await setup().create({ title: 'Plain' })).toMatchObject({ image_url: null, promo_code: null, featured: false, theme: null });
+  });
+
+  it('keeps known occasion themes only', async () => {
+    expect((await setup().create({ title: 'x', theme: 'national_day' })).theme).toBe('national_day');
+    expect((await setup().create({ title: 'x', theme: 'halloween' })).theme).toBeNull();
   });
 
   it('rejects unsafe images and bad codes', async () => {
