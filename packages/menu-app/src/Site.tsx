@@ -12,6 +12,7 @@ import OffersPage from './OffersPage';
 import GalleryPage from './GalleryPage';
 import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
+import InstallButton from './InstallButton';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -200,6 +201,7 @@ function Layout() {
             </div>
           </nav>
           <div className="flex items-center gap-2">
+            <InstallButton />
             <Link to="/scan" className="hidden sm:inline-flex items-center gap-2 rounded-full bg-copper-700 hover:bg-copper-500 px-5 py-2.5 text-[15px] font-semibold text-white">
               <Icon name="qr" className="h-4 w-4" /> Scan table QR
             </Link>
