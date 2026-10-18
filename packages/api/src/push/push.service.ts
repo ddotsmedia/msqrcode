@@ -1,10 +1,13 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import * as webpush from 'web-push';
 import { PushSubscription } from '../entities/push-subscription.entity';
 import { AppSecret } from '../entities/app-secret.entity';
 import { LoyaltyCard } from '../entities/loyalty-card.entity';
+import { DeviceToken } from '../entities/device-token.entity';
+import { fcmSend } from './fcm';
+import { apnsSend } from './apns';
 
 export interface PushMessage {
   title: string;
@@ -26,7 +29,43 @@ export class PushService {
     @InjectRepository(PushSubscription) private subs: Repository<PushSubscription>,
     @InjectRepository(AppSecret) private secrets: Repository<AppSecret>,
     @InjectRepository(LoyaltyCard) private cards: Repository<LoyaltyCard>,
+    @InjectRepository(DeviceToken) private devices: Repository<DeviceToken>,
   ) {}
+
+  // App phones (native push). Tokens the push service says are gone are deleted.
+  private async sendDevices(list: DeviceToken[], msg: PushMessage) {
+    // iPhones get an Apple token from the app, Android phones a Firebase token.
+    const results = await Promise.all(list.map((d) => (d.platform === 'ios' ? apnsSend(d.token, d.app, msg) : fcmSend(d.token, msg))));
+    const gone = list.filter((_, i) => results[i] === 'gone').map((d) => d.id);
+    if (gone.length) await this.devices.delete(gone);
+    return results.filter((r) => r === 'sent').length;
+  }
+
+  // Customer app: register this phone, linked to its rewards card when it has one.
+  async registerDevice(body: { token?: unknown; platform?: unknown; loyalty_token?: unknown }, staff?: { id: string; role: string; assigned_branch_id?: string | null }) {
+    const token = typeof body?.token === 'string' ? body.token.trim() : '';
+    if (token.length < 20 || token.length > 512 || !/^[\w:.\-]+$/.test(token)) throw new BadRequestException('Not a device token');
+    const platform = body?.platform === 'ios' ? 'ios' : 'android';
+    const lt = typeof body?.loyalty_token === 'string' ? body.loyalty_token.slice(0, 128) : '';
+    const card = !staff && lt ? await this.cards.findOne({ where: { token: lt } }) : null;
+    const row = (await this.devices.findOne({ where: { token } })) ?? this.devices.create({ token });
+    Object.assign(row, staff
+      ? { platform, app: 'staff', user_id: staff.id, branch_id: staff.role === 'admin' ? null : (staff.assigned_branch_id ?? null), card_id: null }
+      : { platform, app: 'customer', card_id: card?.id ?? row.card_id ?? null, user_id: null, branch_id: null });
+    await this.devices.save(row);
+    return { ok: true };
+  }
+
+  async unregisterDevice(body: { token?: unknown }) {
+    if (typeof body?.token === 'string') await this.devices.delete({ token: body.token });
+    return { ok: true };
+  }
+
+  // Staff app: phones and tablets of this branch, plus full admins.
+  async sendToStaff(branchId: string, msg: PushMessage) {
+    const list = await this.devices.find({ where: [{ app: 'staff', branch_id: branchId }, { app: 'staff', branch_id: IsNull() }] });
+    return this.sendDevices(list, msg);
+  }
 
   async getSecret(key: string) {
     return (await this.secrets.findOne({ where: { key } }))?.value ?? null;
@@ -106,8 +145,8 @@ export class PushService {
   }
 
   async sendToCard(cardId: string, msg: PushMessage) {
-    const list = await this.subs.find({ where: { card_id: cardId } });
-    await Promise.all(list.map((s) => this.send(s, msg)));
+    const [list, phones] = await Promise.all([this.subs.find({ where: { card_id: cardId } }), this.devices.find({ where: { app: 'customer', card_id: cardId } })]);
+    await Promise.all([...list.map((s) => this.send(s, msg)), this.sendDevices(phones, msg)]);
   }
 
   // Everyone with notifications on, 20 at a time.
@@ -118,6 +157,8 @@ export class PushService {
       const results = await Promise.all(list.slice(i, i + 20).map((s) => this.send(s, msg)));
       sent += results.filter(Boolean).length;
     }
+    const phones = await this.devices.find({ where: { app: 'customer' }, take: 10_000 });
+    for (let i = 0; i < phones.length; i += 50) sent += await this.sendDevices(phones.slice(i, i + 50), msg);
     return sent;
   }
 
@@ -133,7 +174,7 @@ export class PushService {
   }
 
   async stats() {
-    return { subscribers: await this.subs.count() };
+    return { subscribers: (await this.subs.count()) + (await this.devices.count({ where: { app: 'customer' } })) };
   }
 
   // "We miss you": subscribers with no stamp for 30 days, at most once every 60 days.

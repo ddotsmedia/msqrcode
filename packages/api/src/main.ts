@@ -54,7 +54,7 @@ async function bootstrap() {
   // The sites call the API on their own domain (/api), so only these origins may call it cross-site.
   const origins = (process.env.CORS_ORIGIN ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   app.enableCors({
-    origin: origins.length ? origins : process.env.NODE_ENV === 'production' ? ['https://coffeesales.ae', 'https://admin.coffeesales.ae'] : true,
+    origin: origins.length ? origins : process.env.NODE_ENV === 'production' ? ['https://coffeesales.ae', 'https://admin.coffeesales.ae', 'capacitor://localhost', 'https://localhost'] : true,
     credentials: false,
   });
 

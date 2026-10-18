@@ -32,3 +32,4 @@ export { GiftCardUse } from './gift-card-use.entity';
 export { CorporateAccount } from './corporate-account.entity';
 export { CorporateInvoice } from './corporate-invoice.entity';
 export { GroupOrder } from './group-order.entity';
+export { DeviceToken } from './device-token.entity';

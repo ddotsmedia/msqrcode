@@ -9,3 +9,7 @@
 # build output must be produced fresh inside the image
 **/dist
 **/*.tsbuildinfo
+
+# native app projects are built by the mobile workflow, not the web images
+packages/*/android
+packages/*/ios

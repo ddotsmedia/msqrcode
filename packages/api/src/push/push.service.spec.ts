@@ -30,7 +30,16 @@ function setup() {
     save: jest.fn(async ({ key, value }: any) => secrets.set(key, value)),
   };
   const cards = { findOne: jest.fn(async ({ where }: any) => (where.token === 'tok' ? { id: 'c1' } : null)) };
-  return { svc: new PushService(subsRepo as any, secretRepo as any, cards as any), subs, secrets };
+  const devices: any[] = [];
+  const deviceRepo = {
+    find: jest.fn(async () => []),
+    count: jest.fn(async () => devices.length),
+    findOne: jest.fn(async ({ where }: any) => devices.find((d) => d.token === where.token) ?? null),
+    create: jest.fn((o) => ({ ...o })),
+    save: jest.fn(async (o) => (devices.includes(o) ? o : (devices.push(o), o))),
+    delete: jest.fn(async () => undefined),
+  };
+  return { svc: new PushService(subsRepo as any, secretRepo as any, cards as any, deviceRepo as any), subs, secrets, devices };
 }
 
 const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc123', keys: { p256dh: 'p'.repeat(87), auth: 'a'.repeat(22) } };
@@ -73,5 +82,17 @@ describe('PushService', () => {
     await svc.subscribe({ token: 'tok', subscription: sub });
     expect(await svc.broadcast({ title: 'Hello', body: 'New pastries today' })).toEqual({ ok: true, sent: 1 });
     expect((await svc.broadcast({ title: 'Again', body: 'Too soon' })).ok).toBe(false);
+  });
+
+  it('registers app phones for customers and staff, one row per token', async () => {
+    const { svc, devices } = setup();
+    await expect(svc.registerDevice({ token: 'bad token!' })).rejects.toThrow('Not a device token');
+    const tok = 'fcm_' + 'a'.repeat(40);
+    await svc.registerDevice({ token: tok, platform: 'ios' });
+    expect(devices).toHaveLength(1);
+    expect(devices[0]).toMatchObject({ app: 'customer', platform: 'ios' });
+    await svc.registerDevice({ token: tok, platform: 'ios' }, { id: 'u1', role: 'staff', assigned_branch_id: 'b1' });
+    expect(devices).toHaveLength(1);
+    expect(devices[0]).toMatchObject({ app: 'staff', user_id: 'u1', branch_id: 'b1', card_id: null });
   });
 });

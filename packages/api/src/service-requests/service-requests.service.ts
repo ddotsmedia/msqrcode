@@ -1,5 +1,6 @@
+import { PushService } from '../push/push.service';
 import { knownTable } from '../branches/known-table';
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { ServiceRequest } from '../entities/service-request.entity';
@@ -24,6 +25,7 @@ export class ServiceRequestsService {
   constructor(
     @InjectRepository(ServiceRequest) private requests: Repository<ServiceRequest>,
     @InjectRepository(Branch) private branches: Repository<Branch>,
+    @Optional() private push?: PushService,
   ) {}
 
   // Public: called from the menu opened by a table QR.
@@ -45,6 +47,7 @@ export class ServiceRequestsService {
       return { ok: false, message: 'Staff are busy right now. Please wave to a team member.' };
     }
     const saved = await this.requests.save(this.requests.create({ branch_id: branchId, table_number: table, type }));
+    this.push?.sendToStaff(branchId, { title: `Table ${table}: ${type === 'bill' ? 'bill please' : 'needs a team member'}`, body: branch.name, url: '/' }).catch(() => undefined);
     return { ok: true, id: saved.id, repeated: false };
   }
 

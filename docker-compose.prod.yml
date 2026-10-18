@@ -54,7 +54,13 @@ services:
       # Shown on business tax invoices. Set COMPANY_TRN as a GitHub secret.
       COMPANY_NAME: Milestones Coffee
       COMPANY_TRN: ${COMPANY_TRN:-}
-      CORS_ORIGIN: https://coffeesales.ae,https://www.coffeesales.ae,https://admin.coffeesales.ae
+      # App push (GitHub secrets, base64): Firebase service account for Android, Apple .p8 key for iPhone.
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
+      APNS_KEY: ${APNS_KEY:-}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+      # The last two are the iPhone and Android apps.
+      CORS_ORIGIN: https://coffeesales.ae,https://www.coffeesales.ae,https://admin.coffeesales.ae,capacitor://localhost,https://localhost
     ports:
       - "127.0.0.1:3016:3000" # only nginx on this server reaches it
     depends_on:

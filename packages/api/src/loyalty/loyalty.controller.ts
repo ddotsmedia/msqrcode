@@ -20,6 +20,12 @@ export class LoyaltyController {
     return this.loyalty.getByToken(token);
   }
 
+  // Store rule: customers can delete their rewards card (and everything tied to it) from the app.
+  @Post('loyalty/card/:token/delete')
+  deleteCard(@Param('token') token: string) {
+    return this.loyalty.deleteCard(token);
+  }
+
   // Customers can add their birthday once; it cannot be changed afterwards.
   @Patch('loyalty/card/:token/birthday')
   setBirthday(@Param('token') token: string, @Body() body: Record<string, unknown>) {

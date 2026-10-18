@@ -103,8 +103,12 @@ jobs:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           COMPANY_TRN: ${{ secrets.COMPANY_TRN }}
+          FCM_SERVICE_ACCOUNT: ${{ secrets.FCM_SERVICE_ACCOUNT }}
+          APNS_KEY: ${{ secrets.APNS_KEY }}
+          APNS_KEY_ID: ${{ secrets.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ secrets.APNS_TEAM_ID }}
         with:
-          envs: JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,COMPANY_TRN
+          envs: JWT_SECRET,ADMIN_EMAIL,ADMIN_PASSWORD,COMPANY_TRN,FCM_SERVICE_ACCOUNT,APNS_KEY,APNS_KEY_ID,APNS_TEAM_ID
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
@@ -115,7 +119,7 @@ jobs:
             git reset --hard origin/main
             umask 077
             # Secrets arrive as environment variables, not pasted into the script text.
-            printf 'JWT_SECRET=%s\nADMIN_EMAIL=%s\nADMIN_PASSWORD=%s\nCOMPANY_TRN=%s\n' "$JWT_SECRET" "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$COMPANY_TRN" > .env
+            printf 'JWT_SECRET=%s\nADMIN_EMAIL=%s\nADMIN_PASSWORD=%s\nCOMPANY_TRN=%s\nFCM_SERVICE_ACCOUNT=%s\nAPNS_KEY=%s\nAPNS_KEY_ID=%s\nAPNS_TEAM_ID=%s\n' "$JWT_SECRET" "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$COMPANY_TRN" "$FCM_SERVICE_ACCOUNT" "$APNS_KEY" "$APNS_KEY_ID" "$APNS_TEAM_ID" > .env
             echo "--- database backup (keeps the newest 5) ---"
             BK="$HOME/msqrcode-backups"; mkdir -p "$BK"
             OUT="$BK/msqrcode-$(date +%Y%m%d-%H%M%S).sql.gz"
