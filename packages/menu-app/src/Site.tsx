@@ -15,6 +15,7 @@ import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
 import DrinkQuiz from './DrinkQuiz';
+import GiftCardsPage, { GiftCardPage } from './GiftCards';
 import CareersPage from './CareersPage';
 import { BrewGuidePage, BrewGuidesPage } from './BrewGuides';
 import { Crescent, useRamadan } from './lib/season';
@@ -116,6 +117,7 @@ const MORE: [string, string][] = [
   ['/news', "What's New"],
   ['/find-your-drink', 'Find your drink'],
   ['/brew', 'Brew guides'],
+  ['/gift-cards', 'Gift cards'],
   ['/catering', 'Catering'],
   ['/careers', 'Careers'],
   ['/about', 'About'],
@@ -1106,6 +1108,8 @@ export function SiteRoutes() {
         <Route path="catering" element={<CateringPage />} />
         <Route path="find-your-drink" element={<DrinkQuiz />} />
         <Route path="careers" element={<CareersPage />} />
+        <Route path="gift-cards" element={<GiftCardsPage />} />
+        <Route path="gift/:code" element={<GiftCardPage />} />
         <Route path="brew" element={<BrewGuidesPage />} />
         <Route path="brew/:slug" element={<BrewGuidePage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />

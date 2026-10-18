@@ -27,3 +27,5 @@ export { CouponRedemption } from './coupon-redemption.entity';
 export { ProductRating } from './product-rating.entity';
 export { JobApplication } from './job-application.entity';
 export { SeasonSettings } from './season-settings.entity';
+export { GiftCard } from './gift-card.entity';
+export { GiftCardUse } from './gift-card-use.entity';

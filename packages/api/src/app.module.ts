@@ -22,6 +22,7 @@ import { CouponsModule } from './coupons/coupons.module';
 import { RatingsModule } from './ratings/ratings.module';
 import { CareersModule } from './careers/careers.module';
 import { SeasonModule } from './season/season.module';
+import { GiftCardsModule } from './gift-cards/gift-cards.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { SeasonModule } from './season/season.module';
     RatingsModule,
     CareersModule,
     SeasonModule,
+    GiftCardsModule,
     OrdersModule,
   ],
   controllers: [],
