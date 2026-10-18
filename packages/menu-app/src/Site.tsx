@@ -110,9 +110,10 @@ const NAV: [string, string][] = [
   ['/menu', 'Menu'],
   ['/branches', 'Branches'],
   ['/loyalty', 'Rewards'],
-  ['/news', "What's New"],
+  ['/offers', 'Offers'],
 ];
 const MORE: [string, string][] = [
+  ['/news', "What's New"],
   ['/find-your-drink', 'Find your drink'],
   ['/brew', 'Brew guides'],
   ['/catering', 'Catering'],
@@ -172,7 +173,7 @@ function SiteFooter() {
             </div>
           )}
         </div>
-        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/find-your-drink', 'Find your drink'], ['/branches', 'Branches'], ['/brew', 'Brew guides'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
+        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/offers', 'Offers'], ['/find-your-drink', 'Find your drink'], ['/branches', 'Branches'], ['/brew', 'Brew guides'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
         <FooterCol title="Rewards" links={[['/loyalty', 'My card'], ['/scan', 'Scan a QR'], ['/faq', 'FAQ']]} />
         <FooterCol title="Company" links={[['/about', 'About'], ['/catering', 'Catering'], ['/careers', 'Careers'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
       </div>
@@ -484,7 +485,7 @@ function OfferBand() {
             <h2 className="mt-2 text-3xl md:text-4xl tracking-tight">{offer.title}</h2>
             {offer.body && <p className="mt-2 text-cream/90 md:text-lg">{offer.body}</p>}
           </div>
-          <Link to="/news" className="mt-6 md:mt-0 inline-flex shrink-0 rounded-full bg-brand-700 hover:bg-brand-900 px-6 py-3.5 font-semibold">
+          <Link to="/offers" className="mt-6 md:mt-0 inline-flex shrink-0 rounded-full bg-brand-700 hover:bg-brand-900 px-6 py-3.5 font-semibold">
             All offers
           </Link>
         </div>
@@ -810,7 +811,13 @@ function WhatsNewPage() {
   return (
     <div className="space-y-12">
       <h1 className="text-3xl md:text-4xl font-semibold text-brand-800">What's New</h1>
-      <OffersPage />
+      <Link to="/offers" className="flex items-center justify-between gap-4 rounded-[20px] bg-gradient-to-r from-copper-500 to-[#7a5230] px-6 py-5 text-white">
+        <span>
+          <span className="block font-display text-2xl">Offers & happy hours</span>
+          <span className="text-cream/90">Live deals, the weekly schedule and your rewards.</span>
+        </span>
+        <span className="shrink-0 rounded-full bg-brand-700 px-5 py-2.5 font-semibold">See offers →</span>
+      </Link>
       <BlogListPage />
     </div>
   );
@@ -1091,7 +1098,7 @@ export function SiteRoutes() {
         <Route path="branches" element={<BranchesPage />} />
         <Route path="branches/:id" element={<BranchDetailPage />} />
         <Route path="map" element={<Navigate to="/branches?view=map" replace />} />
-        <Route path="offers" element={<Navigate to="/news" replace />} />
+        <Route path="offers" element={<OffersPage />} />
         <Route path="news" element={<WhatsNewPage />} />
         <Route path="gallery" element={<GalleryPage />} />
         <Route path="blog" element={<Navigate to="/news" replace />} />
