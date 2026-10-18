@@ -423,7 +423,12 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
         // Load products
         const productsRes = await axios.get(`${API_BASE_URL}/products`);
-        setProducts(Array.isArray(productsRes.data) ? productsRes.data : []);
+        const list: Product[] = Array.isArray(productsRes.data) ? productsRes.data : [];
+        setProducts(list);
+        // Deep link from "Find your drink": /menu?item=<product id> opens that item.
+        const item = new URLSearchParams(window.location.search).get('item');
+        const linked = item ? list.find((p) => p.id === item) : undefined;
+        if (linked) setSelectedProduct(linked);
 
         if (branchId) {
           // Load availability for this branch
@@ -631,6 +636,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             />
+            <a href="/find-your-drink" className="mt-2 inline-block text-sm font-semibold text-copper-700 hover:underline">
+              ✨ {t('quizLink')}
+            </a>
           </div>
 
           {/* Filters */}

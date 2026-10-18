@@ -14,6 +14,7 @@ import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
+import DrinkQuiz from './DrinkQuiz';
 import CareersPage from './CareersPage';
 import { BrewGuidePage, BrewGuidesPage } from './BrewGuides';
 import { Crescent, useRamadan } from './lib/season';
@@ -112,6 +113,7 @@ const NAV: [string, string][] = [
   ['/news', "What's New"],
 ];
 const MORE: [string, string][] = [
+  ['/find-your-drink', 'Find your drink'],
   ['/brew', 'Brew guides'],
   ['/catering', 'Catering'],
   ['/careers', 'Careers'],
@@ -170,7 +172,7 @@ function SiteFooter() {
             </div>
           )}
         </div>
-        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/branches', 'Branches'], ['/brew', 'Brew guides'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
+        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/find-your-drink', 'Find your drink'], ['/branches', 'Branches'], ['/brew', 'Brew guides'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
         <FooterCol title="Rewards" links={[['/loyalty', 'My card'], ['/scan', 'Scan a QR'], ['/faq', 'FAQ']]} />
         <FooterCol title="Company" links={[['/about', 'About'], ['/catering', 'Catering'], ['/careers', 'Careers'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
       </div>
@@ -1095,6 +1097,7 @@ export function SiteRoutes() {
         <Route path="blog" element={<Navigate to="/news" replace />} />
         <Route path="faq" element={<FaqPage />} />
         <Route path="catering" element={<CateringPage />} />
+        <Route path="find-your-drink" element={<DrinkQuiz />} />
         <Route path="careers" element={<CareersPage />} />
         <Route path="brew" element={<BrewGuidesPage />} />
         <Route path="brew/:slug" element={<BrewGuidePage />} />
