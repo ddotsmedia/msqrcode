@@ -16,6 +16,8 @@ interface Order {
   type?: 'pickup' | 'dine_in';
   pickup_at?: string | null;
   rewards_card?: boolean;
+  car?: string | null;
+  arrived_at?: string | null;
   status: 'placed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   total: number;
   created_at: string;
@@ -59,6 +61,7 @@ export default function KitchenPage({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const seen = useRef<Set<string> | null>(null);
+  const outside = useRef<Set<string> | null>(null);
 
   async function load() {
     try {
@@ -66,6 +69,10 @@ export default function KitchenPage({
       const ids = new Set(res.open.map((o) => o.id));
       if (seen.current && res.open.some((o) => o.status === 'placed' && !seen.current!.has(o.id))) chime();
       seen.current = ids;
+      // Curbside: chime again when a customer taps "I'm here".
+      const here = new Set(res.open.filter((o) => o.arrived_at).map((o) => o.id));
+      if (outside.current && [...here].some((id) => !outside.current!.has(id))) chime();
+      outside.current = here;
       setBoard(res);
       setError(null);
     } catch (e) {
@@ -75,6 +82,7 @@ export default function KitchenPage({
 
   useEffect(() => {
     seen.current = null;
+    outside.current = null;
     setBoard(null);
     load();
     const timer = setInterval(load, 5000);
@@ -147,7 +155,8 @@ export default function KitchenPage({
 
       <div className="grid gap-4 md:grid-cols-3">
         {COLUMNS.map((col) => {
-          const list = board?.open.filter((o) => o.status === col.status) ?? [];
+          // Customers waiting outside go to the top.
+          const list = (board?.open.filter((o) => o.status === col.status) ?? []).sort((x, y) => Number(!!y.arrived_at) - Number(!!x.arrived_at));
           return (
             <section key={col.status} className="rounded-lg bg-gray-200/60 p-3">
               <h2 className="mb-3 flex items-center justify-between px-1 font-semibold text-gray-700">
@@ -157,7 +166,15 @@ export default function KitchenPage({
               <div className="space-y-3">
                 {list.length === 0 && <p className="px-1 text-sm text-gray-500">No orders</p>}
                 {list.map((o) => (
-                  <article key={o.id} className={`rounded-lg bg-white p-3 shadow-sm ${col.status === 'placed' ? 'ring-2 ring-amber-400' : ''}`}>
+                  <article
+                    key={o.id}
+                    className={`rounded-lg bg-white p-3 shadow-sm ${o.arrived_at ? 'ring-2 ring-green-600' : col.status === 'placed' ? 'ring-2 ring-amber-400' : ''}`}
+                  >
+                    {o.arrived_at && (
+                      <p className="-mx-3 -mt-3 mb-2 rounded-t-lg bg-green-600 px-3 py-1.5 text-sm font-bold text-white">
+                        🚗 Outside since {hhmm(o.arrived_at)} · {o.car}
+                      </p>
+                    )}
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="text-lg font-bold text-gray-900">
                         #{o.order_no} {where(o) && <span className={o.type === 'pickup' ? 'text-amber-700' : 'text-brand-700'}>· {where(o)}</span>}
@@ -169,6 +186,7 @@ export default function KitchenPage({
                       {o.phone && <span className="text-gray-400"> · {o.phone}</span>}
                       {o.rewards_card && <span className="ml-1 text-amber-700" title="Earns a stamp when collected">· ⭐ rewards</span>}
                     </p>
+                    {o.car && !o.arrived_at && <p className="text-xs text-gray-500">🚗 Curbside: {o.car}</p>}
                     <ul className="mt-2 space-y-1 text-sm">
                       {o.items.map((i, n) => (
                         <li key={n}>
