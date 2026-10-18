@@ -5,6 +5,7 @@ import { OfferEvent } from '../entities/offer-event.entity';
 import { Promotion } from '../entities/promotion.entity';
 import { CouponRedemption } from '../entities/coupon-redemption.entity';
 import { Order } from '../entities/order.entity';
+import { OfferReminder } from '../entities/offer-reminder.entity';
 
 export const OFFER_EVENTS = ['view', 'code_copy', 'share', 'calendar', 'order_click', 'coupon_open', 'combo_add'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -17,6 +18,7 @@ export class OfferStatsService {
     @InjectRepository(Promotion) private promos: Repository<Promotion>,
     @InjectRepository(CouponRedemption) private coupons: Repository<CouponRedemption>,
     @InjectRepository(Order) private orders: Repository<Order>,
+    @InjectRepository(OfferReminder) private reminders: Repository<OfferReminder>,
   ) {}
 
   // Public: the Offers page sends a small batch of counts. Unknown offers and types are dropped.
@@ -38,7 +40,7 @@ export class OfferStatsService {
     const days = Number(daysRaw ?? 30);
     if (![7, 30, 90].includes(days)) throw new BadRequestException('Choose 7, 30 or 90 days');
     const since = new Date(Date.now() - days * 864e5);
-    const [counts, promos, redeemed, orders] = await Promise.all([
+    const [counts, promos, redeemed, orders, reminders] = await Promise.all([
       this.events
         .createQueryBuilder('e')
         .select('e.promotion_id', 'promotion_id')
@@ -57,6 +59,7 @@ export class OfferStatsService {
         .groupBy('c.promotion_id')
         .getRawMany<{ promotion_id: string; n: string }>(),
       this.orders.find({ where: { created_at: MoreThanOrEqual(since) }, select: ['id', 'discounts', 'status'] }),
+      this.reminders.find({ select: ['promotion_id'] }),
     ]);
     const comboOrders = new Map<string, { orders: number; saved: number }>();
     for (const o of orders) {
@@ -81,6 +84,7 @@ export class OfferStatsService {
         order_clicks: of('order_click'),
         coupon_opens: of('coupon_open'),
         combo_adds: of('combo_add'),
+        reminders: reminders.filter((r) => r.promotion_id === p.id).length,
         redemptions: Number(redeemed.find((r) => r.promotion_id === p.id)?.n ?? 0),
         combo_orders: p.combo_price ? (comboOrders.get(p.title)?.orders ?? 0) : 0,
         combo_saved: p.combo_price ? (comboOrders.get(p.title)?.saved ?? 0) : 0,

@@ -13,6 +13,7 @@ interface Row {
   coupon_opens: number;
   combo_adds: number;
   redemptions: number;
+  reminders: number;
   combo_orders: number;
   combo_saved: number;
   action_rate: number;
@@ -72,7 +73,7 @@ export default function OfferStats({ token }: { token: string }) {
             <p className="mt-4 text-sm text-gray-500">No offer activity yet.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
+              <table className="w-full min-w-[840px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wide text-gray-500">
                     <th className="py-2 pr-3">Offer</th>
@@ -83,6 +84,7 @@ export default function OfferStats({ token }: { token: string }) {
                     <th className="py-2 pr-3">Code copies</th>
                     <th className="py-2 pr-3">Shares</th>
                     <th className="py-2 pr-3">Calendar</th>
+                    <th className="py-2 pr-3" title="Customers waiting for a reminder before it starts">Reminders</th>
                     <th className="py-2 pr-3" title="Share of views that led to an order tap, coupon or combo">Action rate</th>
                   </tr>
                 </thead>
@@ -109,6 +111,7 @@ export default function OfferStats({ token }: { token: string }) {
                       <td className="py-2 pr-3 tabular-nums">{r.code_copies}</td>
                       <td className="py-2 pr-3 tabular-nums">{r.shares}</td>
                       <td className="py-2 pr-3 tabular-nums">{r.calendar}</td>
+                      <td className="py-2 pr-3 tabular-nums">{r.reminders}</td>
                       <td className="py-2 pr-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${r.action_rate >= 10 ? 'bg-green-50 text-green-700' : r.action_rate > 0 ? 'bg-amber-50 text-amber-800' : 'bg-gray-100 text-gray-500'}`}>
                           {r.action_rate}%
