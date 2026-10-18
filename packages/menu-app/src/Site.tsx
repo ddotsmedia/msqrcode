@@ -13,6 +13,7 @@ import GalleryPage from './GalleryPage';
 import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
+import CateringPage from './CateringPage';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -91,6 +92,7 @@ const NAV: [string, string][] = [
   ['/news', "What's New"],
 ];
 const MORE: [string, string][] = [
+  ['/catering', 'Catering'],
   ['/about', 'About'],
   ['/gallery', 'Gallery'],
   ['/faq', 'FAQ'],
@@ -148,7 +150,7 @@ function SiteFooter() {
         </div>
         <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/branches', 'Branches'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
         <FooterCol title="Rewards" links={[['/loyalty', 'My card'], ['/scan', 'Scan a QR'], ['/faq', 'FAQ']]} />
-        <FooterCol title="Company" links={[['/about', 'About'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
+        <FooterCol title="Company" links={[['/about', 'About'], ['/catering', 'Catering'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
       </div>
       <div className="max-w-6xl mx-auto px-4 border-t border-brand-700 py-6 flex justify-between text-[13px] text-brand-300">
         <span>© {new Date().getFullYear()} Milestones Coffee</span>
@@ -1012,6 +1014,7 @@ export function SiteRoutes() {
         <Route path="gallery" element={<GalleryPage />} />
         <Route path="blog" element={<Navigate to="/news" replace />} />
         <Route path="faq" element={<FaqPage />} />
+        <Route path="catering" element={<CateringPage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />
         <Route path="menu" element={<AllMenuPage />} />
         <Route path="menu/:id" element={<BranchMenuPage />} />

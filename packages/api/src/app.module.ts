@@ -16,6 +16,7 @@ import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PromotionsModule } from './promotions/promotions.module';
 import { OrdersModule } from './orders/orders.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
+import { CateringModule } from './catering/catering.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { ServiceRequestsModule } from './service-requests/service-requests.modul
     LoyaltyModule,
     PromotionsModule,
     ServiceRequestsModule,
+    CateringModule,
     OrdersModule,
   ],
   controllers: [],
