@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
 import { readFavs } from './lib/favorites';
+import { trackOffer } from './lib/offerTrack';
 import { bestDiscount } from './lib/happyHour';
 import { countdown, DAY_NAMES, daysLeft, dubaiDate, icsFor, isTimed, liveNow, timing, weekGrid, whenLabel, type Offer } from './lib/offers';
 
@@ -198,7 +199,8 @@ export default function OffersPage() {
       .slice(0, 5);
   }, [offers]);
 
-  async function copy(code: string) {
+  async function copy(code: string, id?: string) {
+    if (id) trackOffer(id, 'code_copy');
     try {
       await navigator.clipboard.writeText(code);
       setToast(`Code ${code} copied`);
@@ -207,6 +209,7 @@ export default function OffersPage() {
     }
   }
   async function share(o: Offer) {
+    trackOffer(o.id, 'share');
     const text = `${o.title}${o.discount_percent ? ` (${o.discount_percent}% off)` : ''} at Milestones Coffee`;
     if (navigator.share) {
       try {
@@ -220,6 +223,7 @@ export default function OffersPage() {
   }
   // Digital coupon: a 10-minute QR for this rewards card. Staff redeem it once.
   async function openCoupon(o: Offer) {
+    trackOffer(o.id, 'coupon_open');
     const token = readToken();
     if (!token) {
       setCoupon({ offer: o, error: 'join' });
@@ -237,6 +241,7 @@ export default function OffersPage() {
   }
 
   function calendar(o: Offer) {
+    trackOffer(o.id, 'calendar');
     const url = URL.createObjectURL(new Blob([icsFor(o, SITE)], { type: 'text/calendar' }));
     const a = document.createElement('a');
     a.href = url;
@@ -522,7 +527,7 @@ function OfferCard({
   now: Date;
   catName: (id: string) => string;
   branchName: (id?: string | null) => string;
-  onCopy: (code: string) => void;
+  onCopy: (code: string, id?: string) => void;
   onShare: (o: Offer) => void;
   onCalendar: (o: Offer) => void;
   products: Product[];
@@ -532,16 +537,36 @@ function OfferCard({
 }) {
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
+  // Count a view once, when at least half the card has been on screen.
+  const ref = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          trackOffer(o.id, 'view');
+          io.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [o.id]);
   const comboItems = isCombo(o) ? (o.combo_product_ids ?? []).map((id) => products.find((p) => p.id === id)).filter((p): p is Product => !!p) : [];
   const normal = comboItems.reduce((s, p) => s + Number(p.base_price), 0);
   // Combo: order from the offer's branch, the only branch taking orders, or let the visitor pick one.
   const orderBranches = o.branch_id ? branches.filter((b) => b.id === o.branch_id) : branches.filter((b) => b.pickup_enabled);
-  const addCombo = (branchId: string) => navigate(`/menu/${branchId}?combo=${o.id}`);
+  const addCombo = (branchId: string) => {
+    trackOffer(o.id, 'combo_add');
+    navigate(`/menu/${branchId}?combo=${o.id}`);
+  };
   const cats = (o.category_ids ?? []).filter(Boolean).map(catName).filter(Boolean);
   const isNew = o.created_at && Date.now() - Date.parse(o.created_at) < 7 * 864e5;
   const live = liveNow(o, now);
   return (
-    <article className={`flex h-full flex-col overflow-hidden rounded-[22px] bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(10,26,51,0.12)] ${live ? 'ring-2 ring-green-600' : 'border border-brand-100'}`}>
+    <article ref={ref} className={`flex h-full flex-col overflow-hidden rounded-[22px] bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(10,26,51,0.12)] ${live ? 'ring-2 ring-green-600' : 'border border-brand-100'}`}>
       <Visual o={o} className="h-36">
         <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
           <div className="flex flex-wrap gap-1.5">
@@ -619,7 +644,7 @@ function OfferCard({
         {o.promo_code && (
           <button
             type="button"
-            onClick={() => onCopy(o.promo_code!)}
+            onClick={() => onCopy(o.promo_code!, o.id)}
             className="flex items-center justify-between rounded-xl border-2 border-dashed border-copper-500 bg-cream px-3 py-2 text-left"
             aria-label={`Copy code ${o.promo_code}`}
           >
@@ -660,7 +685,7 @@ function OfferCard({
               Add combo to order
             </button>
           ) : (
-            <Link to={orderLink(o)} className="flex-1 rounded-full bg-brand-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-900">
+            <Link to={orderLink(o)} onClick={() => trackOffer(o.id, 'order_click')} className="flex-1 rounded-full bg-brand-700 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-brand-900">
               {comboItems.length >= 2 ? 'See on menu' : 'Order now'}
             </Link>
           )}
@@ -715,7 +740,7 @@ function Slider({ slides, now }: { slides: Offer[]; now: Date }) {
             {o.body && <p className="mt-2 line-clamp-2 text-white/85 md:text-lg">{o.body}</p>}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Status o={o} now={now} light />
-              <Link to={orderLink(o)} className="rounded-full bg-copper-500 px-5 py-2.5 font-semibold hover:bg-copper-700">
+              <Link to={orderLink(o)} onClick={() => trackOffer(o.id, 'order_click')} className="rounded-full bg-copper-500 px-5 py-2.5 font-semibold hover:bg-copper-700">
                 Order now
               </Link>
             </div>
