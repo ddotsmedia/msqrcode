@@ -21,7 +21,11 @@ export class User {
   password_hash: string;
 
   @Column({ type: 'varchar', length: 50, default: 'viewer' })
-  role: string; // admin, branch_manager, staff, viewer
+  role: string; // admin (full access), staff (custom access), branch_manager (older accounts)
+
+  // Admin panel sections for non-admins (see auth/permissions.ts). Null on older branch manager accounts.
+  @Column({ type: 'jsonb', nullable: true })
+  permissions: string[] | null;
 
   @Column({ type: 'uuid', nullable: true })
   assigned_branch_id: string;

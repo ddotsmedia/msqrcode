@@ -6,6 +6,8 @@ export interface Me {
   email: string;
   role: string;
   assigned_branch_id: string | null;
+  permissions?: string[]; // sections this user can open (all for full admins)
+  name?: string | null;
 }
 
 export function readToken(): string | null {

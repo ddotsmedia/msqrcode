@@ -14,9 +14,10 @@ import CateringRequestsPage from './pages/CateringRequestsPage';
 import CareersPage from './pages/CareersPage';
 import GiftCardsPage from './pages/GiftCardsPage';
 import CorporatePage from './pages/CorporatePage';
+import UsersPage from './pages/UsersPage';
 import RequestsPage, { useServiceRequests } from './pages/RequestsPage';
 
-type Tab = 'requests' | 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty' | 'catering' | 'careers' | 'gifts' | 'business';
+type Tab = 'requests' | 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty' | 'catering' | 'careers' | 'gifts' | 'business' | 'users';
 
 const TAB_LABELS: Record<Tab, string> = {
   requests: 'Table requests',
@@ -34,16 +35,16 @@ const TAB_LABELS: Record<Tab, string> = {
   careers: 'Careers',
   gifts: 'Gift cards',
   business: 'Business accounts',
+  users: 'Users & access',
 };
 
-const ADMIN_ONLY: Tab[] = ['business', 'dashboard', 'catering', 'careers', 'promotions', 'menu-import', 'products', 'categories', 'qr', 'branches'];
 
 const NAV: { group: string; tabs: Tab[] }[] = [
   { group: 'Overview', tabs: ['dashboard'] },
   { group: 'Live service', tabs: ['requests', 'availability', 'kitchen'] },
   { group: 'Customers', tabs: ['loyalty', 'gifts', 'business', 'promotions', 'catering', 'careers'] },
   { group: 'Menu', tabs: ['products', 'categories', 'menu-import'] },
-  { group: 'Setup', tabs: ['branches', 'qr'] },
+  { group: 'Setup', tabs: ['branches', 'qr', 'users'] },
 ];
 
 // Lucide icon paths
@@ -55,6 +56,7 @@ const TAB_ICONS: Record<Tab, string> = {
   catering: 'M3 11h18M5 11a7 7 0 0 1 14 0M12 4V2M2 15h20M7 19h10',
   careers: 'M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2',
   gifts: 'M4 8h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5',
+  users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   business: 'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4',
   loyalty: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
   promotions: 'M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42zM7.5 7.5h.01',
@@ -146,22 +148,24 @@ function LoginPage({ onLogin }: { onLogin: (token: string) => void }) {
 function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: () => void }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState<string | null>(null);
-  const requests = useServiceRequests(token, branchId);
+  // Full admins see every section; everyone else sees the sections they were given (Users is admin-only).
+  const can = (t: Tab) => me.role === 'admin' || (t !== 'users' && (me.permissions ?? []).includes(t));
+  const requests = useServiceRequests(token, can('requests') ? branchId : null);
   const [products, setProducts] = useState<Product[]>([]);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, boolean>>({});
-  const [tab, setTab] = useState<Tab>('availability');
+  const [tab, setTab] = useState<Tab>(() => (['availability', 'kitchen', 'requests', 'loyalty', 'gifts', 'dashboard', 'products', 'promotions', 'catering', 'careers', 'business', 'categories', 'menu-import', 'branches', 'qr'] as Tab[]).find((t) => can(t)) ?? 'availability');
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const canEdit = me.role === 'admin' || me.role === 'branch_manager';
+  const canEdit = can('availability');
 
   useEffect(() => {
     api<Branch[]>('/branches', token)
       .then((list) => {
         const visible =
-          me.role === 'branch_manager' && me.assigned_branch_id
+          me.role !== 'admin' && me.assigned_branch_id
             ? list.filter((b) => b.id === me.assigned_branch_id)
             : list;
         setBranches(visible);
@@ -204,7 +208,6 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
     }
   }
 
-  const isAdmin = me.role === 'admin';
   const go = (t: Tab) => {
     setTab(t);
     setMenuOpen(false);
@@ -212,7 +215,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
   const nav = (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
       {NAV.map((g) => {
-        const tabs = g.tabs.filter((t) => isAdmin || !ADMIN_ONLY.includes(t));
+        const tabs = g.tabs.filter(can);
         if (!tabs.length) return null;
         return (
           <div key={g.group}>
@@ -278,7 +281,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
         )}
       </header>
 
-      {tab === 'dashboard' && me.role === 'admin' && (
+      {tab === 'dashboard' && can('dashboard') && (
         <main className="max-w-6xl mx-auto p-4 space-y-6">
           <InsightsPage token={token} />
           <div>
@@ -287,43 +290,44 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
           </div>
         </main>
       )}
-      {tab === 'promotions' && (
-        <PromotionsPage token={token} />
+      {tab === 'promotions' && can('promotions') && (
+        <PromotionsPage token={token} admin={me.role === 'admin'} />
       )}
-      {tab === 'catering' && me.role === 'admin' && <CateringRequestsPage token={token} />}
-      {tab === 'careers' && me.role === 'admin' && <CareersPage token={token} />}
-      {tab === 'gifts' && <GiftCardsPage token={token} role={me.role} />}
-      {tab === 'business' && me.role === 'admin' && <CorporatePage token={token} />}
-      {tab === 'loyalty' && (
+      {tab === 'catering' && can('catering') && <CateringRequestsPage token={token} />}
+      {tab === 'careers' && can('careers') && <CareersPage token={token} />}
+      {tab === 'gifts' && can('gifts') && <GiftCardsPage token={token} role={me.role} />}
+      {tab === 'business' && can('business') && <CorporatePage token={token} />}
+      {tab === 'users' && can('users') && <UsersPage token={token} me={me} />}
+      {tab === 'loyalty' && can('loyalty') && (
         <LoyaltyPage token={token} role={me.role} branchId={me.assigned_branch_id} />
       )}
-      {tab === 'menu-import' && me.role === 'admin' && (
+      {tab === 'menu-import' && can('menu-import') && (
         <main className="max-w-3xl mx-auto p-4"><MenuImportPage token={token} /></main>
       )}
-      {tab === 'products' && me.role === 'admin' && (
+      {tab === 'products' && can('products') && (
         <main className="max-w-3xl mx-auto p-4"><ProductsPage token={token} /></main>
       )}
-      {tab === 'categories' && me.role === 'admin' && (
+      {tab === 'categories' && can('categories') && (
         <main className="max-w-3xl mx-auto p-4"><CategoriesPage token={token} /></main>
       )}
-      {tab === 'qr' && me.role === 'admin' && (
+      {tab === 'qr' && can('qr') && (
         <main className="max-w-3xl mx-auto p-4"><QrCodesPage token={token} /></main>
       )}
-      {tab === 'branches' && me.role === 'admin' && (
+      {tab === 'branches' && can('branches') && (
         <main className="max-w-3xl mx-auto p-4">
           <BranchesPage token={token} onQrCreated={() => undefined} />
         </main>
       )}
 
-      {tab === 'requests' && (
+      {tab === 'requests' && can('requests') && (
         <main className="max-w-3xl mx-auto p-4"><RequestsPage token={token} data={requests} branches={branches} branchId={branchId} onBranch={setBranchId} /></main>
       )}
 
-      {tab === 'kitchen' && branchId && (
+      {tab === 'kitchen' && can('kitchen') && branchId && (
         <main className="max-w-6xl mx-auto"><KitchenPage token={token} branchId={branchId} branches={branches} onBranch={setBranchId} /></main>
       )}
 
-      {tab === 'availability' && (
+      {tab === 'availability' && can('availability') && (
       <main className="max-w-3xl mx-auto p-4 space-y-4">
         <section className="bg-white rounded-lg shadow-sm p-4">
           <label className="block text-sm font-semibold text-gray-700 mb-2" htmlFor="branch">
