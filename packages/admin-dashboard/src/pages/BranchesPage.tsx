@@ -24,7 +24,20 @@ interface BranchForm {
   hours: Hours;
   ramadan_on: boolean;
   ramadan_hours: Hours;
+  amenities: string[];
 }
+
+// Same keys as the API's branches/amenities.ts.
+const AMENITIES: [string, string][] = [
+  ['wifi', 'Wi-Fi'],
+  ['parking', 'Parking'],
+  ['drive_thru', 'Drive-thru'],
+  ['outdoor', 'Outdoor seating'],
+  ['family', 'Family area'],
+  ['laptop', 'Laptop friendly'],
+  ['wheelchair', 'Wheelchair access'],
+  ['kids', 'Kids area'],
+];
 
 type Hours = Record<string, { open: string; close: string } | null>; // null = closed that day
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -81,6 +94,7 @@ const EMPTY: BranchForm = {
   hours: fillHours(null, '08:00', '22:00'),
   ramadan_on: false,
   ramadan_hours: fillHours(null, '19:00', '02:00'),
+  amenities: [],
 };
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -149,6 +163,7 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
       hours: fillHours((b as any).operating_hours, '08:00', '22:00'),
       ramadan_on: !!(b as any).ramadan_hours,
       ramadan_hours: fillHours((b as any).ramadan_hours, '19:00', '02:00'),
+      amenities: Array.isArray((b as any).amenities) ? (b as any).amenities : [],
     });
   }
 
@@ -166,7 +181,7 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
       google_maps_url: form.google_maps_url || null,
       google_review_url: form.google_review_url || null,
       whatsapp_number: form.whatsapp_number || null,
-      ...(form.id ? { operating_hours: toApi(form.hours), ramadan_hours: form.ramadan_on ? toApi(form.ramadan_hours) : null } : {}),
+      ...(form.id ? { operating_hours: toApi(form.hours), ramadan_hours: form.ramadan_on ? toApi(form.ramadan_hours) : null, amenities: form.amenities } : {}),
     });
     try {
       if (form.id) {
@@ -369,6 +384,25 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
               <p className="text-xs text-gray-500">Opening hours default to 08:00–22:00 every day. You can change these after saving.</p>
             ) : (
               <>
+                <fieldset className="rounded-lg border border-gray-200 p-3">
+                  <legend className="px-1 text-sm font-semibold text-gray-700">Amenities (shown on the website)</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {AMENITIES.map(([key, label]) => {
+                      const on = form.amenities.includes(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => setForm({ ...form, amenities: on ? form.amenities.filter((a) => a !== key) : [...form.amenities, key] })}
+                          className={`rounded-full border px-3 py-1.5 text-sm ${on ? 'border-brand-700 bg-brand-700 text-white' : 'border-gray-300 text-gray-700'}`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
                 <fieldset className="rounded-lg border border-gray-200 p-3">
                   <legend className="px-1 text-sm font-semibold text-gray-700">Opening hours</legend>
                   <HoursEditor value={form.hours} onChange={(h) => setForm({ ...form, hours: h })} />

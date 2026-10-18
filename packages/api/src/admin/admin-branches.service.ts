@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Branch } from '../entities/branch.entity';
 import { QrCode } from '../entities/qr-code.entity';
+import { amenities } from '../branches/amenities';
 
 type Dict = Record<string, unknown>;
 
@@ -127,6 +128,7 @@ export class AdminBranchesService {
     if (body.whatsapp_number !== undefined) branch.whatsapp_number = validateWhatsApp(body.whatsapp_number);
     if (body.operating_hours !== undefined) branch.operating_hours = this.hours(body.operating_hours, 'Opening hours', false) as any;
     if (body.ramadan_hours !== undefined) branch.ramadan_hours = this.hours(body.ramadan_hours, 'Ramadan hours', true);
+    if (body.amenities !== undefined) branch.amenities = amenities(body.amenities);
     if (body.delivery_links !== undefined) branch.delivery_links = typeof body.delivery_links === 'object' && body.delivery_links !== null ? body.delivery_links as Record<string, string> : null;
     return this.branches.save(branch);
   }

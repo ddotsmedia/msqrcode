@@ -79,6 +79,10 @@ export class Branch {
   @Column({ type: 'jsonb', nullable: true })
   ramadan_hours: Record<string, any> | null;
 
+  // Wi-Fi, parking, drive-thru... (see branches/amenities.ts).
+  @Column({ type: 'jsonb', nullable: true })
+  amenities: string[] | null;
+
   @CreateDateColumn()
   created_at: Date;
 
