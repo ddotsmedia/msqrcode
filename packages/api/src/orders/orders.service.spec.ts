@@ -88,6 +88,18 @@ describe('OrdersService', () => {
     expect(items.save.mock.calls[0][0][1].options.discount).toBeNull();
   });
 
+  it('takes combo savings off the total for each full set', async () => {
+    const combo = { title: 'Latte + cake', combo_product_ids: [P1, P2], combo_price: '30.00', is_active: true };
+    const { svc, saved } = setup({ deals: [combo] });
+    // Latte 23.5 + cake 22 = 45.5 as a set -> 30, saving 15.5; the second latte stays full price.
+    const res = await svc.create(body());
+    expect(res.total).toBe(53.5);
+    expect(res.discounts).toEqual([{ title: 'Latte + cake', sets: 1, amount: 15.5 }]);
+    expect(saved[0]).toMatchObject({ subtotal: 69, total: 53.5, discounts: [{ title: 'Latte + cake', sets: 1, amount: 15.5 }] });
+    const expired = setup({ deals: [{ ...combo, ends_on: '2020-01-01' }] });
+    expect((await expired.svc.create(body())).total).toBe(69);
+  });
+
   it('falls back to the first choice when a choice is missing or unknown', async () => {
     const { svc, items } = setup();
     await svc.create(body({ items: [{ product_id: P1, qty: 1, choices: { 'g-size': 'Huge' } }] }));

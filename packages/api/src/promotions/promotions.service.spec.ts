@@ -16,6 +16,14 @@ describe('PromotionsService offer visuals', () => {
     expect(await setup().create({ title: 'Plain' })).toMatchObject({ image_url: null, promo_code: null, featured: false, theme: null });
   });
 
+  it('saves a combo of 2 to 4 items with a price', async () => {
+    const A = '11111111-1111-1111-1111-111111111111';
+    const B = '22222222-2222-2222-2222-222222222222';
+    expect(await setup().create({ title: 'Combo', combo_product_ids: [A, B, A], combo_price: '22.5' })).toMatchObject({ combo_product_ids: [A, B], combo_price: 22.5 });
+    await expect(setup().create({ title: 'x', combo_product_ids: [A], combo_price: 10 })).rejects.toThrow('2 to 4');
+    await expect(setup().create({ title: 'x', combo_product_ids: [A, B], combo_price: 0 })).rejects.toThrow('Combo price');
+  });
+
   it('keeps known occasion themes only', async () => {
     expect((await setup().create({ title: 'x', theme: 'national_day' })).theme).toBe('national_day');
     expect((await setup().create({ title: 'x', theme: 'halloween' })).theme).toBeNull();

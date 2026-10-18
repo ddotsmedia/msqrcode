@@ -56,6 +56,10 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   total: number;
 
+  // Combo savings taken off the total: [{ title, sets, amount }].
+  @Column({ type: 'jsonb', nullable: true })
+  discounts: { title: string; sets: number; amount: number }[] | null;
+
   @Column({ type: 'varchar', length: 20, nullable: true })
   payment_status: string | null;
 

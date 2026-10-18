@@ -13,6 +13,7 @@ import { Promotion } from '../entities/promotion.entity';
 import { LoyaltyCard } from '../entities/loyalty-card.entity';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { bestDiscount, discounted } from '../promotions/happy-hour';
+import { comboSavings } from '../promotions/combos';
 
 export interface StaffUser {
   id: string;
@@ -153,7 +154,21 @@ export class OrdersService {
         this.items.create({ product_id: product.id, name_snapshot: product.name, unit_price: unitPrice, qty, options: { choices, note: note || null, discount } }),
       );
     }
-    total = Math.round(total * 100) / 100;
+    // Combo deals valid today for this branch come off the total.
+    const day = new Date(dubaiNow().dayStart.getTime() + 4 * 3600_000).toISOString().slice(0, 10);
+    const combos = (
+      await this.promotions.find({
+        where: [
+          { is_active: true, branch_id: IsNull(), combo_price: Not(IsNull()) },
+          { is_active: true, branch_id: branchId, combo_price: Not(IsNull()) },
+        ],
+      })
+    ).filter((p) => (!p.starts_on || p.starts_on <= day) && (!p.ends_on || p.ends_on >= day));
+    const combo = comboSavings(
+      items.map((i) => ({ product_id: i.product_id, unit: Number(i.unit_price), qty: i.qty })),
+      combos,
+    );
+    total = Math.round((total - combo.amount) * 100) / 100;
     full = Math.round(full * 100) / 100;
 
     // Link the customer's rewards card (if the phone has one) so the order earns a stamp when collected.
@@ -174,6 +189,7 @@ export class OrdersService {
         car: pickup ? clean(body.car, 40) || null : null,
         loyalty_card_id: card?.id ?? null,
         subtotal: full,
+        discounts: combo.applied.length ? combo.applied : null,
         total,
         status: 'placed',
         payment_status: 'unpaid',
@@ -183,7 +199,7 @@ export class OrdersService {
     );
     items.forEach((i) => (i.order_id = saved.id));
     await this.items.save(items);
-    return { id: saved.id, access_token: token, order_no: saved.order_no, total, earns_stamp: !!card };
+    return { id: saved.id, access_token: token, order_no: saved.order_no, total, earns_stamp: !!card, discounts: combo.applied };
   }
 
   // Public: rough wait for a new order, from how many are queued or being made (5 to 45 minutes).
@@ -214,6 +230,7 @@ export class OrdersService {
       car: o.car,
       arrived_at: o.arrived_at,
       total: Number(o.total),
+      discounts: o.discounts ?? [],
       created_at: o.created_at,
       loyalty: o.loyalty_card_id ? (o.loyalty_stamped ? 'stamped' : 'linked') : null,
       items: (o.items ?? []).map((i) => ({ product_id: i.product_id, name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
@@ -277,6 +294,7 @@ export class OrdersService {
       arrived_at: o.arrived_at,
       status: o.status,
       total: Number(o.total),
+      discounts: o.discounts ?? [],
       created_at: o.created_at,
       items: (o.items ?? []).map((i) => ({ name: i.name_snapshot, qty: i.qty, options: i.options })),
     });

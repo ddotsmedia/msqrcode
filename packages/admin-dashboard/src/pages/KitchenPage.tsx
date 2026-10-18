@@ -20,6 +20,7 @@ interface Order {
   arrived_at?: string | null;
   status: 'placed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   total: number;
+  discounts?: { title: string; amount: number }[];
   created_at: string;
   items: Line[];
 }
@@ -199,6 +200,11 @@ export default function KitchenPage({
                         </li>
                       ))}
                     </ul>
+                    {(o.discounts ?? []).map((d) => (
+                      <p key={d.title} className="mt-1 text-xs font-semibold text-green-700">
+                        🎁 {d.title} −AED {d.amount.toFixed(2)}
+                      </p>
+                    ))}
                     <p className="mt-2 text-sm font-semibold text-gray-700">AED {o.total.toFixed(2)} · pay at counter</p>
                     <div className="mt-3 flex gap-2">
                       {col.next && (
