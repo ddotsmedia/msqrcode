@@ -13,9 +13,10 @@ import LoyaltyPage from './pages/LoyaltyPage';
 import CateringRequestsPage from './pages/CateringRequestsPage';
 import CareersPage from './pages/CareersPage';
 import GiftCardsPage from './pages/GiftCardsPage';
+import CorporatePage from './pages/CorporatePage';
 import RequestsPage, { useServiceRequests } from './pages/RequestsPage';
 
-type Tab = 'requests' | 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty' | 'catering' | 'careers' | 'gifts';
+type Tab = 'requests' | 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty' | 'catering' | 'careers' | 'gifts' | 'business';
 
 const TAB_LABELS: Record<Tab, string> = {
   requests: 'Table requests',
@@ -32,14 +33,15 @@ const TAB_LABELS: Record<Tab, string> = {
   catering: 'Catering',
   careers: 'Careers',
   gifts: 'Gift cards',
+  business: 'Business accounts',
 };
 
-const ADMIN_ONLY: Tab[] = ['dashboard', 'catering', 'careers', 'promotions', 'menu-import', 'products', 'categories', 'qr', 'branches'];
+const ADMIN_ONLY: Tab[] = ['business', 'dashboard', 'catering', 'careers', 'promotions', 'menu-import', 'products', 'categories', 'qr', 'branches'];
 
 const NAV: { group: string; tabs: Tab[] }[] = [
   { group: 'Overview', tabs: ['dashboard'] },
   { group: 'Live service', tabs: ['requests', 'availability', 'kitchen'] },
-  { group: 'Customers', tabs: ['loyalty', 'gifts', 'promotions', 'catering', 'careers'] },
+  { group: 'Customers', tabs: ['loyalty', 'gifts', 'business', 'promotions', 'catering', 'careers'] },
   { group: 'Menu', tabs: ['products', 'categories', 'menu-import'] },
   { group: 'Setup', tabs: ['branches', 'qr'] },
 ];
@@ -53,6 +55,7 @@ const TAB_ICONS: Record<Tab, string> = {
   catering: 'M3 11h18M5 11a7 7 0 0 1 14 0M12 4V2M2 15h20M7 19h10',
   careers: 'M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2',
   gifts: 'M4 8h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5',
+  business: 'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4M10 18h4',
   loyalty: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
   promotions: 'M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42zM7.5 7.5h.01',
   products: 'M21 8 12 3 3 8v8l9 5 9-5ZM3 8l9 5 9-5M12 13v8',
@@ -290,6 +293,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
       {tab === 'catering' && me.role === 'admin' && <CateringRequestsPage token={token} />}
       {tab === 'careers' && me.role === 'admin' && <CareersPage token={token} />}
       {tab === 'gifts' && <GiftCardsPage token={token} role={me.role} />}
+      {tab === 'business' && me.role === 'admin' && <CorporatePage token={token} />}
       {tab === 'loyalty' && (
         <LoyaltyPage token={token} role={me.role} branchId={me.assigned_branch_id} />
       )}

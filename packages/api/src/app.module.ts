@@ -23,6 +23,7 @@ import { RatingsModule } from './ratings/ratings.module';
 import { CareersModule } from './careers/careers.module';
 import { SeasonModule } from './season/season.module';
 import { GiftCardsModule } from './gift-cards/gift-cards.module';
+import { CorporateModule } from './corporate/corporate.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { GiftCardsModule } from './gift-cards/gift-cards.module';
     CareersModule,
     SeasonModule,
     GiftCardsModule,
+    CorporateModule,
     OrdersModule,
   ],
   controllers: [],

@@ -16,6 +16,7 @@ import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
 import DrinkQuiz from './DrinkQuiz';
 import GiftCardsPage, { GiftCardPage } from './GiftCards';
+import BusinessPage, { BusinessInvoice, BusinessPortal } from './Business';
 import CareersPage from './CareersPage';
 import { BrewGuidePage, BrewGuidesPage } from './BrewGuides';
 import { Crescent, useRamadan } from './lib/season';
@@ -118,6 +119,7 @@ const MORE: [string, string][] = [
   ['/find-your-drink', 'Find your drink'],
   ['/brew', 'Brew guides'],
   ['/gift-cards', 'Gift cards'],
+  ['/business', 'Business accounts'],
   ['/catering', 'Catering'],
   ['/careers', 'Careers'],
   ['/about', 'About'],
@@ -160,7 +162,7 @@ function Logo({ dark = false }: { dark?: boolean }) {
 
 function SiteFooter() {
   return (
-    <footer className="bg-brand-900 text-brand-100 text-[15px] pb-20 md:pb-0">
+    <footer className="bg-brand-900 text-brand-100 text-[15px] pb-20 md:pb-0 print:hidden">
       <div className="max-w-6xl mx-auto px-4 pt-16 pb-10 grid gap-10 grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="col-span-2 md:col-span-1">
           <Logo dark />
@@ -205,7 +207,7 @@ function Layout() {
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
-      <header className="bg-white/95 backdrop-blur border-b border-brand-100 sticky top-0 z-40">
+      <header className="bg-white/95 backdrop-blur border-b border-brand-100 sticky top-0 z-40 print:hidden">
         <div className="max-w-6xl mx-auto px-4 h-[72px] flex items-center justify-between gap-4">
           <Logo />
           <nav className="hidden lg:flex items-center gap-1" aria-label="Main">
@@ -262,7 +264,7 @@ function Layout() {
           ))}
         </div>
       )}
-      <nav aria-label="Mobile" className="md:hidden fixed bottom-0 inset-x-0 z-40 h-[68px] bg-white border-t border-brand-100 grid grid-cols-5 items-center">
+      <nav aria-label="Mobile" className="print:hidden md:hidden fixed bottom-0 inset-x-0 z-40 h-[68px] bg-white border-t border-brand-100 grid grid-cols-5 items-center">
         {barItems.map(([to, label, icon]) =>
           to === '/scan' ? (
             <Link key={to} to={to} aria-label="Scan QR" className="justify-self-center -mt-6 grid h-14 w-14 place-items-center rounded-full bg-copper-700 text-white shadow-[0_6px_14px_rgba(138,95,56,0.4)]">
@@ -1110,6 +1112,9 @@ export function SiteRoutes() {
         <Route path="careers" element={<CareersPage />} />
         <Route path="gift-cards" element={<GiftCardsPage />} />
         <Route path="gift/:code" element={<GiftCardPage />} />
+        <Route path="business" element={<BusinessPage />} />
+        <Route path="business/:token" element={<BusinessPortal />} />
+        <Route path="business/:token/invoice/:id" element={<BusinessInvoice />} />
         <Route path="brew" element={<BrewGuidesPage />} />
         <Route path="brew/:slug" element={<BrewGuidePage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />

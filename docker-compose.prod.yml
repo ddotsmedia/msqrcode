@@ -51,6 +51,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       MENU_PUBLIC_URL: https://coffeesales.ae
+      # Shown on business tax invoices. Set COMPANY_TRN as a GitHub secret.
+      COMPANY_NAME: Milestones Coffee
+      COMPANY_TRN: ${COMPANY_TRN:-}
       CORS_ORIGIN: https://coffeesales.ae,https://www.coffeesales.ae,https://admin.coffeesales.ae
     ports:
       - "127.0.0.1:3016:3000" # only nginx on this server reaches it

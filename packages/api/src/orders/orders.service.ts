@@ -1,4 +1,6 @@
 import { knownTable } from '../branches/known-table';
+import { CorporateService } from '../corporate/corporate.service';
+import { CorporateAccount } from '../entities/corporate-account.entity';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, MoreThanOrEqual, Not, Repository } from 'typeorm';
@@ -59,6 +61,7 @@ export class OrdersService {
     @InjectRepository(Promotion) private promotions: Repository<Promotion>,
     @InjectRepository(LoyaltyCard) private cards: Repository<LoyaltyCard>,
     @Optional() private loyalty?: LoyaltyService,
+    @Optional() private corporate?: CorporateService,
   ) {}
 
   // Public: a customer sends an order from their table, or orders ahead for pickup. Prices come from the database only.
@@ -173,6 +176,11 @@ export class OrdersService {
     total = Math.round((total - combo.amount) * 100) / 100;
     full = Math.round(full * 100) / 100;
 
+    // Company account: pickup only, charged to the account (monthly invoice) within its credit limit.
+    const accountToken = typeof body.account_token === 'string' ? body.account_token : '';
+    if (accountToken && !pickup) throw new BadRequestException('Company accounts can order ahead for pickup only');
+    const account = accountToken && this.corporate ? await this.corporate.forOrder(accountToken, total) : null;
+
     // Link the customer's rewards card (if the phone has one) so the order earns a stamp when collected.
     const loyaltyToken = typeof body.loyalty_token === 'string' ? body.loyalty_token.trim().slice(0, 128) : '';
     const card = loyaltyToken ? await this.cards.findOne({ where: { token: loyaltyToken } }) : null;
@@ -194,14 +202,15 @@ export class OrdersService {
         discounts: combo.applied.length ? combo.applied : null,
         total,
         status: 'placed',
-        payment_status: 'unpaid',
-        payment_provider: 'counter',
+        payment_status: account ? 'on_account' : 'unpaid',
+        payment_provider: account ? 'account' : 'counter',
+        corporate_account_id: account?.id ?? null,
         access_token: token,
       }),
     );
     items.forEach((i) => (i.order_id = saved.id));
     await this.items.save(items);
-    return { id: saved.id, access_token: token, order_no: saved.order_no, total, earns_stamp: !!card, discounts: combo.applied };
+    return { id: saved.id, access_token: token, order_no: saved.order_no, total, earns_stamp: !!card, discounts: combo.applied, on_account: account?.company ?? null };
   }
 
   // Public: rough wait for a new order, from how many are queued or being made (5 to 45 minutes).
@@ -283,8 +292,14 @@ export class OrdersService {
         take: 30,
       }),
     ]);
+    // Company account orders are not paid at the counter: show the company so staff do not charge.
+    const accIds = [...new Set([...open, ...finished].map((o) => o.corporate_account_id).filter((x): x is string => !!x))];
+    const accNames = new Map(
+      accIds.length ? (await this.orders.manager.getRepository(CorporateAccount).find({ where: { id: In(accIds) } })).map((a) => [a.id, a.company]) : [],
+    );
     const row = (o: Order) => ({
       id: o.id,
+      on_account: o.corporate_account_id ? (accNames.get(o.corporate_account_id) ?? 'Company account') : null,
       order_no: o.order_no,
       customer_name: o.customer_name,
       phone: o.phone,

@@ -16,6 +16,7 @@ interface Order {
   type?: 'pickup' | 'dine_in';
   pickup_at?: string | null;
   rewards_card?: boolean;
+  on_account?: string | null;
   car?: string | null;
   arrived_at?: string | null;
   status: 'placed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
@@ -205,7 +206,11 @@ export default function KitchenPage({
                         🎁 {d.title} −AED {d.amount.toFixed(2)}
                       </p>
                     ))}
-                    <p className="mt-2 text-sm font-semibold text-gray-700">AED {o.total.toFixed(2)} · pay at counter</p>
+                    {o.on_account ? (
+                      <p className="mt-2 rounded bg-brand-50 px-2 py-1 text-sm font-semibold text-brand-800">AED {o.total.toFixed(2)} · on {o.on_account} account — do not charge</p>
+                    ) : (
+                      <p className="mt-2 text-sm font-semibold text-gray-700">AED {o.total.toFixed(2)} · pay at counter</p>
+                    )}
                     <div className="mt-3 flex gap-2">
                       {col.next && (
                         <button

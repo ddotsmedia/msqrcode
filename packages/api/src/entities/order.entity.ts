@@ -72,6 +72,13 @@ export class Order {
   @Column({ type: 'varchar', length: 255, unique: true })
   access_token: string;
 
+  // Ordered on a company account (paid by monthly invoice), and the invoice it was billed on.
+  @Column({ type: 'uuid', nullable: true })
+  corporate_account_id: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  invoice_id: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 
