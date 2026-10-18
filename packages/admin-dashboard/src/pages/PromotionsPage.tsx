@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import type { BranchRow } from './BranchesPage';
 import RamadanCard from './RamadanCard';
+import OfferStats from './OfferStats';
 
 interface Promotion {
   id: string;
@@ -130,6 +131,8 @@ export default function PromotionsPage({ token }: { token: string }) {
     <main className="p-4 max-w-4xl mx-auto space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Offers</h2>
       {error && <p className="text-red-600 text-sm">{error}</p>}
+
+      <OfferStats token={token} />
 
       <RamadanCard token={token} categories={categories} />
 

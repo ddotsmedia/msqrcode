@@ -3,10 +3,26 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { PromotionsService } from './promotions.service';
+import { OfferStatsService } from './offer-stats.service';
 
 @Controller()
 export class PromotionsController {
-  constructor(private promotions: PromotionsService) {}
+  constructor(
+    private promotions: PromotionsService,
+    private stats: OfferStatsService,
+  ) {}
+
+  @Post('offers/events')
+  record(@Body() body: { events?: unknown }) {
+    return this.stats.record(body);
+  }
+
+  @Get('admin/offers/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  offerStats(@Query('days') days?: string) {
+    return this.stats.stats(days);
+  }
 
   @Get('promotions')
   listActive(@Query('branch_id') branchId?: string) {
