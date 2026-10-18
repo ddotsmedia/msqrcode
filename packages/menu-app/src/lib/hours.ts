@@ -120,7 +120,7 @@ export function getNextOpenTime(operatingHours: OperatingHours | null | undefine
 }
 
 // Pickup times for order-ahead: every 15 minutes from `lead` minutes after now until 15 minutes before
-// today's closing, at most `ahead` minutes away. Without opening hours, the next 2 hours.
+// today's closing, at most `ahead` minutes after now (or after opening, if not open yet). Without opening hours, the next 2 hours.
 export function pickupSlots(
   operatingHours: OperatingHours | null | undefined,
   timezone: string,
@@ -140,7 +140,8 @@ export function pickupSlots(
   }
   const base = now.getTime() - (now.getSeconds() * 1000 + now.getMilliseconds());
   const first = Math.ceil(Math.max(cur + lead, open) / 15) * 15;
-  const last = Math.min(close - 15, cur + ahead);
+  // Before opening, customers can pre-order for the first hours after opening (e.g. iftar at 1pm for 7pm).
+  const last = Math.min(close - 15, Math.max(cur, open) + ahead);
   const out: { at: string; label: string }[] = [];
   for (let m = first; m <= last; m += 15) {
     const day = m % (24 * 60);

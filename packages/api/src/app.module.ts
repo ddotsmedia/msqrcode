@@ -17,6 +17,7 @@ import { PromotionsModule } from './promotions/promotions.module';
 import { OrdersModule } from './orders/orders.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
 import { CateringModule } from './catering/catering.module';
+import { SeasonModule } from './season/season.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { CateringModule } from './catering/catering.module';
     PromotionsModule,
     ServiceRequestsModule,
     CateringModule,
+    SeasonModule,
     OrdersModule,
   ],
   controllers: [],

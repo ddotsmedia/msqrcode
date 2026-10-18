@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import type { BranchRow } from './BranchesPage';
+import RamadanCard from './RamadanCard';
 
 interface Promotion {
   id: string;
@@ -96,6 +97,8 @@ export default function PromotionsPage({ token }: { token: string }) {
     <main className="p-4 max-w-4xl mx-auto space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Offers</h2>
       {error && <p className="text-red-600 text-sm">{error}</p>}
+
+      <RamadanCard token={token} categories={categories} />
 
       <form onSubmit={create} className="bg-white rounded-lg shadow p-4 grid gap-3 md:grid-cols-2">
         <input required maxLength={120} placeholder="Title (e.g. Free drink with breakfast)" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputClass} />
