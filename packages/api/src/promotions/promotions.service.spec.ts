@@ -13,7 +13,8 @@ describe('PromotionsService offer visuals', () => {
   });
 
   it('defaults to no image, no code, not featured and no theme', async () => {
-    expect(await setup().create({ title: 'Plain' })).toMatchObject({ image_url: null, promo_code: null, featured: false, theme: null });
+    expect(await setup().create({ title: 'Plain' })).toMatchObject({ image_url: null, promo_code: null, featured: false, theme: null, coupon_enabled: false });
+    expect((await setup().create({ title: 'Coupon', coupon_enabled: true })).coupon_enabled).toBe(true);
   });
 
   it('saves a combo of 2 to 4 items with a price', async () => {

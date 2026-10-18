@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import QRCode from 'qrcode';
+import CouponRedeem from './CouponRedeem';
 import { api } from '../api';
 
 interface CardRow {
@@ -597,6 +598,7 @@ export default function LoyaltyPage({ token, role, branchId }: { token: string; 
           </button>
         )}
       </div>
+      <CouponRedeem token={token} branchId={branchId ?? null} />
       {counter && <CounterScreen token={token} branchId={branchId ?? null} onClose={() => setCounter(false)} />}
       {scanning && (
         <ScanStamp

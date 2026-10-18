@@ -82,6 +82,7 @@ export class PromotionsService {
       promo_code: code || null,
       featured: body.featured === true,
       theme: THEMES.find((t) => t === body.theme) ?? null,
+      coupon_enabled: body.coupon_enabled === true,
       title,
       body: typeof body.body === 'string' && body.body.trim() ? body.body.trim().slice(0, 500) : null,
       branch_id: typeof body.branch_id === 'string' && body.branch_id ? body.branch_id : null,
