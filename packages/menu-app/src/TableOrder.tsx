@@ -41,6 +41,7 @@ interface Placed {
   status?: string;
   seen?: boolean;
   pickup?: string; // pickup time label, for order-ahead
+  here?: boolean; // curbside: the customer tapped "I'm here"
   rated?: Record<string, boolean>; // product id -> thumbs up, after collecting
   lines?: Omit<CartLine, 'key'>[]; // what was ordered, for "Order again"
 }
@@ -297,6 +298,7 @@ export function TableOrder({
   const [sheet, setSheet] = useState<'cart' | string | null>(null); // 'cart' or an order id
   const [name, setName] = useState(() => read<string>('msq_order_name', ''));
   const [phone, setPhone] = useState(() => read<string>('msq_order_phone', ''));
+  const [car, setCar] = useState(() => read<string>('msq_order_car', ''));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Tracked | null>(null);
@@ -365,10 +367,11 @@ export function TableOrder({
     setError(null);
     write('msq_order_name', name.trim());
     write('msq_order_phone', phone.trim());
+    if (pickup) write('msq_order_car', car.trim());
     try {
       const r = await axios.post('/api/orders', {
         branch_id: branchId,
-        ...(pickup ? { type: 'pickup', pickup_at: slot!.at } : { table }),
+        ...(pickup ? { type: 'pickup', pickup_at: slot!.at, car: car.trim() || undefined } : { table }),
         customer_name: name.trim(),
         phone: phone.trim() || undefined,
         loyalty_token: rewardsToken() || undefined,
@@ -393,6 +396,26 @@ export function TableOrder({
       ]);
       cart.clear();
       setSheet(r.data.id);
+    } catch (err: any) {
+      const m = err?.response?.data?.message;
+      setError(typeof m === 'string' ? m : t('orderError'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Curbside: tell the branch we are outside so they bring the order to the car.
+  async function arrived(o: Placed) {
+    if (!car.trim()) {
+      setError(t('orderHereAsk'));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    write('msq_order_car', car.trim());
+    try {
+      await axios.post(`/api/orders/${o.id}/arrived`, { token: o.token, car: car.trim() });
+      setPlaced((prev) => prev.map((x) => (x.id === o.id ? { ...x, here: true } : x)));
     } catch (err: any) {
       const m = err?.response?.data?.message;
       setError(typeof m === 'string' ? m : t('orderError'));
@@ -578,6 +601,18 @@ export function TableOrder({
                           )}
                         </label>
                       )}
+                      {pickup && (
+                        <label className="mt-3 block">
+                          <span className="mb-1 block text-sm font-semibold text-slate-700">{t('orderCar')}</span>
+                          <input
+                            value={car}
+                            maxLength={40}
+                            onChange={(e) => setCar(e.target.value)}
+                            placeholder={t('orderCarPh')}
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none"
+                          />
+                        </label>
+                      )}
                       <div className="mt-4 flex items-baseline justify-between border-t border-slate-100 pt-3">
                         <span className="font-semibold text-slate-700">{t('orderTotal')}</span>
                         <span className="text-xl font-bold text-brand-900">{money(cart.total)}</span>
@@ -690,6 +725,34 @@ export function TableOrder({
                         </p>
                       )}
                     </>
+                  )}
+                  {current.pickup && ['placed', 'preparing', 'ready'].includes(current.status ?? '') && (
+                    <div className="mt-4 rounded-xl border border-brand-100 p-3">
+                      {current.here ? (
+                        <p role="status" className="text-sm font-semibold text-green-800">
+                          🚗 {t('orderHereDone')}
+                        </p>
+                      ) : (
+                        <>
+                          <input
+                            value={car}
+                            maxLength={40}
+                            onChange={(e) => setCar(e.target.value)}
+                            placeholder={t('orderCarPh')}
+                            aria-label={t('orderCarPh')}
+                            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => arrived(current)}
+                            className="mt-2 w-full rounded-xl bg-copper-500 py-3 text-sm font-semibold text-white hover:bg-copper-700 disabled:opacity-60"
+                          >
+                            {t('orderHere')}
+                          </button>
+                        </>
+                      )}
+                    </div>
                   )}
                   {error && <p className="mt-3 rounded-lg bg-red-50 p-2.5 text-sm text-red-700">{error}</p>}
                   <div className="mt-4 flex gap-2">

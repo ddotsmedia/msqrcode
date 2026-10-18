@@ -171,6 +171,7 @@ export class OrdersService {
         type: pickup ? 'pickup' : 'dine_in',
         table_number: pickup ? null : table,
         pickup_at: pickupAt,
+        car: pickup ? clean(body.car, 40) || null : null,
         loyalty_card_id: card?.id ?? null,
         subtotal: full,
         total,
@@ -210,11 +211,26 @@ export class OrdersService {
       type: o.type,
       table: o.table_number,
       pickup_at: o.pickup_at,
+      car: o.car,
+      arrived_at: o.arrived_at,
       total: Number(o.total),
       created_at: o.created_at,
       loyalty: o.loyalty_card_id ? (o.loyalty_stamped ? 'stamped' : 'linked') : null,
       items: (o.items ?? []).map((i) => ({ product_id: i.product_id, name: i.name_snapshot, qty: i.qty, unit_price: Number(i.unit_price), options: i.options })),
     };
+  }
+
+  // Public: curbside pickup. The customer is outside; staff bring the order to their car.
+  async arrived(id: string, token: unknown, carRaw: unknown) {
+    const o = await this.own(id, token);
+    if (o.type !== 'pickup') throw new BadRequestException('Only order-ahead orders can be brought to your car');
+    if (!(OPEN as readonly string[]).includes(o.status)) throw new BadRequestException('This order is already closed');
+    const car = clean(carRaw, 40) || o.car;
+    if (!car) throw new BadRequestException('Tell us your car so we can find you, e.g. White Patrol, plate A 12345');
+    o.car = car;
+    o.arrived_at = o.arrived_at ?? new Date();
+    await this.orders.save(o);
+    return { ok: true, car: o.car, arrived_at: o.arrived_at };
   }
 
   // Public: the customer can cancel until staff start making it.
@@ -257,6 +273,8 @@ export class OrdersService {
       type: o.type,
       table: o.table_number,
       pickup_at: o.pickup_at,
+      car: o.car,
+      arrived_at: o.arrived_at,
       status: o.status,
       total: Number(o.total),
       created_at: o.created_at,
