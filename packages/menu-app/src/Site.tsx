@@ -15,6 +15,7 @@ import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
 import { Crescent, useRamadan } from './lib/season';
+import { AMENITIES, amenityList } from './lib/amenities';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -35,6 +36,21 @@ export interface SiteBranch {
   delivery_links?: Record<string, string> | null;
   pickup_enabled?: boolean;
   ramadan?: boolean; // the API swapped in Ramadan hours
+  amenities?: string[] | null;
+}
+
+function Amenities({ list }: { list?: string[] | null }) {
+  const keys = amenityList(list);
+  if (!keys.length) return null;
+  return (
+    <ul className="flex flex-wrap gap-1.5" aria-label="Amenities">
+      {keys.map((k) => (
+        <li key={k} className="rounded-full bg-cream px-2.5 py-1 text-xs font-medium text-brand-900">
+          <span aria-hidden="true">{AMENITIES[k].icon}</span> {AMENITIES[k].label}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function useBranches() {
@@ -798,6 +814,7 @@ function BranchesPage() {
   const { branches, error } = useBranches();
   const [query, setQuery] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);
+  const [need, setNeed] = useState<string[]>([]);
   const [params, setParams] = useSearchParams();
   const view = params.get('view') === 'map' ? 'map' : 'list';
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -836,9 +853,12 @@ function BranchesPage() {
     .filter((b) => {
       if (query && !`${b.name} ${b.address}`.toLowerCase().includes(query.toLowerCase())) return false;
       if (onlyOpen && isOpenNow(b.operating_hours, b.timezone || TZ, new Date()) !== true) return false;
+      if (need.some((a) => !amenityList(b.amenities).includes(a))) return false;
       return true;
     })
     .sort((a, b) => (kmTo(a) ?? Infinity) - (kmTo(b) ?? Infinity));
+  // Only offer filters for amenities at least one branch has.
+  const offered = Object.keys(AMENITIES).filter((k) => (branches ?? []).some((b) => amenityList(b.amenities).includes(k)));
 
   return (
     <div className="space-y-4">
@@ -883,6 +903,24 @@ function BranchesPage() {
           {locating === 'busy' ? 'Finding you…' : coords ? 'Nearest first' : 'Near me'}
         </button>
       </div>
+      {offered.length > 0 && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by amenity">
+          {offered.map((k) => {
+            const on = need.includes(k);
+            return (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setNeed(on ? need.filter((x) => x !== k) : [...need, k])}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium ${on ? 'bg-brand-700 text-white' : 'border border-brand-100 bg-white text-brand-800'}`}
+              >
+                <span aria-hidden="true">{AMENITIES[k].icon}</span> {AMENITIES[k].label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {locating === 'denied' && <p className="text-sm text-slate-500">Location is off, so branches are shown in the usual order.</p>}
       {error && <p className="text-red-600">Could not load branches. Try again later.</p>}
       {!branches && !error && <p className="text-gray-500">Loading…</p>}
@@ -895,6 +933,7 @@ function BranchesPage() {
               {kmTo(b) !== null && <span className="font-semibold text-brand-700"> · {kmTo(b)!.toFixed(1)} km</span>}
             </p>
             <HoursLine branch={b} />
+            <Amenities list={b.amenities} />
             <ContactButtons branch={b as any} />
             <div className="flex flex-wrap items-center gap-3">
               <Link to={`/menu/${b.id}`} className="inline-block text-sm font-semibold text-brand-700">View menu →</Link>
@@ -947,6 +986,7 @@ function BranchDetailPage() {
         <h1 className="text-2xl font-bold text-brand-800">{branch.name}</h1>
         <p className="text-gray-600">{branch.address}</p>
         <HoursLine branch={branch} />
+        <Amenities list={branch.amenities} />
         <ContactButtons branch={branch as any} />
         <Link to={`/menu/${branch.id}`} className="inline-block px-4 py-2 bg-brand-600 text-white rounded-lg font-semibold">View this branch menu</Link>
       </div>
