@@ -41,6 +41,16 @@ export class Promotion {
   @Column({ type: 'varchar', length: 5, nullable: true })
   end_time: string | null;
 
+  // Offers page visuals: banner image (https), a code to show at the counter, and pinned to the top slider.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  image_url: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  promo_code: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  featured: boolean;
+
   @CreateDateColumn()
   created_at: Date;
 }

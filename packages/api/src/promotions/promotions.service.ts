@@ -5,6 +5,7 @@ import { Promotion } from '../entities/promotion.entity';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const CODE_RE = /^[A-Z0-9-]{3,20}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function today(): string {
@@ -60,8 +61,15 @@ export class PromotionsService {
       const cats = Array.isArray(body.category_ids) ? [...new Set(body.category_ids.map(String).filter((c) => UUID.test(c)))].slice(0, 50) : [];
       pricing = { discount_percent: pct, start_time: start, end_time: end, days: days.length ? days : null, category_ids: cats.length ? cats : null };
     }
+    const image = typeof body.image_url === 'string' ? body.image_url.trim() : '';
+    if (image && !/^https:\/\/[^\s"'<>]{4,490}$/.test(image)) throw new BadRequestException('Image must be an https:// link');
+    const code = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
+    if (code && !CODE_RE.test(code)) throw new BadRequestException('Code must be 3 to 20 letters, numbers or dashes');
     const row = this.promos.create({
       ...pricing,
+      image_url: image || null,
+      promo_code: code || null,
+      featured: body.featured === true,
       title,
       body: typeof body.body === 'string' && body.body.trim() ? body.body.trim().slice(0, 500) : null,
       branch_id: typeof body.branch_id === 'string' && body.branch_id ? body.branch_id : null,

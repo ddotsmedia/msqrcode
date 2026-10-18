@@ -16,10 +16,13 @@ interface Promotion {
   days?: string[] | null;
   start_time?: string | null;
   end_time?: string | null;
+  image_url?: string | null;
+  promo_code?: string | null;
+  featured?: boolean;
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[] };
+const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false };
 
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
@@ -55,6 +58,9 @@ export default function PromotionsPage({ token }: { token: string }) {
           branch_id: form.branch_id || null,
           starts_on: form.starts_on || null,
           ends_on: form.ends_on || null,
+          image_url: form.image_url.trim() || null,
+          promo_code: form.promo_code.trim() || null,
+          featured: form.featured,
           ...(form.happy
             ? { discount_percent: Number(form.discount_percent), start_time: form.start_time || null, end_time: form.end_time || null, days: form.days, category_ids: form.category_ids }
             : {}),
@@ -111,6 +117,18 @@ export default function PromotionsPage({ token }: { token: string }) {
         <textarea maxLength={500} placeholder="Details (optional)" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} className={`${inputClass} md:col-span-2`} rows={2} />
         <label className="text-sm text-gray-600">Starts on<input type="date" value={form.starts_on} onChange={(e) => setForm({ ...form, starts_on: e.target.value })} className={inputClass} /></label>
         <label className="text-sm text-gray-600">Ends on<input type="date" value={form.ends_on} onChange={(e) => setForm({ ...form, ends_on: e.target.value })} className={inputClass} /></label>
+        <label className="text-sm text-gray-600">
+          Banner image link (optional, https://…)
+          <input type="url" maxLength={490} placeholder="https://…/offer.jpg" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} className={inputClass} />
+        </label>
+        <label className="text-sm text-gray-600">
+          Code to show at the counter (optional)
+          <input maxLength={20} placeholder="e.g. HAPPY20" value={form.promo_code} onChange={(e) => setForm({ ...form, promo_code: e.target.value.toUpperCase() })} className={`${inputClass} uppercase placeholder:normal-case`} />
+        </label>
+        <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} />
+          Feature in the big slider at the top of the website's Offers page
+        </label>
         <label className="md:col-span-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
           <input type="checkbox" checked={form.happy} onChange={(e) => setForm({ ...form, happy: e.target.checked })} />
           Happy hour price — take a % off the menu prices at set times (applies to table and pickup orders)
@@ -150,8 +168,13 @@ export default function PromotionsPage({ token }: { token: string }) {
       <ul className="space-y-2">
         {items.map((p) => (
           <li key={p.id} className="bg-white rounded-lg shadow p-4 flex items-start justify-between gap-3">
-            <div>
-              <p className="font-semibold">{p.title} {!p.is_active && <span className="text-xs text-gray-500">(hidden)</span>}</p>
+            {p.image_url && <img src={p.image_url} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} className="h-14 w-20 shrink-0 rounded object-cover" />}
+            <div className="flex-1">
+              <p className="font-semibold">
+                {p.featured && <span title="Featured">⭐ </span>}
+                {p.title} {!p.is_active && <span className="text-xs text-gray-500">(hidden)</span>}
+                {p.promo_code && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">{p.promo_code}</span>}
+              </p>
               {happyText(p) && <p className="text-sm font-semibold text-amber-700">Happy hour {happyText(p)}</p>}
               <p className="text-xs text-gray-500">{branchName(p.branch_id)}{p.starts_on || p.ends_on ? ` · ${p.starts_on ?? ''} → ${p.ends_on ?? ''}` : ''}</p>
             </div>
