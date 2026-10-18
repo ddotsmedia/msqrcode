@@ -33,6 +33,13 @@ export class Order {
   @Column({ type: 'timestamptz', nullable: true })
   pickup_at: Date | null;
 
+  // Curbside pickup: the car to bring the order to, and when the customer tapped "I'm here".
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  car: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  arrived_at: Date | null;
+
   // The customer's rewards card, if they had one open; it earns a stamp when the order is collected.
   @Column({ type: 'uuid', nullable: true })
   loyalty_card_id: string | null;
