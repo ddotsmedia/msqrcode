@@ -1,6 +1,7 @@
 import { knownTable } from '../branches/known-table';
 import { CorporateService } from '../corporate/corporate.service';
 import { CorporateAccount } from '../entities/corporate-account.entity';
+import { PushService } from '../push/push.service';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, IsNull, MoreThanOrEqual, Not, Repository } from 'typeorm';
@@ -62,7 +63,13 @@ export class OrdersService {
     @InjectRepository(LoyaltyCard) private cards: Repository<LoyaltyCard>,
     @Optional() private loyalty?: LoyaltyService,
     @Optional() private corporate?: CorporateService,
+    @Optional() private push?: PushService,
   ) {}
+
+  // App push, never blocking or failing the request.
+  private notify(fn: (p: PushService) => Promise<unknown>) {
+    if (this.push) fn(this.push).catch(() => undefined);
+  }
 
   // Public: a customer sends an order from their table, or orders ahead for pickup. Prices come from the database only.
   async create(body: Record<string, unknown>) {
@@ -210,6 +217,7 @@ export class OrdersService {
     );
     items.forEach((i) => (i.order_id = saved.id));
     await this.items.save(items);
+    this.notify((p) => p.sendToStaff(branchId, { title: `New ${pickup ? 'pickup' : `table ${table}`} order #${saved.order_no}`, body: `${name} · AED ${total.toFixed(2)}`, url: '/' }));
     return { id: saved.id, access_token: token, order_no: saved.order_no, total, earns_stamp: !!card, discounts: combo.applied, on_account: account?.company ?? null };
   }
 
@@ -256,8 +264,10 @@ export class OrdersService {
     const car = clean(carRaw, 40) || o.car;
     if (!car) throw new BadRequestException('Tell us your car so we can find you, e.g. White Patrol, plate A 12345');
     o.car = car;
+    const first = !o.arrived_at;
     o.arrived_at = o.arrived_at ?? new Date();
     await this.orders.save(o);
+    if (first) this.notify((p) => p.sendToStaff(o.branch_id, { title: `Customer outside · order #${o.order_no}`, body: `${o.customer_name} · ${car}`, url: '/' }));
     return { ok: true, car: o.car, arrived_at: o.arrived_at };
   }
 
@@ -327,6 +337,9 @@ export class OrdersService {
     if (!(NEXT[order.status] ?? []).includes(status)) throw new BadRequestException(`Cannot move an order from ${order.status} to ${status}`);
     order.status = status as Order['status'];
     await this.orders.save(order);
+    if (status === 'ready' && order.loyalty_card_id) {
+      this.notify((p) => p.sendToCard(order.loyalty_card_id!, { title: `Order #${order.order_no} is ready`, body: order.type === 'pickup' ? 'Come and collect it at the counter.' : 'It is on its way to your table.', url: '/' }));
+    }
     let stamp: string | null = null;
     if (status === 'completed' && order.loyalty_card_id && !order.loyalty_stamped && this.loyalty) {
       // Collected: stamp the linked card with the normal rules (cooldown, daily limit, bonuses).

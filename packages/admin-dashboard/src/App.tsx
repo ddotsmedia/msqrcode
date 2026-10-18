@@ -15,6 +15,7 @@ import CareersPage from './pages/CareersPage';
 import GiftCardsPage from './pages/GiftCardsPage';
 import CorporatePage from './pages/CorporatePage';
 import UsersPage from './pages/UsersPage';
+import { registerStaffPush } from './native';
 import RequestsPage, { useServiceRequests } from './pages/RequestsPage';
 
 type Tab = 'requests' | 'availability' | 'products' | 'categories' | 'qr' | 'branches' | 'menu-import' | 'dashboard' | 'kitchen' | 'promotions' | 'loyalty' | 'catering' | 'careers' | 'gifts' | 'business' | 'users';
@@ -158,6 +159,10 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<Tab>(() => (['availability', 'kitchen', 'requests', 'loyalty', 'gifts', 'dashboard', 'products', 'promotions', 'catering', 'careers', 'business', 'categories', 'menu-import', 'branches', 'qr'] as Tab[]).find((t) => can(t)) ?? 'availability');
   const [menuOpen, setMenuOpen] = useState(false);
+  // Staff app: alerts on this device for the signed-in user's branch.
+  useEffect(() => {
+    registerStaffPush(token).catch(() => undefined);
+  }, [token]);
 
   const canEdit = can('availability');
 

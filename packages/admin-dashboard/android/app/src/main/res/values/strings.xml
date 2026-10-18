@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Milestones Staff</string>
+    <string name="title_activity_main">Milestones Staff</string>
+    <string name="package_name">ae.coffeesales.staff</string>
+    <string name="custom_url_scheme">ae.coffeesales.staff</string>
+</resources>

@@ -4,6 +4,7 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
+import { PUBLIC_ORIGIN } from './lib/native';
 
 export interface Gift {
   code: string;
@@ -277,7 +278,7 @@ export function GiftCardPage() {
     );
   if (!gift) return <div className="mx-auto aspect-[1.6] max-w-md animate-pulse rounded-[22px] bg-slate-100" aria-label="Loading gift card" />;
 
-  const link = `${window.location.origin}/gift/${gift.code}`;
+  const link = `${PUBLIC_ORIGIN}/gift/${gift.code}`;
   const share = `${gift.to ? `${gift.to}, ` : ''}here is a Milestones Coffee gift card for you (${aed(gift.amount)})${gift.message ? `: "${gift.message}"` : ''} ${link}`;
   const status: Record<Gift['status'], [string, string]> = {
     pending: ['Not paid yet', 'Show this QR at any Milestones branch and pay to activate the card.'],

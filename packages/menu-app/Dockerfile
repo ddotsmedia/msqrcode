@@ -26,7 +26,7 @@ WORKDIR /usr/share/nginx/html
 
 # Copy nginx config
 # Pages and sw.js revalidate on every visit so a deploy shows at once; hashed /assets/ files are cached for a year.
-RUN echo 'server { listen 80; root /usr/share/nginx/html; location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; } location / { add_header Cache-Control "no-cache"; try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+RUN echo 'server { listen 80; root /usr/share/nginx/html; location /assets/ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; } location /.well-known/ { default_type application/json; try_files $uri =404; } location / { add_header Cache-Control "no-cache"; try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
 
 # Copy built app
 COPY --from=builder /app/packages/menu-app/dist/ .

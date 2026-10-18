@@ -16,6 +16,7 @@ import { timing, whenLabel } from './lib/offers';
 import type { Combo } from './lib/combos';
 import { Crescent, useRamadan } from './lib/season';
 import { motion, useReducedMotion } from 'motion/react';
+import { PUBLIC_ORIGIN, isNative, linkDeviceToCard, scanNative } from './lib/native';
 import { GroupCartBar, StartGroup, groupCode } from './GroupOrder';
 
 // API Base URL - will work through nginx reverse proxy
@@ -97,6 +98,7 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   useEffect(() => {
     if (!scanning) return;
 
+    if (isNative) return;
     const scanner = new Html5QrcodeScanner(
       'qr-reader',
       { fps: 10, qrbox: { width: 250, height: 250 } },
@@ -139,6 +141,22 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
     };
   }, [scanning, onBranchDetected]);
 
+  // App: the phone's own scanner, same QR rules as above.
+  const scanWithPhone = async () => {
+    setError(null);
+    const text = await scanNative();
+    if (!text) return;
+    const stamp = text.match(/[?&]stamp=([a-f0-9-]{8,64}(?:\.|%2E)[A-Z2-9]{8})\b/i);
+    if (stamp) {
+      window.location.href = `/loyalty?stamp=${stamp[1]}`;
+      return;
+    }
+    const m = text.match(/[?&]branch=([a-f0-9-]+)/i) ?? text.match(/branch:([a-f0-9-]+)/i);
+    if (!m) return setError('Invalid QR code format. Please scan a Milestones Coffee QR code.');
+    const t = text.match(/[?&;]table[=:]([\w-]{1,20})/i);
+    onBranchDetected(m[1], t ? t[1] : null);
+  };
+
   const handleManualEntry = () => {
     if (manualBranchId.trim()) {
       onBranchDetected(manualBranchId.trim(), null);
@@ -148,7 +166,13 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   return (
     <div className="flex justify-center">
       <div className="w-full bg-white rounded-2xl shadow-sm p-5">
-        <div id="qr-reader" className="mb-6 rounded-lg overflow-hidden border-2 border-brand-200"></div>
+        {isNative ? (
+          <button type="button" onClick={scanWithPhone} className="mb-6 w-full rounded-xl bg-brand-700 py-4 text-lg font-semibold text-white">
+            Scan table QR
+          </button>
+        ) : (
+          <div id="qr-reader" className="mb-6 rounded-lg overflow-hidden border-2 border-brand-200"></div>
+        )}
 
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
@@ -1138,6 +1162,26 @@ export function LoyaltyCard() {
       });
   }
 
+  // Delete the card and everything tied to it (store rule: accounts can be deleted in the app).
+  async function deleteCard() {
+    if (!token || !window.confirm(t('loyaltyDeleteConfirm'))) return;
+    setBusy(true);
+    try {
+      await axios.post(`${API_BASE_URL}/loyalty/card/${token}/delete`);
+      try {
+        localStorage.removeItem(LOYALTY_KEY);
+      } catch {
+        /* storage unavailable */
+      }
+      setCard(null);
+      setToken(null);
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message || 'Could not delete the card. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveBirthday() {
     if (!token || !birthday) return;
     setBusy(true);
@@ -1155,7 +1199,7 @@ export function LoyaltyCard() {
 
   async function shareInvite() {
     if (!card?.referral_code) return;
-    const url = `${window.location.origin}/loyalty?ref=${card.referral_code}`;
+    const url = `${PUBLIC_ORIGIN}/loyalty?ref=${card.referral_code}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: 'Milestones Coffee', url });
@@ -1184,6 +1228,7 @@ export function LoyaltyCard() {
           /* storage unavailable */
         }
         setToken(res.data.token);
+        linkDeviceToCard();
       } else {
         setMessage(res.data.message);
       }
@@ -1339,6 +1384,9 @@ export function LoyaltyCard() {
             </ul>
           </div>
         )}
+        <button type="button" onClick={deleteCard} disabled={busy} className="mt-4 text-xs font-semibold text-red-700 underline">
+          {t('loyaltyDelete')}
+        </button>
       </div>
     );
   }

@@ -362,6 +362,22 @@ export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Public, by secret token only. History carries no staff notes.
+  // Removes the card, its history, coupons, reminders and push links; past orders stay but lose the link.
+  async deleteCard(tokenRaw: string) {
+    const token = typeof tokenRaw === 'string' ? tokenRaw.trim().slice(0, 128) : '';
+    const card = token ? await this.cards.findOne({ where: { token } }) : null;
+    if (!card) throw new NotFoundException('Card not found');
+    await this.cards.manager.transaction(async (m) => {
+      for (const t of ['loyalty_events', 'coupon_redemptions', 'offer_reminders', 'push_subscriptions', 'device_tokens']) {
+        await m.query(`DELETE FROM ${t} WHERE card_id = $1`, [card.id]);
+      }
+      await m.query('UPDATE orders SET loyalty_card_id = NULL WHERE loyalty_card_id = $1', [card.id]);
+      await m.query('UPDATE loyalty_cards SET referred_by = NULL WHERE referred_by = $1', [card.id]);
+      await m.delete(LoyaltyCard, { id: card.id });
+    });
+    return { ok: true };
+  }
+
   async getByToken(token: string) {
     const card = await this.cards.findOne({ where: { token } });
     if (!card) throw new NotFoundException('Card not found');

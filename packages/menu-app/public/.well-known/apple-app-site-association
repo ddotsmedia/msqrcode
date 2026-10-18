@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["APPLE_TEAM_ID.ae.coffeesales.app"],
+        "components": [
+          { "/": "/gift/*" },
+          { "/": "/group/*" },
+          { "/": "/menu*" },
+          { "/": "/offers*" },
+          { "/": "/loyalty*" },
+          { "/": "/business/*" }
+        ]
+      }
+    ]
+  }
+}

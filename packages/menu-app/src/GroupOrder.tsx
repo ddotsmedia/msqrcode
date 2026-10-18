@@ -4,6 +4,7 @@ import axios from 'axios';
 import { pickupSlots } from './lib/hours';
 import { setPageTitle } from './lib/seo';
 import { readBusiness } from './Business';
+import { PUBLIC_ORIGIN } from './lib/native';
 import type { Cart, CartLine } from './TableOrder';
 
 interface GroupView {
@@ -261,7 +262,7 @@ export default function GroupOrderPage() {
     );
   if (!group) return <div className="mx-auto h-64 max-w-xl animate-pulse rounded-[28px] bg-slate-100" aria-label="Loading group order" />;
 
-  const link = `${window.location.origin}/group/${group.code}`;
+  const link = `${PUBLIC_ORIGIN}/group/${group.code}`;
   const share = `Join our Milestones coffee order at ${group.branch.name}: add your drink here ${link}`;
   const slots = isHost && group.status === 'open' ? pickupSlots(branch?.operating_hours ?? null, branch?.timezone || 'Asia/Dubai', new Date(), 15) : [];
   const slot = slots.find((s) => s.at === pickupAt) ?? slots[0];
