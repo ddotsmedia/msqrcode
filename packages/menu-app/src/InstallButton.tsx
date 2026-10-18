@@ -35,9 +35,14 @@ export default function InstallButton() {
         if (choice.outcome === 'accepted') setInstalled(true);
         setEvt(null);
       }}
-      className="px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold"
+      aria-label="Install app"
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-brand-100 bg-white px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300"
     >
-      Install app
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+      </svg>
+      <span className="sm:hidden">Install</span>
+      <span className="hidden sm:inline">Install app</span>
     </button>
   );
 }

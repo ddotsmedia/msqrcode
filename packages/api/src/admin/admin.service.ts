@@ -41,6 +41,22 @@ function list(v: unknown): string[] | undefined {
   return v.map((x) => x.trim()).filter(Boolean);
 }
 
+// Nutrition shown on the menu: calories (kcal), caffeine (mg), sugar and protein (g). Empty = not shown.
+const NUTRIENTS = ['calories', 'caffeine_mg', 'sugar_g', 'protein_g'] as const;
+function nutrition(v: unknown): Record<string, number> | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null || typeof v !== 'object') return null;
+  const out: Record<string, number> = {};
+  for (const k of NUTRIENTS) {
+    const n = num((v as Record<string, unknown>)[k], k);
+    if (n !== undefined) {
+      if (n > 5000) throw new BadRequestException(`${k} looks too high`);
+      out[k] = Math.round(n);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -105,6 +121,7 @@ export class AdminService {
       is_seasonal: bool(body.is_seasonal),
       dietary_tags: list(body.dietary_tags),
       allergens: list(body.allergens),
+      nutritional_info: nutrition(body.nutritional_info) as Product['nutritional_info'],
     };
     if (!id && data.base_price === undefined) {
       throw new BadRequestException('base_price is required');

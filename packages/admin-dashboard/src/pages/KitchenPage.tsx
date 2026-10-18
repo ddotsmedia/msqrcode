@@ -1,129 +1,232 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { chime } from './RequestsPage';
 
+interface Line {
+  name: string;
+  qty: number;
+  options?: { choices?: { choice: string }[]; note?: string | null } | null;
+}
 interface Order {
   id: string;
   order_no: string;
   customer_name: string;
-  status: string;
-  type: 'pickup' | 'dine_in';
-  table_number?: string;
-  items: any[];
+  phone: string;
+  table: string | null;
+  type?: 'pickup' | 'dine_in';
+  pickup_at?: string | null;
+  rewards_card?: boolean;
+  status: 'placed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
+  total: number;
+  created_at: string;
+  items: Line[];
+}
+interface Board {
+  ordering_enabled: boolean;
+  pickup_enabled: boolean;
+  open: Order[];
+  finished: Order[];
 }
 
+const COLUMNS: { status: Order['status']; title: string; next?: { to: Order['status']; label: string } }[] = [
+  { status: 'placed', title: 'New', next: { to: 'preparing', label: 'Start' } },
+  { status: 'preparing', title: 'Preparing', next: { to: 'ready', label: 'Ready' } },
+  { status: 'ready', title: 'Ready', next: { to: 'completed', label: 'Collected' } },
+];
 
-export default function KitchenPage({ token, branchId }: { token: string; branchId: string }) {
-  const [orders, setOrders] = useState<Order[]>([]);
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dubai' });
+// "Table 5" or "Pickup 18:30"
+const where = (o: Order) => (o.type === 'pickup' && o.pickup_at ? `Pickup ${hhmm(o.pickup_at)}` : o.table ? `Table ${o.table}` : '');
+
+const ago = (iso: string) => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  return m < 1 ? 'just now' : `${m} min ago`;
+};
+
+// Orders customers send from the table QR menu. Checks every 5 seconds and chimes on a new order.
+export default function KitchenPage({
+  token,
+  branchId,
+  branches,
+  onBranch,
+}: {
+  token: string;
+  branchId: string;
+  branches: { id: string; name: string }[];
+  onBranch: (id: string) => void;
+}) {
+  const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const seen = useRef<Set<string> | null>(null);
 
-  useEffect(() => {
-    // Load initial orders
-    api<Order[]>(`/orders?branch=${branchId}`, token)
-      .then(setOrders)
-      .catch((e: Error) => setError(e.message));
-
-    // Connect to SSE stream (token passed as query param since EventSource doesn't support headers)
-    const eventSource = new EventSource(`/api/orders/stream?token=${encodeURIComponent(token)}`);
-
-    eventSource.onmessage = (event) => {
-      try {
-        const update = JSON.parse(event.data);
-        setOrders((prev) => {
-          const existing = prev.find((o) => o.id === update.id);
-          if (existing) {
-            existing.status = update.status;
-            return [...prev];
-          }
-          return prev;
-        });
-      } catch (err) {
-        console.error('Failed to parse SSE message', err);
-      }
-    };
-
-    eventSource.onerror = () => {
-      eventSource.close();
-      setError('Connection lost');
-    };
-
-    return () => eventSource.close();
-  }, [token, branchId]);
-
-  async function updateStatus(orderId: string, newStatus: string) {
+  async function load() {
     try {
-      await api(`/orders/${orderId}/status`, token, {
-        method: 'PUT',
-        body: JSON.stringify({ status: newStatus }),
-      });
+      const res = await api<Board>(`/admin/orders?branch_id=${branchId}`, token);
+      const ids = new Set(res.open.map((o) => o.id));
+      if (seen.current && res.open.some((o) => o.status === 'placed' && !seen.current!.has(o.id))) chime();
+      seen.current = ids;
+      setBoard(res);
+      setError(null);
     } catch (e) {
       setError((e as Error).message);
     }
   }
 
-  const statuses = ['placed', 'paid', 'preparing', 'ready', 'completed'];
-  const columns = statuses.map((status) => ({
-    status,
-    orders: orders.filter((o) => o.status === status),
-  }));
+  useEffect(() => {
+    seen.current = null;
+    setBoard(null);
+    load();
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [branchId, token]);
+
+  async function move(o: Order, status: Order['status']) {
+    if (status === 'cancelled' && !window.confirm(`Cancel order ${o.order_no} for ${o.customer_name}?`)) return;
+    setBusy(o.id);
+    try {
+      await api(`/admin/orders/${o.id}/status`, token, { method: 'PATCH', body: JSON.stringify({ status }) });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleOrdering(kind: 'table' | 'pickup') {
+    if (!board) return;
+    setBusy('switch');
+    try {
+      const res = await api<{ ordering_enabled: boolean; pickup_enabled: boolean }>(`/admin/orders/ordering`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ branch_id: branchId, kind, enabled: kind === 'pickup' ? !board.pickup_enabled : !board.ordering_enabled }),
+      });
+      setBoard({ ...board, ...res });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Kitchen Display</h1>
-      {error && <p className="bg-red-900 text-red-100 rounded p-3 mb-4">{error}</p>}
-
-      <div className="grid grid-cols-5 gap-4">
-        {columns.map((col) => (
-          <div key={col.status} className="bg-gray-800 rounded-lg p-4">
-            <h2 className="font-bold text-lg mb-4 uppercase">{col.status}</h2>
-            <div className="space-y-3">
-              {col.orders.map((order) => (
-                <div key={order.id} className="bg-gray-700 rounded p-3 text-sm">
-                  <p className="font-semibold">{order.order_no}</p>
-                  <p className="text-xs text-gray-400">{order.customer_name}</p>
-                  {order.type === 'dine_in' && order.table_number && (
-                    <p className="text-xs text-yellow-400">Table {order.table_number}</p>
-                  )}
-                  <ul className="mt-2 text-xs space-y-1">
-                    {order.items?.map((item, i) => (
-                      <li key={i}>
-                        {item.qty}x {item.name_snapshot}
-                      </li>
-                    ))}
-                  </ul>
-
-                  {col.status !== 'completed' && (
-                    <div className="mt-3 flex gap-2">
-                      {statuses.indexOf(col.status) < statuses.length - 1 && (
-                        <button
-                          onClick={() => updateStatus(order.id, statuses[statuses.indexOf(col.status) + 1])}
-                          className="flex-1 bg-green-700 hover:bg-green-600 rounded px-2 py-1 text-xs font-semibold"
-                        >
-                          Next
-                        </button>
-                      )}
-                      {col.status === 'ready' && (
-                        <button
-                          onClick={() => updateStatus(order.id, 'completed')}
-                          className="flex-1 bg-blue-700 hover:bg-blue-600 rounded px-2 py-1 text-xs font-semibold"
-                        >
-                          Done
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+    <div className="p-4 space-y-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white p-4 shadow-sm">
+        {branches.length > 1 && (
+          <select value={branchId} onChange={(e) => onBranch(e.target.value)} className="border border-gray-300 rounded px-3 py-2 text-sm" aria-label="Branch">
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="flex-1 min-w-[12rem] text-sm text-gray-500">New orders chime; keep this screen open. Customers pay at the counter.</div>
+        {(
+          [
+            ['table', 'Order from table QR', board?.ordering_enabled],
+            ['pickup', 'Order ahead & pickup', board?.pickup_enabled],
+          ] as const
+        ).map(([kind, label, on]) => (
+          <button
+            key={kind}
+            type="button"
+            role="switch"
+            aria-checked={!!on}
+            disabled={!board || busy === 'switch'}
+            onClick={() => toggleOrdering(kind)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${on ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+          >
+            {label}: {on ? 'On' : 'Off'}
+          </button>
         ))}
       </div>
 
-      <script>
-        {`
-          // Beep on new order
-          window.orderSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj==');
-        `}
-      </script>
+      {error && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{error}</p>}
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {COLUMNS.map((col) => {
+          const list = board?.open.filter((o) => o.status === col.status) ?? [];
+          return (
+            <section key={col.status} className="rounded-lg bg-gray-200/60 p-3">
+              <h2 className="mb-3 flex items-center justify-between px-1 font-semibold text-gray-700">
+                {col.title}
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs">{list.length}</span>
+              </h2>
+              <div className="space-y-3">
+                {list.length === 0 && <p className="px-1 text-sm text-gray-500">No orders</p>}
+                {list.map((o) => (
+                  <article key={o.id} className={`rounded-lg bg-white p-3 shadow-sm ${col.status === 'placed' ? 'ring-2 ring-amber-400' : ''}`}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-lg font-bold text-gray-900">
+                        #{o.order_no} {where(o) && <span className={o.type === 'pickup' ? 'text-amber-700' : 'text-brand-700'}>· {where(o)}</span>}
+                      </p>
+                      <span className="text-xs text-gray-500">{ago(o.created_at)}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {o.customer_name}
+                      {o.phone && <span className="text-gray-400"> · {o.phone}</span>}
+                      {o.rewards_card && <span className="ml-1 text-amber-700" title="Earns a stamp when collected">· ⭐ rewards</span>}
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      {o.items.map((i, n) => (
+                        <li key={n}>
+                          <span className="font-semibold">{i.qty}×</span> {i.name}
+                          {(i.options?.choices?.length || i.options?.note) && (
+                            <span className="block pl-5 text-xs text-gray-500">
+                              {[...(i.options?.choices ?? []).map((c) => c.choice), i.options?.note && `“${i.options.note}”`].filter(Boolean).join(' · ')}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-sm font-semibold text-gray-700">AED {o.total.toFixed(2)} · pay at counter</p>
+                    <div className="mt-3 flex gap-2">
+                      {col.next && (
+                        <button
+                          type="button"
+                          disabled={busy === o.id}
+                          onClick={() => move(o, col.next!.to)}
+                          className="flex-1 rounded bg-brand-700 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                        >
+                          {col.next.label}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy === o.id}
+                        onClick={() => move(o, 'cancelled')}
+                        className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-600 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {board && board.finished.length > 0 && (
+        <section className="rounded-lg bg-white p-4 shadow-sm">
+          <h2 className="mb-2 font-semibold text-gray-700">Last 2 hours</h2>
+          <ul className="divide-y text-sm">
+            {board.finished.map((o) => (
+              <li key={o.id} className="flex justify-between gap-3 py-2">
+                <span>
+                  #{o.order_no} · {o.customer_name} {where(o) && `· ${where(o)}`}
+                </span>
+                <span className={o.status === 'cancelled' ? 'text-red-600' : 'text-green-700'}>
+                  {o.status === 'cancelled' ? 'Cancelled' : 'Collected'} · AED {o.total.toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

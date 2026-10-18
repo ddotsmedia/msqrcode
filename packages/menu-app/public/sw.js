@@ -1,4 +1,4 @@
-const CACHE_NAME = 'milestones-v1';
+const CACHE_NAME = 'milestones-v3';
 const ASSETS_TO_CACHE = ['/index.html'];
 
 // Precache app shell on install
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (e) => {
 
   // Network-first for navigations, fallback to shell
   e.respondWith(
-    fetch(request)
+    fetch(request, { cache: 'no-cache' })
       .then((r) => {
         if (r.status === 200) {
           const cache_resp = r.clone();
@@ -58,5 +58,39 @@ self.addEventListener('fetch', (e) => {
         return caches.match(request);
       })
       .catch(() => caches.match(request).then((r) => r || caches.match('/index.html')))
+  );
+});
+
+// Rewards notifications (stamp reminders, double-stamp hours, offers).
+self.addEventListener('push', (e) => {
+  let data = {};
+  try {
+    data = e.data ? e.data.json() : {};
+  } catch {
+    data = { title: 'Milestones Coffee', body: e.data ? e.data.text() : '' };
+  }
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'Milestones Coffee', {
+      body: data.body || '',
+      icon: '/logo/logo-180.png',
+      badge: '/logo/logo-180.png',
+      data: { url: data.url || '/loyalty' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/loyalty';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if ('focus' in c) {
+          c.navigate(url);
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });

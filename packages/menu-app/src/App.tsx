@@ -1,10 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLang } from './i18n';
 import axios from 'axios';
 import { ContactButtons } from './lib/ContactButtons';
 import { getTodayHours, isOpenNow } from './lib/hours';
 import { buildJsonLd, setMetaDescription, setPageTitle } from './lib/seo';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import QRCode from 'qrcode';
+import { readFavs, toggleFav } from './lib/favorites';
+import { TableService } from './TableService';
+import { NotifyButton } from './NotifyButton';
+import { AddToOrder, TableOrder, groupsOf, unitPrice, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
+import { bestDiscount, discounted, isLive, type HappyHour } from './lib/happyHour';
+import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
 const API_BASE_URL = '/api';
@@ -21,6 +29,8 @@ interface Branch {
   longitude?: number;
   operating_hours?: Record<string, any>;
   whatsapp_number?: string;
+  ordering_enabled?: boolean;
+  pickup_enabled?: boolean;
   google_maps_url?: string;
   google_review_url?: string;
   delivery_links?: Record<string, string>;
@@ -55,6 +65,7 @@ interface Product {
   dietary_tags?: string[];
   allergens?: string[];
   variants?: ProductVariant[];
+  option_groups?: ChoiceGroup[];
 }
 
 interface ProductVariant {
@@ -62,7 +73,7 @@ interface ProductVariant {
   product_id: string;
   name: string;
   display_order: number;
-  options?: Record<string, any>;
+  options?: { choices?: { name: string; price_adjustment: number }[] } | null;
 }
 
 interface ProductAvailability {
@@ -93,6 +104,13 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
     scanner.render(
       (decodedText) => {
         // Accepts the menu link (?branch=<id>&table=<n>) and the older branch:<id> text format
+        // Counter self-stamp code: open the rewards card, which adds the stamp.
+        const stamp = decodedText.match(/[?&]stamp=([a-f0-9-]{8,64}(?:\.|%2E)[A-Z2-9]{8})\b/i);
+        if (stamp) {
+          scanner.clear().catch(() => {});
+          window.location.href = `/loyalty?stamp=${stamp[1]}`;
+          return;
+        }
         const link = decodedText.match(/[?&]branch=([a-f0-9-]+)/i);
         const legacy = decodedText.match(/branch:([a-f0-9-]+)/i);
         const branchMatch = link ?? legacy;
@@ -124,13 +142,8 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-brand-800 mb-2">☕ Milestones</h1>
-          <p className="text-brand-600">Digital Menu</p>
-        </div>
-
+    <div className="flex justify-center">
+      <div className="w-full bg-white rounded-2xl shadow-sm p-5">
         <div id="qr-reader" className="mb-6 rounded-lg overflow-hidden border-2 border-brand-200"></div>
 
         {error && (
@@ -154,12 +167,12 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
             value={manualBranchId}
             onChange={(e) => setManualBranchId(e.target.value)}
             placeholder="Branch ID"
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             onKeyPress={(e) => e.key === 'Enter' && handleManualEntry()}
           />
           <button
             onClick={handleManualEntry}
-            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+            className="shrink-0 px-5 py-2 bg-brand-700 text-white rounded-lg hover:bg-brand-600 font-medium"
           >
             Go
           </button>
@@ -173,31 +186,44 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
   );
 }
 
+// Nutrition to show for a product, e.g. [['Calories', '190 kcal'], ...]; only values the cafe has entered.
+function nutritionOf(p: Product): [string, string][] {
+  const n = p.nutritional_info ?? {};
+  const rows: [string, unknown, string][] = [
+    ['Calories', n.calories, ' kcal'],
+    ['Caffeine', n.caffeine_mg, ' mg'],
+    ['Sugar', n.sugar_g, ' g'],
+    ['Protein', n.protein_g, ' g'],
+  ];
+  return rows.filter(([, v]) => typeof v === 'number').map(([label, v, unit]) => [label, `${v}${unit}`]);
+}
+
 function ProductDetailsModal({
   product,
   onClose,
   availability,
+  branchId,
+  onAdd,
+  deal,
 }: {
   product: Product;
   onClose: () => void;
   availability: boolean;
+  branchId: string | null;
+  onAdd?: (line: Omit<CartLine, 'key'>) => void;
+  deal?: { percent: number; title: string; until: string | null } | null;
 }) {
-  const handleAddToOrder = () => {
-    // Track analytics
+  // Count the product as viewed (feeds "Top products" in the admin Insights page).
+  useEffect(() => {
     fetch(`${API_BASE_URL}/analytics/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_type: 'product_selected',
-        product_id: product.id,
-      }),
+      body: JSON.stringify({ event_type: 'product_selected', product_id: product.id, ...(branchId ? { branch_id: branchId } : {}) }),
     }).catch(() => {});
+  }, [product.id, branchId]);
 
-    alert(`${product.name} added to order! Please proceed to counter to complete purchase.`);
-    onClose();
-  };
-
-  return (
+  // Rendered on <body> so the phone's bottom navigation cannot cover the buttons.
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg max-h-[90vh] overflow-y-auto">
         {product.image_url && (
@@ -220,6 +246,11 @@ function ProductDetailsModal({
               {product.is_popular && (
                 <span className="inline-block mt-2 ml-2 px-3 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full">
                   Popular
+                </span>
+              )}
+              {product.is_seasonal && (
+                <span className="inline-block mt-2 ml-2 px-3 py-1 bg-copper-500 text-white text-xs font-semibold rounded-full">
+                  Limited time
                 </span>
               )}
             </div>
@@ -253,22 +284,43 @@ function ProductDetailsModal({
             </div>
           )}
 
+          {nutritionOf(product).length > 0 && (
+            <dl className="mb-4 grid grid-cols-4 gap-2 rounded-lg bg-cream p-3 text-center" aria-label="Nutrition per serving">
+              {nutritionOf(product).map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</dt>
+                  <dd className="font-semibold text-brand-900">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
           <div className="mb-6">
-            <p className="text-3xl font-bold text-brand-600">{Number(product.base_price).toFixed(2)} AED</p>
+            {deal ? (
+              <p className="text-3xl font-bold text-copper-700">
+                {discounted(Number(product.base_price), deal.percent).toFixed(2)} AED{' '}
+                <s className="text-lg font-medium text-gray-400">{Number(product.base_price).toFixed(2)}</s>
+                <span className="ml-2 align-middle rounded-full bg-copper-500 px-2 py-0.5 text-xs font-semibold text-white">−{deal.percent}%</span>
+              </p>
+            ) : (
+              <p className="text-3xl font-bold text-brand-600">{Number(product.base_price).toFixed(2)} AED</p>
+            )}
           </div>
 
           <div className="space-y-3">
-            <button
-              onClick={handleAddToOrder}
-              disabled={!availability}
-              className={`w-full py-3 rounded-lg font-semibold text-white transition ${
-                availability
-                  ? 'bg-brand-600 hover:bg-brand-700'
-                  : 'bg-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {availability ? 'Add to Order' : 'Currently Unavailable'}
-            </button>
+            {onAdd ? (
+              <AddToOrder
+                product={product}
+                discount={deal?.percent}
+                available={availability}
+                onAdd={(line) => {
+                  onAdd(line);
+                  onClose();
+                }}
+              />
+            ) : (
+              !availability && <p className="w-full py-3 rounded-lg text-center font-semibold bg-gray-100 text-gray-500">Currently Unavailable</p>
+            )}
             <button
               onClick={onClose}
               className="w-full py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
@@ -278,7 +330,8 @@ function ProductDetailsModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -295,9 +348,26 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [showDietary, setShowDietary] = useState<string | null>(null);
+  const [showFlag, setShowFlag] = useState<'new' | 'seasonal' | null>(null);
   const [sortBy, setSortBy] = useState<'menu' | 'price_asc' | 'price_desc'>('menu');
+  const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
   const [showText, setShowText] = useState(false);
+  // Happy-hour deals for this branch; re-checked every minute so prices change on time.
+  const [deals, setDeals] = useState<HappyHour[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    axios
+      .get(`${API_BASE_URL}/promotions`, { params: branchId ? { branch_id: branchId } : {} })
+      .then((r) => setDeals(Array.isArray(r.data) ? r.data.filter((p: HappyHour) => p.discount_percent) : []))
+      .catch(() => setDeals([]));
+  }, [branchId]);
+  const dealFor = (p: Product) => bestDiscount(deals, p.category_id, new Date(now));
+  const cart = useCart(branchId ?? '', table ?? 'pickup');
 
   useEffect(() => {
     const loadMenuData = async () => {
@@ -401,6 +471,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
       filtered = filtered.filter((p) => availability[p.id] !== false);
     }
 
+    if (showFlag === 'new') filtered = filtered.filter((p) => p.is_new);
+    if (showFlag === 'seasonal') filtered = filtered.filter((p) => p.is_seasonal);
+
     // Filter by dietary tags
     if (showDietary) {
       filtered = filtered.filter((p) =>
@@ -410,7 +483,9 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
     if (sortBy === 'price_asc') return filtered.sort((a, b) => Number(a.base_price) - Number(b.base_price));
     if (sortBy === 'price_desc') return filtered.sort((a, b) => Number(b.base_price) - Number(a.base_price));
-    return filtered.sort((a, b) => a.display_order - b.display_order);
+    // Hearted drinks first, then the menu order.
+    const favRank = (id: string) => (favs.includes(id) ? 0 : 1);
+    return [...filtered].sort((a, b) => favRank(a.id) - favRank(b.id) || a.display_order - b.display_order);
   };
 
   if (loading) {
@@ -461,11 +536,25 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   }
 
   const filteredProducts = getFilteredProducts();
+  const canOrder = !!(table && branchId && branch?.ordering_enabled);
+  const canPickup = !!(!table && branchId && branch?.pickup_enabled);
+  // "Order again": rebuild a past line from today's menu, prices and happy hour; null if gone or sold out.
+  const reprice = (l: Omit<CartLine, 'key'>): Omit<CartLine, 'key'> | null => {
+    const p = products.find((x) => x.id === l.product_id);
+    if (!p || availability[p.id] === false) return null;
+    const groups = groupsOf(p);
+    const choices = Object.fromEntries(
+      groups.map((g) => [g.id, (g.options!.choices!.find((c) => c.name === l.choices[g.id]) ?? g.options!.choices![0]).name]),
+    );
+    const deal = dealFor(p);
+    const base = unitPrice(p, choices);
+    return { ...l, name: p.name, choices, labels: groups.map((g) => choices[g.id]), unit: deal ? discounted(base, deal.percent) : base };
+  };
 
   return (
     <div className="min-h-screen bg-brand-50">
       {/* Header */}
-      <div className="bg-white border-b border-brand-200 sticky top-0 z-40">
+      <div className="bg-white border-b border-brand-200 md:sticky md:top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -512,7 +601,6 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
             </div>
           </div>
 
-          <LoyaltyCard />
           {branchId && <FeedbackForm branchId={branchId} />}
 
           {/* Search Bar */}
@@ -536,6 +624,27 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
               />
               <span className="text-sm font-medium text-gray-700">{t('availableOnly')}</span>
             </label>
+
+            {(
+              [
+                ['new', 'New'],
+                ['seasonal', 'Limited time'],
+              ] as const
+            )
+              .filter(([flag]) => products.some((p) => (flag === 'new' ? p.is_new : p.is_seasonal)))
+              .map(([flag, label]) => (
+                <button
+                  key={flag}
+                  type="button"
+                  aria-pressed={showFlag === flag}
+                  onClick={() => setShowFlag(showFlag === flag ? null : flag)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                    showFlag === flag ? 'bg-copper-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
 
             {['Vegan', 'Gluten-Free', 'Dairy-Free'].map((dietary) => (
               <button
@@ -598,6 +707,24 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           </div>
         )}
 
+        {(() => {
+          const live = deals.filter((d) => isLive(d, new Date(now)));
+          if (!live.length) return null;
+          const d = live.sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0))[0];
+          return (
+            <div role="status" className="mb-6 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-copper-500 to-[#7a5230] px-5 py-4 text-white">
+              <span className="text-2xl font-bold">−{d.discount_percent}%</span>
+              <div>
+                <p className="font-semibold">{d.title}</p>
+                <p className="text-sm text-cream/90">
+                  {t('happyHourNow')}
+                  {d.end_time ? ` · ${t('happyHourUntil').replace('{t}', d.end_time)}` : ''}
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Products Grid */}
         {filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -617,12 +744,42 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                     />
                   )}
                   <div className="p-4">
-                    <h3 className="font-bold text-gray-900 mb-1">{product.name}</h3>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <h3 className="font-bold text-gray-900">
+                        {product.name}
+                        {product.is_new && <span className="ml-2 align-middle rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800">New</span>}
+                        {product.is_seasonal && (
+                          <span className="ml-2 align-middle rounded-full bg-copper-500 px-2 py-0.5 text-[11px] font-semibold text-white">Limited time</span>
+                        )}
+                      </h3>
+                      <button
+                        type="button"
+                        aria-label={favs.includes(product.id) ? 'Remove from favourites' : 'Add to favourites'}
+                        aria-pressed={favs.includes(product.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFavs(toggleFav(product.id));
+                        }}
+                        className="text-xl leading-none text-copper-700 px-1"
+                      >
+                        {favs.includes(product.id) ? '♥' : '♡'}
+                      </button>
+                    </div>
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                    {typeof product.nutritional_info?.calories === 'number' && (
+                      <p className="-mt-2 mb-3 text-xs text-gray-500">{product.nutritional_info.calories} kcal</p>
+                    )}
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-brand-600">
-                        {Number(product.base_price).toFixed(2)} AED
-                      </span>
+                      {dealFor(product) ? (
+                        <span className="text-lg font-bold text-copper-700">
+                          {discounted(Number(product.base_price), dealFor(product)!.percent).toFixed(2)} AED{' '}
+                          <s className="text-sm font-medium text-gray-400">{Number(product.base_price).toFixed(2)}</s>
+                        </span>
+                      ) : (
+                        <span className="text-lg font-bold text-brand-600">
+                          {Number(product.base_price).toFixed(2)} AED
+                        </span>
+                      )}
                       <span
                         className={`text-xs font-semibold px-2 py-1 rounded ${
                           isAvailable
@@ -645,12 +802,40 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
         )}
       </div>
 
+      {table && branchId && branch && (
+        <>
+          <div className={canOrder ? 'h-44' : 'h-28'} aria-hidden="true" />
+          <TableService
+            extra={canOrder ? <TableOrder branchId={branchId} table={table} cart={cart} reprice={reprice} /> : null}
+            branchId={branchId}
+            branchName={branch.name}
+            table={table}
+            whatsapp={branch.whatsapp_number}
+            picks={products.filter((p) => favs.includes(p.id)).map((p) => p.name).slice(0, 10)}
+          />
+        </>
+      )}
+
+      {canPickup && (
+        <>
+          <div className="h-32" aria-hidden="true" />
+          <div className="fixed inset-x-0 bottom-[72px] md:bottom-4 z-40 px-3">
+            <div className="mx-auto max-w-md rounded-2xl border border-brand-100 bg-white p-3 pb-1 shadow-[0_12px_32px_rgba(10,26,51,0.18)]">
+              <TableOrder branchId={branchId!} table={null} cart={cart} hours={branch?.operating_hours} timezone={branch?.timezone || 'Asia/Dubai'} reprice={reprice} />
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Product Details Modal */}
       {selectedProduct && (
         <ProductDetailsModal
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
           availability={availability[selectedProduct.id] !== false}
+          branchId={branchId}
+          deal={dealFor(selectedProduct)}
+          onAdd={canOrder || canPickup ? cart.add : undefined}
         />
       )}
     </div>
@@ -720,7 +905,8 @@ export function FeedbackForm({ branchId }: { branchId: string }) {
 const LOYALTY_KEY = 'milestones_loyalty_token';
 
 export function LoyaltyCard() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const reduceMotion = useReducedMotion();
   const [token, setToken] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LOYALTY_KEY);
@@ -728,13 +914,87 @@ export function LoyaltyCard() {
       return null;
     }
   });
-  const [card, setCard] = useState<{ name: string | null; stamps: number; target: number; redeemed_count: number } | null>(null);
+  const [card, setCard] = useState<{
+    name: string | null;
+    stamps: number;
+    target: number;
+    redeemed_count: number;
+    reward_name?: string;
+    referral_code?: string;
+    referral_bonus?: number;
+    has_birthday?: boolean;
+    double_now?: boolean;
+    tier?: 'bronze' | 'silver' | 'gold';
+    tier_perk?: string;
+    visits_year?: number;
+    next_tier?: 'silver' | 'gold' | null;
+    next_tier_at?: number | null;
+    challenge?: { target: number; bonus: number; visits: number; done: boolean } | null;
+    history?: { type: 'enroll' | 'stamp' | 'redeem' | 'adjust' | 'bonus'; delta: number; created_at: string }[];
+  } | null>(null);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // Invite code from a friend's link: /loyalty?ref=CODE
+  const [ref] = useState(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get('ref') ?? '';
+      return /^[A-Z0-9]{6,12}$/i.test(v) ? v.toUpperCase() : '';
+    } catch {
+      return '';
+    }
+  });
+
+  // Counter code from /loyalty?stamp=<branch>.<code>, scanned at the till.
+  const [stampCode, setStampCode] = useState(() => {
+    try {
+      const v = decodeURIComponent(new URLSearchParams(window.location.search).get('stamp') ?? '');
+      return /^[a-f0-9-]{8,64}\.[A-Z2-9]{8}$/i.test(v) ? v : '';
+    } catch {
+      return '';
+    }
+  });
+  const [stampNote, setStampNote] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
+    if (!token || !stampCode) return;
+    const code = stampCode;
+    setStampCode('');
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('stamp');
+      window.history.replaceState(null, '', url.pathname + url.search);
+    } catch {
+      /* keep the URL as is */
+    }
+    setStampNote({ ok: true, text: t('loyaltySelfAdding') });
+    axios
+      .post(`${API_BASE_URL}/loyalty/self-stamp`, { token, code })
+      .then((r) => {
+        setStampNote(
+          r.data.ok
+            ? { ok: true, text: t('loyaltySelfAdded').replace('{n}', String(r.data.earned ?? 1)).replace('{b}', r.data.branch_name ?? 'Milestones') }
+            : { ok: false, text: r.data.message ?? 'Could not add your stamp.' },
+        );
+        loadCard();
+      })
+      .catch((err) => setStampNote({ ok: false, text: err?.response?.data?.message || 'Could not add your stamp. Please ask our staff.' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, stampCode]);
+
+  // QR that staff scan to add a stamp. Encodes the card's secret token.
+  useEffect(() => {
+    if (!token) return;
+    QRCode.toDataURL(`MSQ-CARD:${token}`, { margin: 1, width: 220, color: { dark: '#13284b', light: '#ffffff' } })
+      .then(setQr)
+      .catch(() => setQr(null));
+  }, [token]);
+
+  function loadCard() {
     if (!token) return;
     axios
       .get(`${API_BASE_URL}/loyalty/card/${token}`)
@@ -747,13 +1007,47 @@ export function LoyaltyCard() {
         }
         setToken(null);
       });
-  }, [token]);
+  }
+
+  async function saveBirthday() {
+    if (!token || !birthday) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await axios.patch(`${API_BASE_URL}/loyalty/card/${token}/birthday`, { birthday });
+      if (!res.data.ok) setMessage(res.data.message);
+      loadCard();
+    } catch (err: any) {
+      setMessage(err?.response?.data?.message || 'Could not save your birthday.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function shareInvite() {
+    if (!card?.referral_code) return;
+    const url = `${window.location.origin}/loyalty?ref=${card.referral_code}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Milestones Coffee', url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* share cancelled or clipboard blocked */
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadCard, [token]);
 
   async function enroll() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await axios.post(`${API_BASE_URL}/loyalty/enroll`, { phone, name });
+      const res = await axios.post(`${API_BASE_URL}/loyalty/enroll`, { phone, name, birthday: birthday || undefined, ref: ref || undefined });
       if (res.data.ok) {
         try {
           localStorage.setItem(LOYALTY_KEY, res.data.token);
@@ -778,21 +1072,144 @@ export function LoyaltyCard() {
         <p className="text-sm font-semibold text-gray-800 mb-2">
           {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
-        <div className="grid grid-cols-5 gap-2 mb-2">
-          {dots.map((filled, i) => (
-            <div
-              key={i}
-              className={`aspect-square rounded-full flex items-center justify-center text-sm ${
-                filled ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
+        {card.tier && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                card.tier === 'gold' ? 'bg-amber-100 text-amber-800' : card.tier === 'silver' ? 'bg-slate-200 text-slate-700' : 'bg-orange-50 text-orange-800'
               }`}
             >
-              {filled ? '☕' : i + 1}
+              {t(card.tier === 'gold' ? 'tierGold' : card.tier === 'silver' ? 'tierSilver' : 'tierBronze')}
+            </span>
+            {card.tier_perk && <span className="text-xs text-gray-600">{card.tier_perk}</span>}
+            <span className="w-full text-xs text-gray-500">
+              {card.next_tier && card.next_tier_at != null
+                ? t('tierNext')
+                    .replace('{n}', String(Math.max(1, card.next_tier_at - (card.visits_year ?? 0))))
+                    .replace('{t}', t(card.next_tier === 'gold' ? 'tierGold' : 'tierSilver'))
+                : t('tierTopReached')}
+            </span>
+          </div>
+        )}
+        {card.challenge && (
+          <div className="mb-3 rounded border border-brand-100 bg-brand-50 p-2">
+            <p className="text-xs font-semibold text-brand-800">{t('challengeTitle')}</p>
+            <p className="text-xs text-gray-700">
+              {card.challenge.done
+                ? t('challengeDone')
+                : t('challengeText').replace('{n}', String(card.challenge.target)).replace('{b}', String(card.challenge.bonus))}
+            </p>
+            <div className="mt-1.5 flex gap-1" aria-label={`${card.challenge.visits} / ${card.challenge.target}`}>
+              {Array.from({ length: card.challenge.target }, (_, i) => (
+                <span key={i} className={`h-2 flex-1 rounded-full ${i < card.challenge!.visits ? 'bg-copper-500' : 'bg-white border border-brand-100'}`} />
+              ))}
             </div>
+          </div>
+        )}
+        {stampNote && (
+          <p role="status" className={`mb-2 rounded p-2 text-sm font-semibold ${stampNote.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
+            {stampNote.text}
+          </p>
+        )}
+        {card.double_now && (
+          <p className="mb-2 rounded bg-amber-50 p-2 text-xs font-semibold text-amber-800">{t('loyaltyDoubleNow')}</p>
+        )}
+        {qr && (
+          <div className="mb-3 flex items-center gap-3">
+            <img src={qr} alt="" width={110} height={110} className="h-28 w-28 rounded border" />
+            <p className="text-xs text-gray-600">{t('loyaltyShowQr')}</p>
+          </div>
+        )}
+        <div className="grid grid-cols-5 gap-2 mb-2 max-w-xs">
+          {dots.map((filled, i) => (
+            <motion.div
+              key={i}
+              className={`aspect-square rounded-full flex items-center justify-center text-sm ${
+                filled ? 'bg-copper-500 text-white' : 'bg-gray-100 text-gray-400'
+              }`}
+              initial={reduceMotion || !filled ? false : { scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.35, delay: filled ? i * 0.06 : 0, ease: 'backOut' }}
+            >
+              {filled ? '☕' : i + 1}
+            </motion.div>
           ))}
         </div>
         <p className="text-xs text-gray-600">
           {card.stamps}/{card.target} {t('loyaltyStamps')}
         </p>
+        {card.stamps >= card.target ? (
+          <p className="mt-2 rounded bg-amber-50 p-2 text-sm font-semibold text-amber-800">{t('loyaltyReady')}</p>
+        ) : (
+          <p className="mt-2 text-xs text-gray-600">{t('loyaltyToGo').replace('{n}', String(card.target - card.stamps))}</p>
+        )}
+        {card.redeemed_count > 0 && (
+          <p className="mt-1 text-xs text-gray-500">{t('loyaltyRedeemed').replace('{n}', String(card.redeemed_count))}</p>
+        )}
+        {card.reward_name && <p className="mt-1 text-xs text-gray-500">{t('loyaltyReward').replace('{r}', card.reward_name)}</p>}
+        {card.has_birthday === false && (
+          <div className="mt-3 border-t pt-2">
+            <p className="text-xs font-semibold text-gray-700 mb-1">{t('loyaltyAddBirthday')}</p>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                className="flex-1 min-w-0 border border-gray-300 rounded px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={saveBirthday}
+                disabled={busy || !birthday}
+                className="shrink-0 px-3 py-1 bg-brand-700 text-white rounded text-sm font-semibold disabled:opacity-50"
+              >
+                {t('loyaltySave')}
+              </button>
+            </div>
+            {message && <p className="mt-1 text-xs text-amber-700">{message}</p>}
+          </div>
+        )}
+        <NotifyButton token={token} />
+        {card.referral_code && (card.referral_bonus ?? 0) > 0 && (
+          <div className="mt-3 border-t pt-2">
+            <p className="text-xs font-semibold text-gray-700">{t('loyaltyInvite')}</p>
+            <p className="text-xs text-gray-600 mt-0.5">{t('loyaltyInviteText').replace('{n}', String(card.referral_bonus))}</p>
+            <button type="button" onClick={shareInvite} className="mt-2 px-3 py-1.5 rounded bg-copper-700 text-white text-xs font-semibold">
+              {copied ? t('loyaltyCopied') : t('loyaltyShare')}
+            </button>
+          </div>
+        )}
+        {card.history && card.history.length > 0 && (
+          <div className="mt-3 border-t pt-2">
+            <p className="text-xs font-semibold text-gray-700 mb-1">{t('loyaltyActivity')}</p>
+            <ul className="space-y-1">
+              {card.history.slice(0, 5).map((h, i) => (
+                <li key={i} className="flex justify-between gap-3 text-xs text-gray-600">
+                  <span>
+                    {t(
+                      {
+                        stamp: 'loyaltyEvStamp',
+                        redeem: 'loyaltyEvRedeem',
+                        adjust: 'loyaltyEvAdjust',
+                        bonus: 'loyaltyEvBonus',
+                        enroll: 'loyaltyEvEnroll',
+                      }[h.type],
+                    )}
+                    {(h.type === 'adjust' || h.type === 'bonus' || (h.type === 'stamp' && h.delta > 1)) &&
+                      ` (${h.delta > 0 ? '+' : ''}${h.delta})`}
+                  </span>
+                  <span className="text-gray-400">
+                    {new Date(h.created_at).toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      timeZone: 'Asia/Dubai',
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }
@@ -813,6 +1230,17 @@ export function LoyaltyCard() {
         inputMode="tel"
         className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
       />
+      <label className="block text-xs text-gray-600">
+        {t('loyaltyBirthday')}
+        <input
+          type="date"
+          value={birthday}
+          onChange={(e) => setBirthday(e.target.value)}
+          className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
+        />
+      </label>
+      {stampCode && <p className="rounded bg-amber-50 p-2 text-xs font-semibold text-amber-800">{t('loyaltySelfJoin')}</p>}
+      {ref && <p className="text-xs text-green-700">{t('loyaltyJoinedRef')}</p>}
       {message && <p className="text-xs text-amber-700">{message}</p>}
       <button
         type="button"
