@@ -15,6 +15,7 @@ interface Order {
   table: string | null;
   type?: 'pickup' | 'dine_in';
   pickup_at?: string | null;
+  rewards_card?: boolean;
   status: 'placed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   total: number;
   created_at: string;
@@ -166,6 +167,7 @@ export default function KitchenPage({
                     <p className="text-sm text-gray-600">
                       {o.customer_name}
                       {o.phone && <span className="text-gray-400"> · {o.phone}</span>}
+                      {o.rewards_card && <span className="ml-1 text-amber-700" title="Earns a stamp when collected">· ⭐ rewards</span>}
                     </p>
                     <ul className="mt-2 space-y-1 text-sm">
                       {o.items.map((i, n) => (

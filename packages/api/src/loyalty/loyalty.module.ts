@@ -13,5 +13,6 @@ import { PushModule } from '../push/push.module';
   imports: [TypeOrmModule.forFeature([LoyaltyCard, LoyaltyEvent, LoyaltySettings, User, Branch]), PushModule],
   controllers: [LoyaltyController],
   providers: [LoyaltyService],
+  exports: [LoyaltyService],
 })
 export class LoyaltyModule {}

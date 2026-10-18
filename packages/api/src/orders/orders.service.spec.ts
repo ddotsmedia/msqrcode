@@ -18,7 +18,7 @@ const latte = {
 };
 const cake = { id: P2, name: 'Cake', category_id: 'food', status: 'active', base_price: 22, variants: [], option_groups: [] };
 
-function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; openPhone?: number; inSlot?: number; deals?: any[]; soldOut?: string[]; branchPrice?: number; order?: any } = {}) {
+function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; openPhone?: number; inSlot?: number; deals?: any[]; stampResult?: any; soldOut?: string[]; branchPrice?: number; order?: any } = {}) {
   const saved: any[] = [];
   const counts = { table: opts.openTable ?? 0 };
   const orders = {
@@ -40,8 +40,10 @@ function setup(opts: { enabled?: boolean; pickup?: boolean; openTable?: number; 
   const prices = { find: jest.fn(async () => (opts.branchPrice ? [{ product_id: P2, price_aed: opts.branchPrice }] : [])) };
   const availability = { find: jest.fn(async () => (opts.soldOut ?? []).map((product_id) => ({ product_id }))) };
   const promotions = { find: jest.fn(async () => opts.deals ?? []) };
-  const svc = new OrdersService(orders as any, items as any, products as any, branches as any, prices as any, availability as any, promotions as any);
-  return { svc, saved, items, branch, orders };
+  const cards = { findOne: jest.fn(async ({ where }: any) => (where.token === 'card-token' || where.id === 'card-1' ? { id: 'card-1', token: 'card-token' } : null)) };
+  const loyalty = { addStamp: jest.fn(async () => opts.stampResult ?? { ok: true, stamps: 3 }) };
+  const svc = new OrdersService(orders as any, items as any, products as any, branches as any, prices as any, availability as any, promotions as any, cards as any, loyalty as any);
+  return { svc, saved, items, branch, loyalty, orders };
 }
 
 const body = (extra: Record<string, unknown> = {}) => ({
@@ -138,7 +140,7 @@ describe('OrdersService', () => {
   it('moves orders forward and keeps managers to their branch', async () => {
     const admin = { id: 'u', role: 'admin' };
     const order = { id: O1, branch_id: B1, status: 'placed' };
-    expect(await setup({ order }).svc.setStatus(O1, 'preparing', admin)).toEqual({ ok: true, status: 'preparing' });
+    expect(await setup({ order }).svc.setStatus(O1, 'preparing', admin)).toEqual({ ok: true, status: 'preparing', stamp: null });
     await expect(setup({ order: { ...order, status: 'completed' } }).svc.setStatus(O1, 'ready', admin)).rejects.toBeInstanceOf(BadRequestException);
     await expect(setup({ order }).svc.setStatus(O1, 'ready', { id: 'm', role: 'branch_manager', assigned_branch_id: B2 })).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -177,6 +179,39 @@ describe('OrdersService', () => {
       const { svc, branch } = setup({ enabled: true, pickup: false });
       expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' }, 'pickup')).toEqual({ ordering_enabled: true, pickup_enabled: true });
       expect(branch.ordering_enabled).toBe(true);
+    });
+  });
+
+  describe('rewards card', () => {
+    it('links the card when the phone sends a known token, and ignores unknown ones', async () => {
+      const a = setup();
+      expect(await a.svc.create(body({ loyalty_token: 'card-token' }))).toMatchObject({ earns_stamp: true });
+      expect(a.saved[0].loyalty_card_id).toBe('card-1');
+      const b = setup();
+      expect(await b.svc.create(body({ loyalty_token: 'nope' }))).toMatchObject({ earns_stamp: false });
+      expect(b.saved[0].loyalty_card_id).toBeNull();
+    });
+
+    it('stamps the card once when the order is collected', async () => {
+      const admin = { id: B2, role: 'admin' };
+      const order: any = { id: O1, branch_id: B1, status: 'ready', order_no: '012', loyalty_card_id: 'card-1', loyalty_stamped: false };
+      const { svc, loyalty } = setup({ order });
+      expect(await svc.setStatus(O1, 'completed', admin)).toEqual({ ok: true, status: 'completed', stamp: 'added' });
+      expect(loyalty.addStamp).toHaveBeenCalledWith({ token: 'card-token' }, { id: B2, role: 'admin', assigned_branch_id: B1 }, 'Order 012');
+      expect(order.loyalty_stamped).toBe(true);
+    });
+
+    it('reports a refused stamp without failing the status change', async () => {
+      const order: any = { id: O1, branch_id: B1, status: 'ready', order_no: '012', loyalty_card_id: 'card-1', loyalty_stamped: false };
+      const { svc } = setup({ order, stampResult: { ok: false, message: 'Daily limit reached' } });
+      expect(await svc.setStatus(O1, 'completed', { id: 'u', role: 'admin' })).toEqual({ ok: true, status: 'completed', stamp: 'Daily limit reached' });
+      expect(order.loyalty_stamped).toBe(false);
+    });
+
+    it('does not stamp for orders without a card or on other steps', async () => {
+      const { svc, loyalty } = setup({ order: { id: O1, branch_id: B1, status: 'placed', loyalty_card_id: 'card-1' } });
+      await svc.setStatus(O1, 'preparing', { id: 'u', role: 'admin' });
+      expect(loyalty.addStamp).not.toHaveBeenCalled();
     });
   });
 
