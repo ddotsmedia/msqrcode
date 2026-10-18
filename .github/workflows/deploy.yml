@@ -5,6 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# One deploy at a time: merging several PRs quickly started overlapping deploys that
+# ran git reset / docker build on the VPS at the same time and failed. Queue them instead.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME_API: ${{ github.repository }}/api
