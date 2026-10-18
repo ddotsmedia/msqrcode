@@ -24,7 +24,8 @@ function setup(raw: { counts?: any[]; redeemed?: any[]; orders?: any[] } = {}) {
   };
   const coupons = { createQueryBuilder: jest.fn(() => qb(raw.redeemed ?? [])) };
   const orders = { find: jest.fn(async () => raw.orders ?? []) };
-  return { svc: new OfferStatsService(events as any, promos as any, coupons as any, orders as any), saved };
+  const reminders = { find: jest.fn(async () => [{ promotion_id: A }, { promotion_id: A }]) };
+  return { svc: new OfferStatsService(events as any, promos as any, coupons as any, orders as any, reminders as any), saved };
 }
 
 describe('OfferStatsService', () => {
@@ -60,7 +61,7 @@ describe('OfferStatsService', () => {
       ],
     });
     const { rows } = await svc.stats('30');
-    expect(rows[0]).toMatchObject({ title: 'Happy hour', views: 40, order_clicks: 6, code_copies: 3, redemptions: 4, action_rate: 15, combo_orders: 0 });
+    expect(rows[0]).toMatchObject({ title: 'Happy hour', views: 40, order_clicks: 6, code_copies: 3, redemptions: 4, action_rate: 15, combo_orders: 0, reminders: 2 });
     expect(rows[1]).toMatchObject({ title: 'Coffee & croissant', views: 10, combo_adds: 2, combo_orders: 2, combo_saved: 36, action_rate: 20 });
     await expect(svc.stats('5')).rejects.toBeInstanceOf(BadRequestException);
   });

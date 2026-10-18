@@ -6,6 +6,7 @@ import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
 import { readFavs } from './lib/favorites';
 import { trackOffer } from './lib/offerTrack';
+import { ensurePush } from './lib/push';
 import { bestDiscount } from './lib/happyHour';
 import { countdown, DAY_NAMES, daysLeft, dubaiDate, icsFor, isTimed, liveNow, timing, weekGrid, whenLabel, type Offer } from './lib/offers';
 
@@ -108,6 +109,7 @@ export default function OffersPage() {
   const [sort, setSort] = useState<Sort>('smart');
   const [toast, setToast] = useState<string | null>(null);
   const [used, setUsed] = useState<string[]>([]);
+  const [reminders, setReminders] = useState<string[]>([]);
   const [coupon, setCoupon] = useState<{ offer: Offer; code?: string; expires?: number; error?: string } | null>(null);
 
   useEffect(() => {
@@ -131,6 +133,7 @@ export default function OffersPage() {
     if (token) {
       axios.get(`/api/loyalty/card/${token}`).then((r) => setCard(r.data)).catch(() => undefined);
       axios.get<string[]>('/api/coupons/used', { params: { token } }).then((r) => setUsed(Array.isArray(r.data) ? r.data : [])).catch(() => undefined);
+      axios.get<string[]>('/api/offers/reminders', { params: { token } }).then((r) => setReminders(Array.isArray(r.data) ? r.data : [])).catch(() => undefined);
     }
     return () => window.clearInterval(timer);
   }, []);
@@ -221,6 +224,37 @@ export default function OffersPage() {
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${SITE}`)}`, '_blank', 'noopener');
   }
+  // "Remind me": a phone notification 15 minutes before this happy hour starts.
+  async function toggleReminder(o: Offer) {
+    const token = readToken();
+    if (!token) {
+      setToast('Join our free rewards (Rewards tab) to get reminders');
+      return;
+    }
+    const on = !reminders.includes(o.id);
+    if (on) {
+      const push = await ensurePush(token);
+      if (push !== 'ok') {
+        setToast(
+          push === 'unsupported'
+            ? 'This browser cannot show notifications. On iPhone, add the site to your home screen first.'
+            : push === 'blocked'
+              ? 'Notifications are blocked. Allow them for this site in your browser settings.'
+              : 'Could not turn on reminders. Please try again.',
+        );
+        return;
+      }
+    }
+    try {
+      await axios.post('/api/offers/reminders', { token, promotion_id: o.id, on });
+      setReminders((r) => (on ? [...r, o.id] : r.filter((x) => x !== o.id)));
+      setToast(on ? `We'll remind you 15 minutes before ${o.title}` : 'Reminder off');
+    } catch (e: any) {
+      const m = e?.response?.data?.message;
+      setToast(typeof m === 'string' ? m : 'Could not save the reminder.');
+    }
+  }
+
   // Digital coupon: a 10-minute QR for this rewards card. Staff redeem it once.
   async function openCoupon(o: Offer) {
     trackOffer(o.id, 'coupon_open');
@@ -352,7 +386,7 @@ export default function OffersPage() {
             <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((o) => (
                 <li key={o.id}>
-                  <OfferCard o={o} now={now} catName={catName} branchName={branchName} onCopy={copy} onShare={share} onCalendar={calendar} products={products} branches={branches} onCoupon={openCoupon} used={used.includes(o.id)} />
+                  <OfferCard o={o} now={now} catName={catName} branchName={branchName} onCopy={copy} onShare={share} onCalendar={calendar} products={products} branches={branches} onCoupon={openCoupon} used={used.includes(o.id)} reminded={reminders.includes(o.id)} onRemind={toggleReminder} />
                 </li>
               ))}
             </ul>
@@ -522,6 +556,8 @@ function OfferCard({
   branches,
   onCoupon,
   used,
+  reminded,
+  onRemind,
 }: {
   o: Offer;
   now: Date;
@@ -534,6 +570,8 @@ function OfferCard({
   branches: Branch[];
   onCoupon: (o: Offer) => void;
   used: boolean;
+  reminded: boolean;
+  onRemind: (o: Offer) => void;
 }) {
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
@@ -590,6 +628,17 @@ function OfferCard({
         <Status o={o} now={now} />
         {isTimed(o) && (
           <div className="space-y-2">
+            {o.start_time && !liveNow(o, now) && (
+              <button
+                type="button"
+                aria-pressed={reminded}
+                onClick={() => onRemind(o)}
+                className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${reminded ? 'bg-brand-700 text-white' : 'border border-brand-100 text-brand-800 hover:bg-brand-50'}`}
+              >
+                <span aria-hidden="true">{reminded ? '🔔' : '🔕'}</span>
+                {reminded ? 'Reminder on · 15 min before' : 'Remind me 15 min before'}
+              </button>
+            )}
             <DayDots o={o} now={now} />
             <TimeBar o={o} now={now} />
           </div>
