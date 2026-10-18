@@ -14,6 +14,7 @@ import { BlogListPage, BlogPostPage } from './BlogPages';
 import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
+import { Crescent, useRamadan } from './lib/season';
 
 const API = '/api';
 const TZ = 'Asia/Dubai';
@@ -33,6 +34,7 @@ export interface SiteBranch {
   google_review_url?: string | null;
   delivery_links?: Record<string, string> | null;
   pickup_enabled?: boolean;
+  ramadan?: boolean; // the API swapped in Ramadan hours
 }
 
 function useBranches() {
@@ -79,7 +81,7 @@ function HoursLine({ branch }: { branch: SiteBranch }) {
       <span className={open ? 'font-semibold text-green-700' : 'font-semibold text-gray-600'}>
         {open ? 'Open now' : 'Closed'}
       </span>
-      {today && <span className="text-gray-600"> · Today {today.open}–{today.close}</span>}
+      {today && <span className="text-gray-600"> · {branch.ramadan ? 'Ramadan hours' : 'Today'} {today.open}–{today.close}</span>}
     </span>
   );
 }
@@ -299,6 +301,7 @@ interface FeaturedProduct {
   status: string;
   is_popular?: boolean;
   is_seasonal?: boolean;
+  category_id?: string;
   display_order?: number;
 }
 
@@ -342,7 +345,7 @@ function SectionHead({ eyebrow, title, to, cta }: { eyebrow: string; title: stri
 }
 
 // Home page product row: bestsellers, or (pick="seasonal") the limited-time items — hidden when there are none.
-function FeaturedMenu({ pick = 'popular' }: { pick?: 'popular' | 'seasonal' }) {
+function FeaturedMenu({ pick = 'popular', categoryIds = [] }: { pick?: 'popular' | 'seasonal' | 'ramadan'; categoryIds?: string[] }) {
   const [items, setItems] = useState<FeaturedProduct[]>([]);
 
   useEffect(() => {
@@ -354,6 +357,7 @@ function FeaturedMenu({ pick = 'popular' }: { pick?: 'popular' | 'seasonal' }) {
         const active = (res.data as FeaturedProduct[]).filter((p) => p.status === 'active');
         const byOrder = (a: FeaturedProduct, b: FeaturedProduct) => (a.display_order ?? 0) - (b.display_order ?? 0);
         if (pick === 'seasonal') return setItems(active.filter((p) => p.is_seasonal).sort(byOrder).slice(0, 4));
+        if (pick === 'ramadan') return setItems(active.filter((p) => categoryIds.includes(p.category_id ?? '')).sort(byOrder).slice(0, 4));
         const popular = active.filter((p) => p.is_popular);
         setItems((popular.length ? popular : active).sort(byOrder).slice(0, 4));
       })
@@ -361,14 +365,16 @@ function FeaturedMenu({ pick = 'popular' }: { pick?: 'popular' | 'seasonal' }) {
     return () => {
       cancelled = true;
     };
-  }, [pick]);
+  }, [pick, categoryIds.join()]);
 
   if (items.length === 0) return null;
 
   return (
     <section className="py-16 md:py-24">
       <div className="max-w-6xl mx-auto px-4">
-        {pick === 'seasonal' ? (
+        {pick === 'ramadan' ? (
+          <SectionHead eyebrow="Ramadan" title="Iftar & Suhoor picks" to="/menu" cta="See full menu" />
+        ) : pick === 'seasonal' ? (
           <SectionHead eyebrow="Limited time" title="New this season" to="/menu" cta="See full menu" />
         ) : (
           <SectionHead eyebrow="Customer favourites" title="Loved by our regulars" to="/menu" cta="See full menu" />
@@ -382,7 +388,9 @@ function FeaturedMenu({ pick = 'popular' }: { pick?: 'popular' | 'seasonal' }) {
                     {p.image_url && <img src={p.image_url} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />}
                   </div>
                   <div className="flex flex-1 flex-col p-3 sm:p-5">
-                    {pick === 'seasonal' ? (
+                    {pick === 'ramadan' ? (
+                      <span className="self-start rounded-full bg-brand-700 px-2.5 py-1 text-xs font-semibold text-copper-300">Iftar & Suhoor</span>
+                    ) : pick === 'seasonal' ? (
                       <span className="self-start rounded-full bg-copper-500 px-2.5 py-1 text-xs font-semibold text-white">Limited time</span>
                     ) : (
                       p.is_popular && <span className="self-start rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-500">Bestseller</span>
@@ -401,6 +409,33 @@ function FeaturedMenu({ pick = 'popular' }: { pick?: 'popular' | 'seasonal' }) {
         </Link>
       </div>
     </section>
+  );
+}
+
+// Ramadan greeting band on the home page (only while Ramadan mode is on).
+function RamadanBand() {
+  const r = useRamadan();
+  if (!r) return null;
+  return (
+    <>
+      <section className="pt-10 md:pt-14">
+        <Reveal className="max-w-6xl mx-auto px-4">
+          <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-brand-900 to-brand-700 px-7 py-9 text-white md:flex md:items-center md:justify-between md:gap-8 md:px-14">
+            <div className="flex items-start gap-4">
+              <Crescent className="h-12 w-12 shrink-0 text-copper-300" />
+              <div>
+                <h2 className="font-display text-3xl tracking-tight md:text-4xl">{r.greeting}</h2>
+                <p className="mt-2 text-brand-100 md:text-lg">{r.note || 'Our branches are open on Ramadan hours. Order ahead for iftar and suhoor.'}</p>
+              </div>
+            </div>
+            <Link to="/branches" className="mt-6 inline-flex shrink-0 rounded-full bg-copper-500 px-6 py-3.5 font-semibold hover:bg-copper-700 md:mt-0">
+              Ramadan hours & order ahead
+            </Link>
+          </div>
+        </Reveal>
+      </section>
+      {r.featured_category_ids.length > 0 && <FeaturedMenu pick="ramadan" categoryIds={r.featured_category_ids} />}
+    </>
   );
 }
 
@@ -543,7 +578,7 @@ function BranchCard({ b, km }: { b: SiteBranch; km: number | null }) {
       {today && (
         <p className="mt-2 flex items-center gap-2 text-sm text-slate-600">
           <Icon name="clock" className="h-4 w-4 shrink-0 text-copper-500" />
-          Today {today.open}–{today.close}
+          {b.ramadan ? 'Ramadan hours' : 'Today'} {today.open}–{today.close}
         </p>
       )}
       <div className="mt-auto pt-5 flex gap-2.5">
@@ -709,6 +744,7 @@ function HomePage() {
         </div>
       </section>
 
+      <RamadanBand />
       <FeaturedMenu pick="seasonal" />
       <FeaturedMenu />
       <OfferBand />

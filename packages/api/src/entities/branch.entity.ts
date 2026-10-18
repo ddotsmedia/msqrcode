@@ -75,6 +75,10 @@ export class Branch {
   @Column({ type: 'boolean', default: false })
   pickup_enabled: boolean;
 
+  // Opening hours used instead of operating_hours while Ramadan mode is on (same shape). Empty = no change.
+  @Column({ type: 'jsonb', nullable: true })
+  ramadan_hours: Record<string, any> | null;
+
   @CreateDateColumn()
   created_at: Date;
 

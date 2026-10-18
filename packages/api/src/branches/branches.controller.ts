@@ -5,14 +5,16 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
 import { BranchesService } from './branches.service';
 import { Branch } from '../entities/branch.entity';
+import { SeasonService } from '../season/season.service';
 
 @Controller('branches')
 export class BranchesController {
-  constructor(private branchesService: BranchesService) {}
+  constructor(private branchesService: BranchesService, private season: SeasonService) {}
 
   @Get()
   async findAll(): Promise<Branch[]> {
-    return this.branchesService.findAll();
+    // Ramadan mode swaps in each branch's Ramadan hours.
+    return Promise.all((await this.branchesService.findAll()).map((b) => this.season.applyToBranch(b)));
   }
 
   @Get(':id/menu-image')
@@ -22,12 +24,12 @@ export class BranchesController {
 
   @Get(':id')
   async findById(@Param('id') id: string): Promise<Branch> {
-    return this.branchesService.findById(id);
+    return this.season.applyToBranch(await this.branchesService.findById(id));
   }
 
   @Get('code/:code')
   async findByCode(@Param('code') code: string): Promise<Branch> {
-    return this.branchesService.findByCode(code);
+    return this.season.applyToBranch(await this.branchesService.findByCode(code));
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

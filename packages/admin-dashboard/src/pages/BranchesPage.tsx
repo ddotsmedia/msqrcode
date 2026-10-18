@@ -21,12 +21,67 @@ interface BranchForm {
   google_maps_url: string;
   google_review_url: string;
   whatsapp_number: string;
+  hours: Hours;
+  ramadan_on: boolean;
+  ramadan_hours: Hours;
+}
+
+type Hours = Record<string, { open: string; close: string } | null>; // null = closed that day
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const fillHours = (h: unknown, open: string, close: string): Hours =>
+  Object.fromEntries(
+    DAYS.map((d) => {
+      const day = h && typeof h === 'object' ? (h as Record<string, any>)[d] : undefined;
+      return [d, day ? { open: day.open, close: day.close } : h ? null : { open, close }];
+    }),
+  );
+const toApi = (h: Hours) => Object.fromEntries(DAYS.filter((d) => h[d]).map((d) => [d, h[d]]));
+
+// One row per day: open / closed, and the times. A closing time earlier than opening means after midnight.
+function HoursEditor({ value, onChange }: { value: Hours; onChange: (h: Hours) => void }) {
+  return (
+    <div className="space-y-1.5">
+      {DAYS.map((d) => {
+        const day = value[d];
+        return (
+          <div key={d} className="flex items-center gap-2 text-sm">
+            <label className="flex w-32 items-center gap-2">
+              <input type="checkbox" checked={!!day} onChange={(e) => onChange({ ...value, [d]: e.target.checked ? { open: '08:00', close: '22:00' } : null })} />
+              {d}
+            </label>
+            {day ? (
+              <>
+                <input type="time" aria-label={`${d} opens`} value={day.open} onChange={(e) => onChange({ ...value, [d]: { ...day, open: e.target.value } })} className="border border-gray-300 rounded px-2 py-1" />
+                <span className="text-gray-400">–</span>
+                <input type="time" aria-label={`${d} closes`} value={day.close} onChange={(e) => onChange({ ...value, [d]: { ...day, close: e.target.value } })} className="border border-gray-300 rounded px-2 py-1" />
+              </>
+            ) : (
+              <span className="text-gray-400">Closed</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 const TIMEZONES = ['Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Kuwait', 'Asia/Bahrain', 'Asia/Muscat'];
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
-const EMPTY: BranchForm = { id: null, name: '', address: '', phone: '', timezone: 'Asia/Dubai', status: 'active', google_maps_url: '', google_review_url: '', whatsapp_number: '' };
+const EMPTY: BranchForm = {
+  id: null,
+  name: '',
+  address: '',
+  phone: '',
+  timezone: 'Asia/Dubai',
+  status: 'active',
+  google_maps_url: '',
+  google_review_url: '',
+  whatsapp_number: '',
+  hours: fillHours(null, '08:00', '22:00'),
+  ramadan_on: false,
+  ramadan_hours: fillHours(null, '19:00', '02:00'),
+};
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
@@ -91,6 +146,9 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
       google_maps_url: (b as any).google_maps_url ?? '',
       google_review_url: (b as any).google_review_url ?? '',
       whatsapp_number: (b as any).whatsapp_number ?? '',
+      hours: fillHours((b as any).operating_hours, '08:00', '22:00'),
+      ramadan_on: !!(b as any).ramadan_hours,
+      ramadan_hours: fillHours((b as any).ramadan_hours, '19:00', '02:00'),
     });
   }
 
@@ -108,6 +166,7 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
       google_maps_url: form.google_maps_url || null,
       google_review_url: form.google_review_url || null,
       whatsapp_number: form.whatsapp_number || null,
+      ...(form.id ? { operating_hours: toApi(form.hours), ramadan_hours: form.ramadan_on ? toApi(form.ramadan_hours) : null } : {}),
     });
     try {
       if (form.id) {
@@ -306,7 +365,24 @@ export default function BranchesPage({ token, onQrCreated }: { token: string; on
                 placeholder="e.g., +971501234567"
               />
             </div>
-            {!form.id && <p className="text-xs text-gray-500">Opening hours default to 08:00–22:00 every day. You can change these later.</p>}
+            {!form.id ? (
+              <p className="text-xs text-gray-500">Opening hours default to 08:00–22:00 every day. You can change these after saving.</p>
+            ) : (
+              <>
+                <fieldset className="rounded-lg border border-gray-200 p-3">
+                  <legend className="px-1 text-sm font-semibold text-gray-700">Opening hours</legend>
+                  <HoursEditor value={form.hours} onChange={(h) => setForm({ ...form, hours: h })} />
+                </fieldset>
+                <fieldset className="rounded-lg border border-gray-200 p-3">
+                  <legend className="px-1 text-sm font-semibold text-gray-700">Ramadan hours</legend>
+                  <label className="mb-2 flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={form.ramadan_on} onChange={(e) => setForm({ ...form, ramadan_on: e.target.checked })} />
+                    Different hours during Ramadan (used automatically while Ramadan mode is on)
+                  </label>
+                  {form.ramadan_on && <HoursEditor value={form.ramadan_hours} onChange={(h) => setForm({ ...form, ramadan_hours: h })} />}
+                </fieldset>
+              </>
+            )}
 
             {formError && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{formError}</p>}
 

@@ -12,6 +12,7 @@ import { TableService } from './TableService';
 import { NotifyButton } from './NotifyButton';
 import { AddToOrder, TableOrder, groupsOf, unitPrice, useCart, type CartLine, type ChoiceGroup } from './TableOrder';
 import { bestDiscount, discounted, isLive, type HappyHour } from './lib/happyHour';
+import { Crescent, useRamadan } from './lib/season';
 import { motion, useReducedMotion } from 'motion/react';
 
 // API Base URL - will work through nginx reverse proxy
@@ -348,7 +349,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
   const [searchQuery, setSearchQuery] = useState('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   const [showDietary, setShowDietary] = useState<string | null>(null);
-  const [showFlag, setShowFlag] = useState<'new' | 'seasonal' | null>(null);
+  const [showFlag, setShowFlag] = useState<'new' | 'seasonal' | 'ramadan' | null>(null);
+  const ramadan = useRamadan();
   const [sortBy, setSortBy] = useState<'menu' | 'price_asc' | 'price_desc'>('menu');
   const [favs, setFavs] = useState<string[]>(readFavs);
   const [menuImage, setMenuImage] = useState<string | null>(null);
@@ -473,6 +475,7 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
 
     if (showFlag === 'new') filtered = filtered.filter((p) => p.is_new);
     if (showFlag === 'seasonal') filtered = filtered.filter((p) => p.is_seasonal);
+    if (showFlag === 'ramadan') filtered = filtered.filter((p) => ramadan?.featured_category_ids.includes(p.category_id));
 
     // Filter by dietary tags
     if (showDietary) {
@@ -629,9 +632,12 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
               [
                 ['new', 'New'],
                 ['seasonal', 'Limited time'],
+                ['ramadan', 'Iftar & Suhoor'],
               ] as const
             )
-              .filter(([flag]) => products.some((p) => (flag === 'new' ? p.is_new : p.is_seasonal)))
+              .filter(([flag]) =>
+                products.some((p) => (flag === 'new' ? p.is_new : flag === 'seasonal' ? p.is_seasonal : ramadan?.featured_category_ids.includes(p.category_id))),
+              )
               .map(([flag, label]) => (
                 <button
                   key={flag}
@@ -703,6 +709,16 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                   {cat.name}
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {ramadan && (
+          <div role="status" className="mb-4 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-900 to-brand-700 px-5 py-4 text-white">
+            <Crescent className="h-8 w-8 shrink-0 text-copper-300" />
+            <div>
+              <p className="font-semibold">{ramadan.greeting}</p>
+              {ramadan.note && <p className="text-sm text-brand-100">{ramadan.note}</p>}
             </div>
           </div>
         )}

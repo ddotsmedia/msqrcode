@@ -8,6 +8,7 @@ type Dict = Record<string, unknown>;
 
 const DEFAULT_TIMEZONE = 'Asia/Dubai';
 const DEFAULT_HOURS = { open: '08:00', close: '22:00' };
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function text(v: unknown, field: string, max: number, required = false): string | null {
@@ -97,6 +98,21 @@ export class AdminBranchesService {
     return branch;
   }
 
+  // Opening hours: { Monday: { open: 'HH:MM', close: 'HH:MM' }, ... }; a day left out is closed.
+  private hours(v: unknown, field: string, allowNull: boolean): Record<string, { open: string; close: string }> | null {
+    if (v === null && allowNull) return null;
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new BadRequestException(`${field} must be a list of days`);
+    const out: Record<string, { open: string; close: string }> = {};
+    for (const d of DAYS) {
+      const day = (v as Record<string, any>)[d];
+      if (!day) continue;
+      if (!HHMM.test(String(day.open)) || !HHMM.test(String(day.close))) throw new BadRequestException(`${field}: ${d} times must be HH:MM`);
+      if (day.open === day.close) throw new BadRequestException(`${field}: ${d} opens and closes at the same time`);
+      out[d] = { open: day.open, close: day.close };
+    }
+    return out;
+  }
+
   // The code is fixed once created, since QR codes and links depend on the branch id, not the code.
   async update(id: string, body: Dict) {
     const branch = await this.branches.findOne({ where: { id } });
@@ -109,6 +125,8 @@ export class AdminBranchesService {
     if (body.google_maps_url !== undefined) branch.google_maps_url = validateUrl(body.google_maps_url, 'google_maps_url');
     if (body.google_review_url !== undefined) branch.google_review_url = validateUrl(body.google_review_url, 'google_review_url');
     if (body.whatsapp_number !== undefined) branch.whatsapp_number = validateWhatsApp(body.whatsapp_number);
+    if (body.operating_hours !== undefined) branch.operating_hours = this.hours(body.operating_hours, 'Opening hours', false) as any;
+    if (body.ramadan_hours !== undefined) branch.ramadan_hours = this.hours(body.ramadan_hours, 'Ramadan hours', true);
     if (body.delivery_links !== undefined) branch.delivery_links = typeof body.delivery_links === 'object' && body.delivery_links !== null ? body.delivery_links as Record<string, string> : null;
     return this.branches.save(branch);
   }
