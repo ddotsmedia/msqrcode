@@ -62,6 +62,10 @@ export class Promotion {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   combo_price: number | null;
 
+  // Redeemed with a digital coupon at the counter, once per rewards card.
+  @Column({ type: 'boolean', default: false })
+  coupon_enabled: boolean;
+
   @CreateDateColumn()
   created_at: Date;
 }

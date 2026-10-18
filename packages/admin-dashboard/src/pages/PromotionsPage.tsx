@@ -22,6 +22,7 @@ interface Promotion {
   theme?: string | null;
   combo_product_ids?: string[] | null;
   combo_price?: number | string | null;
+  coupon_enabled?: boolean;
 }
 
 // Occasion looks for the website's Offers page. Templates fill the form; check the dates before saving.
@@ -43,7 +44,7 @@ const THEMES: { id: string; label: string; icon: string; template: { title: stri
 ];
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false, theme: '', combo: false, combo_product_ids: [] as string[], combo_price: '' };
+const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', happy: false, discount_percent: '20', start_time: '15:00', end_time: '17:00', days: [] as string[], category_ids: [] as string[], image_url: '', promo_code: '', featured: false, theme: '', combo: false, combo_product_ids: [] as string[], combo_price: '', coupon_enabled: false };
 
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
@@ -85,6 +86,7 @@ export default function PromotionsPage({ token }: { token: string }) {
           promo_code: form.promo_code.trim() || null,
           featured: form.featured,
           theme: form.theme || null,
+          coupon_enabled: form.coupon_enabled,
           ...(form.combo ? { combo_product_ids: form.combo_product_ids, combo_price: Number(form.combo_price) } : {}),
           ...(form.happy
             ? { discount_percent: Number(form.discount_percent), start_time: form.start_time || null, end_time: form.end_time || null, days: form.days, category_ids: form.category_ids }
@@ -180,6 +182,10 @@ export default function PromotionsPage({ token }: { token: string }) {
           </div>
         </div>
         <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={form.coupon_enabled} onChange={(e) => setForm({ ...form, coupon_enabled: e.target.checked })} />
+          Digital coupon — customers with a rewards card show a QR coupon; staff redeem it once in Loyalty → Redeem an offer coupon
+        </label>
+        <label className="md:col-span-2 flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} />
           Feature in the big slider at the top of the website's Offers page
         </label>
@@ -264,6 +270,7 @@ export default function PromotionsPage({ token }: { token: string }) {
                 {p.featured && <span title="Featured">⭐ </span>}
                 {p.theme && <span title={THEMES.find((t) => t.id === p.theme)?.label}>{THEMES.find((t) => t.id === p.theme)?.icon} </span>}
                 {p.title} {!p.is_active && <span className="text-xs text-gray-500">(hidden)</span>}
+                {p.coupon_enabled && <span className="ml-2 rounded bg-green-50 px-1.5 py-0.5 text-xs font-semibold text-green-700">Coupon</span>}
                 {p.promo_code && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">{p.promo_code}</span>}
               </p>
               {happyText(p) && <p className="text-sm font-semibold text-amber-700">Happy hour {happyText(p)}</p>}

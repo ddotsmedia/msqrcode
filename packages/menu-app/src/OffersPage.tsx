@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import QRCode from 'qrcode';
 import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
 import { readFavs } from './lib/favorites';
@@ -105,6 +106,8 @@ export default function OffersPage() {
   const [cat, setCat] = useState('');
   const [sort, setSort] = useState<Sort>('smart');
   const [toast, setToast] = useState<string | null>(null);
+  const [used, setUsed] = useState<string[]>([]);
+  const [coupon, setCoupon] = useState<{ offer: Offer; code?: string; expires?: number; error?: string } | null>(null);
 
   useEffect(() => {
     setPageTitle('Offers');
@@ -124,7 +127,10 @@ export default function OffersPage() {
     axios.get<Product[]>('/api/products').then((r) => setProducts(Array.isArray(r.data) ? r.data : [])).catch(() => undefined);
     axios.get<Rules>('/api/loyalty/settings').then((r) => setRules(r.data)).catch(() => undefined);
     const token = readToken();
-    if (token) axios.get(`/api/loyalty/card/${token}`).then((r) => setCard(r.data)).catch(() => undefined);
+    if (token) {
+      axios.get(`/api/loyalty/card/${token}`).then((r) => setCard(r.data)).catch(() => undefined);
+      axios.get<string[]>('/api/coupons/used', { params: { token } }).then((r) => setUsed(Array.isArray(r.data) ? r.data : [])).catch(() => undefined);
+    }
     return () => window.clearInterval(timer);
   }, []);
 
@@ -212,6 +218,24 @@ export default function OffersPage() {
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${SITE}`)}`, '_blank', 'noopener');
   }
+  // Digital coupon: a 10-minute QR for this rewards card. Staff redeem it once.
+  async function openCoupon(o: Offer) {
+    const token = readToken();
+    if (!token) {
+      setCoupon({ offer: o, error: 'join' });
+      return;
+    }
+    setCoupon({ offer: o });
+    try {
+      const r = await axios.post('/api/coupons/issue', { promotion_id: o.id, token });
+      setCoupon({ offer: o, code: r.data.code, expires: Date.parse(r.data.expires_at) });
+    } catch (e: any) {
+      const m = e?.response?.data?.message;
+      setCoupon({ offer: o, error: typeof m === 'string' ? m : 'Could not open the coupon. Please try again.' });
+      if (typeof m === 'string' && m.includes('already used')) setUsed((u) => [...u, o.id]);
+    }
+  }
+
   function calendar(o: Offer) {
     const url = URL.createObjectURL(new Blob([icsFor(o, SITE)], { type: 'text/calendar' }));
     const a = document.createElement('a');
@@ -323,7 +347,7 @@ export default function OffersPage() {
             <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {shown.map((o) => (
                 <li key={o.id}>
-                  <OfferCard o={o} now={now} catName={catName} branchName={branchName} onCopy={copy} onShare={share} onCalendar={calendar} products={products} branches={branches} />
+                  <OfferCard o={o} now={now} catName={catName} branchName={branchName} onCopy={copy} onShare={share} onCalendar={calendar} products={products} branches={branches} onCoupon={openCoupon} used={used.includes(o.id)} />
                 </li>
               ))}
             </ul>
@@ -344,6 +368,8 @@ export default function OffersPage() {
       {all.some(isTimed) && <Schedule offers={all.filter((o) => !branch || !o.branch_id || o.branch_id === branch)} now={now} />}
       {all.some((o) => isTimed(o)) && products.length > 0 && <Savings offers={all} products={products} categories={categories} />}
       {rules && <Rewards rules={rules} card={card} />}
+
+      {coupon && <CouponSheet coupon={coupon} now={now} onRetry={() => openCoupon(coupon.offer)} onClose={() => setCoupon(null)} />}
 
       {toast && (
         <p role="status" className="fixed inset-x-0 bottom-24 z-50 mx-auto w-fit rounded-full bg-brand-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg md:bottom-8">
@@ -489,6 +515,8 @@ function OfferCard({
   onCalendar,
   products,
   branches,
+  onCoupon,
+  used,
 }: {
   o: Offer;
   now: Date;
@@ -499,6 +527,8 @@ function OfferCard({
   onCalendar: (o: Offer) => void;
   products: Product[];
   branches: Branch[];
+  onCoupon: (o: Offer) => void;
+  used: boolean;
 }) {
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
@@ -600,6 +630,14 @@ function OfferCard({
             <span className="text-xs font-semibold text-copper-700">Copy</span>
           </button>
         )}
+        {o.coupon_enabled &&
+          (used ? (
+            <p className="rounded-xl bg-slate-100 px-3 py-2.5 text-center text-sm font-semibold text-slate-500">✓ Coupon used</p>
+          ) : (
+            <button type="button" onClick={() => onCoupon(o)} className="flex items-center justify-center gap-2 rounded-xl bg-green-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-green-700">
+              <Icon name="qr" className="h-4 w-4" /> Use coupon at the counter
+            </button>
+          ))}
         {picking && (
           <div className="rounded-2xl border border-brand-100 p-3">
             <p className="mb-2 text-sm font-semibold text-brand-900">Pick up from</p>
@@ -973,5 +1011,68 @@ function ForYou({ card, rules, offers, products, now }: { card: Card; rules: Rul
         </ul>
       )}
     </section>
+  );
+}
+
+// Full-screen coupon: QR plus code for staff to scan, with a 10-minute countdown.
+function CouponSheet({ coupon, now, onRetry, onClose }: { coupon: { offer: Offer; code?: string; expires?: number; error?: string }; now: Date; onRetry: () => void; onClose: () => void }) {
+  const [qr, setQr] = useState<string | null>(null);
+  useEffect(() => {
+    setQr(null);
+    if (coupon.code) QRCode.toDataURL(`MSQ-COUPON:${coupon.code}`, { margin: 1, width: 260, color: { dark: '#0b1a33', light: '#ffffff' } }).then(setQr).catch(() => setQr(null));
+  }, [coupon.code]);
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+  const left = coupon.expires ? coupon.expires - now.getTime() : 0;
+  const expired = !!coupon.code && left <= 0;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-900/80 p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label="Coupon" onClick={(e) => e.stopPropagation()} className="w-full max-w-sm overflow-hidden rounded-[28px] bg-white text-center shadow-2xl">
+        <div className={`bg-gradient-to-br ${themeOf(coupon.offer)?.gradient ?? 'from-brand-700 to-brand-900'} px-6 py-5 text-white`}>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-copper-300">Coupon</p>
+          <h2 className="mt-1 font-display text-2xl">{coupon.offer.title}</h2>
+          {coupon.offer.discount_percent ? <p className="text-copper-300">{coupon.offer.discount_percent}% off</p> : null}
+        </div>
+        <div className="p-6">
+          {coupon.error === 'join' ? (
+            <>
+              <p className="text-slate-700">Coupons are for rewards members. Joining is free and takes a few seconds.</p>
+              <Link to="/loyalty" className="mt-4 inline-flex rounded-full bg-copper-500 px-6 py-3 font-semibold text-white">
+                Join rewards
+              </Link>
+            </>
+          ) : coupon.error ? (
+            <p className="rounded-xl bg-red-50 p-3 font-semibold text-red-700">{coupon.error}</p>
+          ) : !coupon.code ? (
+            <div className="mx-auto h-[260px] w-[260px] animate-pulse rounded-2xl bg-slate-100" aria-label="Loading coupon" />
+          ) : expired ? (
+            <>
+              <p className="font-semibold text-slate-700">This coupon timed out.</p>
+              <button type="button" onClick={onRetry} className="mt-4 rounded-full bg-brand-700 px-6 py-3 font-semibold text-white">
+                Show it again
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600">Show this to the barista</p>
+              {qr ? <img src={qr} alt={`Coupon QR code ${coupon.code}`} className="mx-auto mt-3 h-[260px] w-[260px]" /> : <div className="mx-auto mt-3 h-[260px] w-[260px] rounded-2xl bg-slate-100" />}
+              <p className="mt-3 font-mono text-3xl font-bold tracking-[0.3em] text-brand-900">{coupon.code}</p>
+              <p className="mt-2 text-sm text-slate-600">
+                Valid for <span className="font-semibold tabular-nums text-brand-900">{countdown(left)}</span> · one use only
+              </p>
+              <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                <span className="block h-full bg-green-600 transition-all" style={{ width: `${Math.max(0, Math.min(100, (left / 600_000) * 100))}%` }} />
+              </span>
+            </>
+          )}
+          <button type="button" onClick={onClose} className="mt-5 w-full py-2 text-sm font-semibold text-slate-500">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
