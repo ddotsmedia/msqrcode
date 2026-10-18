@@ -24,6 +24,11 @@ export class OrdersController {
     return this.orders.track(id, token);
   }
 
+  @Post('orders/:id/arrived')
+  arrived(@Param('id') id: string, @Body() body: { token?: unknown; car?: unknown }) {
+    return this.orders.arrived(id, body?.token, body?.car);
+  }
+
   @Post('orders/:id/cancel')
   cancel(@Param('id') id: string, @Body() body: { token?: unknown }) {
     return this.orders.cancel(id, body?.token);

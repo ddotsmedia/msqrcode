@@ -15,6 +15,7 @@ import FaqPage from './FaqPage';
 import InstallButton from './InstallButton';
 import CateringPage from './CateringPage';
 import DrinkQuiz from './DrinkQuiz';
+import { BrewGuidePage, BrewGuidesPage } from './BrewGuides';
 import { Crescent, useRamadan } from './lib/season';
 
 const API = '/api';
@@ -96,6 +97,7 @@ const NAV: [string, string][] = [
 ];
 const MORE: [string, string][] = [
   ['/find-your-drink', 'Find your drink'],
+  ['/brew', 'Brew guides'],
   ['/catering', 'Catering'],
   ['/about', 'About'],
   ['/gallery', 'Gallery'],
@@ -152,7 +154,7 @@ function SiteFooter() {
             </div>
           )}
         </div>
-        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/find-your-drink', 'Find your drink'], ['/branches', 'Branches'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
+        <FooterCol title="Explore" links={[['/menu', 'Menu'], ['/find-your-drink', 'Find your drink'], ['/branches', 'Branches'], ['/brew', 'Brew guides'], ['/gallery', 'Gallery'], ['/news', "What's New"]]} />
         <FooterCol title="Rewards" links={[['/loyalty', 'My card'], ['/scan', 'Scan a QR'], ['/faq', 'FAQ']]} />
         <FooterCol title="Company" links={[['/about', 'About'], ['/catering', 'Catering'], ['/contact', 'Contact'], ['/feedback', 'Feedback']]} />
       </div>
@@ -1054,6 +1056,8 @@ export function SiteRoutes() {
         <Route path="faq" element={<FaqPage />} />
         <Route path="catering" element={<CateringPage />} />
         <Route path="find-your-drink" element={<DrinkQuiz />} />
+        <Route path="brew" element={<BrewGuidesPage />} />
+        <Route path="brew/:slug" element={<BrewGuidePage />} />
         <Route path="blog/:slug" element={<BlogPostPage />} />
         <Route path="menu" element={<AllMenuPage />} />
         <Route path="menu/:id" element={<BranchMenuPage />} />

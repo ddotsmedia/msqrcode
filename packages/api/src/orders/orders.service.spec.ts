@@ -180,6 +180,28 @@ describe('OrdersService', () => {
       expect(await svc.setOrdering(B1, true, { id: 'u', role: 'admin' }, 'pickup')).toEqual({ ordering_enabled: true, pickup_enabled: true });
       expect(branch.ordering_enabled).toBe(true);
     });
+
+    it('keeps the car for curbside pickup, only on pickup orders', async () => {
+      const a = setup();
+      await a.svc.create(pickup({ car: '  White Patrol  A 12345 ' }));
+      expect(a.saved[0].car).toBe('White Patrol A 12345');
+      const b = setup();
+      await b.svc.create(body({ car: 'Red Kia' }));
+      expect(b.saved[0].car).toBeNull();
+    });
+
+    it('marks a pickup order as arrived once, with the car', async () => {
+      const order: any = { id: O1, access_token: 't', type: 'pickup', status: 'ready', car: null, arrived_at: null };
+      await expect(setup({ order }).svc.arrived(O1, 't', '')).rejects.toThrow('Tell us your car');
+      const res = await setup({ order }).svc.arrived(O1, 't', 'Black Lexus, D 555');
+      expect(res).toMatchObject({ ok: true, car: 'Black Lexus, D 555' });
+      const first = order.arrived_at;
+      expect(first).toBeInstanceOf(Date);
+      expect((await setup({ order }).svc.arrived(O1, 't', '')).arrived_at).toBe(first);
+      await expect(setup({ order }).svc.arrived(O1, 'x', 'car')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(setup({ order: { ...order, type: 'dine_in' } }).svc.arrived(O1, 't', 'car')).rejects.toThrow('order-ahead');
+      await expect(setup({ order: { ...order, status: 'completed' } }).svc.arrived(O1, 't', 'car')).rejects.toThrow('closed');
+    });
   });
 
   describe('rewards card', () => {
