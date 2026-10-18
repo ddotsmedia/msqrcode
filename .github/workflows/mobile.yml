@@ -11,6 +11,14 @@ on:
   workflow_dispatch:
   push:
     tags: ['mobile-v*']
+  # Also check that the apps still build when a PR changes them.
+  pull_request:
+    paths:
+      - 'packages/*/android/**'
+      - 'packages/*/ios/**'
+      - 'packages/*/capacitor.config.ts'
+      - 'packages/*/src/**native*'
+      - '.github/workflows/mobile.yml'
 
 jobs:
   android:
