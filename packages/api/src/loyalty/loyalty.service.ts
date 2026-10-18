@@ -381,6 +381,8 @@ export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
       referral_code: card.referral_code,
       referral_bonus: rules.referral_bonus,
       has_birthday: !!card.birthday,
+      // Birthday week and the bonus not yet given this year (the Offers page shows a treat).
+      birthday_week: !!card.birthday && rules.birthday_bonus > 0 && card.birthday_rewarded_year !== dubaiNow().year && nearBirthday(card.birthday, dubaiNow().md),
       double_now: isDoubleNow(rules),
       history: history.map((e) => ({ type: e.type, delta: e.delta, created_at: e.created_at })),
       ...(await this.status(card.id, rules)),

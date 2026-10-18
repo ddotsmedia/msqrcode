@@ -57,6 +57,20 @@ describe('LoyaltyService', () => {
     expect(saved[0]).toMatchObject({ type: 'stamp', delta: 1, stamps_after: 3, staff_user_id: 'u1', branch_id: 'b1' });
   });
 
+  it('tells the card page when it is the birthday week and the treat is still due', async () => {
+    const today = dubaiNow().md;
+    const events = (svc: any) => ((svc as any).events.find = jest.fn(async () => []));
+    const a = setup({ card: { birthday: today, referral_code: 'ABC' } });
+    events(a.svc);
+    expect((await a.svc.getByToken('t')).birthday_week).toBe(true);
+    const b = setup({ card: { birthday: today, referral_code: 'ABC', birthday_rewarded_year: dubaiNow().year } });
+    events(b.svc);
+    expect((await b.svc.getByToken('t')).birthday_week).toBe(false);
+    const c = setup({ card: { birthday: null, referral_code: 'ABC' } });
+    events(c.svc);
+    expect((await c.svc.getByToken('t')).birthday_week).toBe(false);
+  });
+
   it('finds a card by the token in its QR code', async () => {
     const { svc } = setup({ stamps: 0 });
     expect((await svc.addStamp({ token: 't' })).ok).toBe(true);
