@@ -21,5 +21,6 @@ export { ServiceRequest } from './service-request.entity';
 export { PushSubscription } from './push-subscription.entity';
 export { AppSecret } from './app-secret.entity';
 export { CateringRequest } from './catering-request.entity';
+export { ProductRating } from './product-rating.entity';
 export { JobApplication } from './job-application.entity';
 export { SeasonSettings } from './season-settings.entity';

@@ -17,6 +17,7 @@ import { PromotionsModule } from './promotions/promotions.module';
 import { OrdersModule } from './orders/orders.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
 import { CateringModule } from './catering/catering.module';
+import { RatingsModule } from './ratings/ratings.module';
 import { CareersModule } from './careers/careers.module';
 import { SeasonModule } from './season/season.module';
 
@@ -52,6 +53,7 @@ import { SeasonModule } from './season/season.module';
     PromotionsModule,
     ServiceRequestsModule,
     CateringModule,
+    RatingsModule,
     CareersModule,
     SeasonModule,
     OrdersModule,
