@@ -24,8 +24,8 @@ export class AvailabilityController {
     @Body() body: { is_available: boolean },
   ): Promise<ProductAvailability> {
     const user = req.user;
-    if (user.role === 'branch_manager' && user.assigned_branch_id !== branchId) {
-      throw new ForbiddenException('Branch managers can only update their own branch');
+    if (user.role !== 'admin' && user.assigned_branch_id !== branchId) {
+      throw new ForbiddenException('You can only update your own branch');
     }
     return this.availabilityService.updateAvailability(
       branchId,

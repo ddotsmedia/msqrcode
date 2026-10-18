@@ -49,7 +49,8 @@ const EMPTY = { title: '', body: '', branch_id: '', starts_on: '', ends_on: '', 
 
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
-export default function PromotionsPage({ token }: { token: string }) {
+// `admin`: full admins also see offer statistics and Ramadan mode.
+export default function PromotionsPage({ token, admin = true }: { token: string; admin?: boolean }) {
   const [items, setItems] = useState<Promotion[]>([]);
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -132,9 +133,9 @@ export default function PromotionsPage({ token }: { token: string }) {
       <h2 className="text-xl font-bold text-gray-800">Offers</h2>
       {error && <p className="text-red-600 text-sm">{error}</p>}
 
-      <OfferStats token={token} />
+      {admin && <OfferStats token={token} />}
 
-      <RamadanCard token={token} categories={categories} />
+      {admin && <RamadanCard token={token} categories={categories} />}
 
       <form onSubmit={create} className="bg-white rounded-lg shadow p-4 grid gap-3 md:grid-cols-2">
         <input required maxLength={120} placeholder="Title (e.g. Free drink with breakfast)" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className={inputClass} />
