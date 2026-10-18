@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
+import { readBusiness } from './Business';
 import { useLang } from './i18n';
 import { pickupSlots } from './lib/hours';
 import { comboSavings, type Combo } from './lib/combos';
@@ -45,6 +46,7 @@ interface Placed {
   here?: boolean; // curbside: the customer tapped "I'm here"
   rated?: Record<string, boolean>; // product id -> thumbs up, after collecting
   lines?: Omit<CartLine, 'key'>[]; // what was ordered, for "Order again"
+  account?: string | null; // company that pays for it (business account)
 }
 const HOUR = 3600_000;
 interface Tracked {
@@ -306,6 +308,9 @@ export function TableOrder({
   const [name, setName] = useState(() => read<string>('msq_order_name', ''));
   const [phone, setPhone] = useState(() => read<string>('msq_order_phone', ''));
   const [car, setCar] = useState(() => read<string>('msq_order_car', ''));
+  // Company account saved on this phone (from its business page): orders for pickup can go on the account.
+  const [business] = useState(readBusiness);
+  const [onAccount, setOnAccount] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Tracked | null>(null);
@@ -382,6 +387,7 @@ export function TableOrder({
         customer_name: name.trim(),
         phone: phone.trim() || undefined,
         loyalty_token: rewardsToken() || undefined,
+        account_token: pickup && business && onAccount ? business.token : undefined,
         items: cart.lines.map((l) => ({
           product_id: l.product_id,
           qty: l.qty,
@@ -397,6 +403,7 @@ export function TableOrder({
           at: Date.now(),
           status: 'placed',
           ...(pickup ? { pickup: slot!.label } : {}),
+          account: r.data.on_account ?? null,
           lines: cart.lines.map(({ key: _key, ...l }) => l),
         },
         ...prev.slice(0, 19),
@@ -633,7 +640,17 @@ export function TableOrder({
                         <span className="font-semibold text-slate-700">{t('orderTotal')}</span>
                         <span className="text-xl font-bold text-brand-900">{money(payable)}</span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>
+                      {pickup && business ? (
+                        <label className="mt-2 flex items-start gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900">
+                          <input type="checkbox" checked={onAccount} onChange={(e) => setOnAccount(e.target.checked)} className="mt-0.5 h-4 w-4" />
+                          <span>
+                            <span className="font-semibold">{t('orderOnAccount').replace('{c}', business.company)}</span>
+                            <span className="block text-xs text-slate-600">{onAccount ? t('orderOnAccountNote') : t('orderPayCounter')}</span>
+                          </span>
+                        </label>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>
+                      )}
                       {rewardsToken() ? (
                         <p className="mt-2 rounded-lg bg-cream px-3 py-2 text-xs font-medium text-brand-900">⭐ {t('orderEarnsStamp')}</p>
                       ) : (
@@ -711,7 +728,7 @@ export function TableOrder({
                         <span>{t('orderTotal')}</span>
                         <span>{money(detail.total)}</span>
                       </div>
-                      {!['completed', 'cancelled'].includes(current.status ?? '') && <p className="mt-1 text-xs text-slate-500">{t('orderPayCounter')}</p>}
+                      {!['completed', 'cancelled'].includes(current.status ?? '') && <p className="mt-1 text-xs text-slate-500">{current.account ? t('orderOnAccountNote') : t('orderPayCounter')}</p>}
                       {current.status === 'completed' && Date.now() - current.at < 7 * 24 * HOUR && (
                         <div className="mt-4 rounded-xl bg-cream p-3">
                           <p className="text-sm font-semibold text-brand-900">{t('rateTitle')}</p>

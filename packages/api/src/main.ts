@@ -46,7 +46,7 @@ async function bootstrap() {
   // Forms anyone can send: a few per IP per day, so one person cannot flood staff inboxes or block real customers.
   const daily = (max: number) =>
     rateLimit({ windowMs: 24 * 3600 * 1000, max, skip: (req) => req.method !== 'POST', message: { message: 'Too many requests from this network today. Please call us instead.' } });
-  app.use(['/loyalty/enroll', '/catering', '/careers', '/gift-cards/request'], daily(10));
+  app.use(['/loyalty/enroll', '/catering', '/careers', '/gift-cards/request', '/corporate/apply'], daily(10));
   app.use(/^\/branches\/[^/]+\/feedback$/, daily(10));
 
   // Enable CORS
