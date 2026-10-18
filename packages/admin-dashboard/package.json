@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext ts,tsx --fix",
+    "lint": "tsc --noEmit",
     "test": "echo 'No tests configured for admin-dashboard'"
   },
   "dependencies": {

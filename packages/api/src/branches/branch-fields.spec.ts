@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AdminBranchesService } from '../admin/admin-branches.service';
 import { Branch } from '../entities/branch.entity';
+import { QrCode } from '../entities/qr-code.entity';
 
 describe('Branch Fields Validation', () => {
   let service: AdminBranchesService;
@@ -19,6 +20,7 @@ describe('Branch Fields Validation', () => {
       providers: [
         AdminBranchesService,
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
+        { provide: getRepositoryToken(QrCode), useValue: { find: jest.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 

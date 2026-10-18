@@ -82,12 +82,16 @@ export default function RequestsPage({
   onBranch: (id: string) => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   async function done(id: string) {
     setBusy(id);
+    setFailed(null);
     try {
       await api(`/admin/service-requests/${id}/done`, token, { method: 'PATCH' });
       await data.reload();
+    } catch (err) {
+      setFailed((err as Error).message);
     } finally {
       setBusy(null);
     }
@@ -108,7 +112,7 @@ export default function RequestsPage({
           ))}
         </select>
       )}
-      {data.error && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{data.error}</p>}
+      {(failed || data.error) && <p className="bg-red-50 text-red-700 rounded p-3 text-sm">{failed || data.error}</p>}
       {data.open.length === 0 ? (
         <p className="bg-white rounded-xl border p-6 text-center text-gray-500">No open requests.</p>
       ) : (

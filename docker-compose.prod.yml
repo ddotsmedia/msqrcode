@@ -51,8 +51,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       MENU_PUBLIC_URL: https://coffeesales.ae
+      CORS_ORIGIN: https://coffeesales.ae,https://www.coffeesales.ae,https://admin.coffeesales.ae
     ports:
-      - "3016:3000"
+      - "127.0.0.1:3016:3000" # only nginx on this server reaches it
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,7 +69,7 @@ services:
       dockerfile: packages/menu-app/Dockerfile
     container_name: msqrcode-menu-app
     ports:
-      - "3017:80"
+      - "127.0.0.1:3017:80"
     depends_on:
       - api
     networks:
@@ -81,7 +82,7 @@ services:
       dockerfile: packages/admin-dashboard/Dockerfile
     container_name: msqrcode-admin-dashboard
     ports:
-      - "3018:80"
+      - "127.0.0.1:3018:80"
     depends_on:
       - api
     networks:

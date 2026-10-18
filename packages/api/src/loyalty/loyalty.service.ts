@@ -452,7 +452,8 @@ export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
       if ((await this.bonus(card, rules.birthday_bonus, rules.stamps_target, 'Birthday', staff)) > 0) bonuses.push('birthday');
       else await this.cards.save(card);
     }
-    if (card.referred_by && !card.referral_rewarded) {
+    // Referral bonus only on a stamp given by staff, so self-made cards cannot farm it at the counter screen.
+    if (card.referred_by && !card.referral_rewarded && staff?.role !== 'self') {
       card.referral_rewarded = true;
       await this.cards.save(card);
       if (rules.referral_bonus > 0) {
@@ -493,7 +494,7 @@ export class LoyaltyService implements OnModuleInit, OnModuleDestroy {
     const { self_stamp } = await this.getSettings();
     if (!self_stamp) throw new BadRequestException('Turn on counter self-stamp in the programme rules first');
     if (typeof branchId !== 'string' || !BRANCH_ID.test(branchId)) throw new BadRequestException('Choose a branch');
-    if (staff.role !== 'admin' && staff.assigned_branch_id && staff.assigned_branch_id !== branchId) {
+    if (staff.role !== 'admin' && staff.assigned_branch_id !== branchId) {
       throw new ForbiddenException('You can only show the code for your own branch');
     }
     const branch = await this.branches.findOne({ where: { id: branchId } });

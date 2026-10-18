@@ -1,4 +1,4 @@
-const CACHE_NAME = 'milestones-v3';
+const CACHE_NAME = 'milestones-v4';
 const ASSETS_TO_CACHE = ['/index.html'];
 
 // Precache app shell on install
@@ -32,13 +32,31 @@ self.addEventListener('fetch', (e) => {
   }
 
   // Cache-first for static assets
-  if (request.method === 'GET' && /\.(js|css|png|jpg|svg|woff|woff2)$/.test(url.pathname)) {
+  // Only our own hashed build files are cache-first; other sites' files (map tiles, images) go to the network.
+  if (request.method === 'GET' && url.origin === self.location.origin && /\.(js|css|png|jpg|svg|woff|woff2)$/.test(url.pathname)) {
+    if (!url.pathname.startsWith('/assets/')) {
+      // Unhashed files (logo, gallery) can change: network first, cache as fallback.
+      e.respondWith(
+        fetch(request)
+          .then((resp) => {
+            if (resp.ok) {
+              const copy = resp.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            }
+            return resp;
+          })
+          .catch(() => caches.match(request))
+      );
+      return;
+    }
     e.respondWith(
       caches.match(request).then((r) => {
         if (r) return r;
         return fetch(request).then((resp) => {
-          const cache_resp = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cache_resp));
+          if (resp.ok) {
+            const cache_resp = resp.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, cache_resp));
+          }
           return resp;
         });
       })
@@ -55,7 +73,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, cache_resp));
           return r;
         }
-        return caches.match(request);
+        return caches.match(request).then((c) => c || r);
       })
       .catch(() => caches.match(request).then((r) => r || caches.match('/index.html')))
   );

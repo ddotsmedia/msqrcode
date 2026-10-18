@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Promotion } from '../entities/promotion.entity';
@@ -93,9 +93,12 @@ export class PromotionsService {
     return this.promos.save(row);
   }
 
-  async setActive(id: string, body: Record<string, unknown>) {
+  async setActive(id: string, body: Record<string, unknown>, staff?: { role: string; assigned_branch_id?: string | null }) {
     const row = await this.promos.findOne({ where: { id } });
     if (!row) throw new NotFoundException('Offer not found');
+    if (staff && staff.role !== 'admin' && (!row.branch_id || row.branch_id !== staff.assigned_branch_id)) {
+      throw new ForbiddenException('You can only change offers for your own branch');
+    }
     row.is_active = body.is_active === true;
     return this.promos.save(row);
   }

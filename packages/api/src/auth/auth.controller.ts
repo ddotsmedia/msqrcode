@@ -8,8 +8,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  login(@Body() body: { email: string; password: string }) {
-    return this.authService.login(body.email, body.password);
+  login(@Body() body: { email?: unknown; password?: unknown }) {
+    return this.authService.login(body?.email, body?.password);
   }
 
   @UseGuards(JwtAuthGuard)

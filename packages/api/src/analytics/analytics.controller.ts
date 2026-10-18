@@ -27,6 +27,8 @@ export class AnalyticsController {
   }
 
   @Get('views')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   async getViewStats(
     @Query('branch_id') branchId?: string,
     @Query('start_date') startDate?: string,
@@ -40,16 +42,22 @@ export class AnalyticsController {
   }
 
   @Get('products')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   async getProductStats(@Query('branch_id') branchId?: string): Promise<any[]> {
     return this.analyticsService.getProductViewStats(branchId);
   }
 
   @Get('searches')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   async getSearchStats(@Query('branch_id') branchId?: string): Promise<any[]> {
     return this.analyticsService.getSearchStats(branchId);
   }
 
   @Get('feedback')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   async getFeedbackStats(@Query('branch_id') branchId?: string): Promise<any[]> {
     return this.analyticsService.getFeedbackStats(branchId);
   }

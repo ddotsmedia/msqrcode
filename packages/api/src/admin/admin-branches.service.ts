@@ -29,6 +29,17 @@ function validateUrl(v: unknown, field: string): string | null {
   return s;
 }
 
+// Delivery app links: up to 10 named https links.
+function validateLinks(v: unknown): Record<string, string> | null {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out: Record<string, string> = {};
+  for (const [k, url] of Object.entries(v as Record<string, unknown>).slice(0, 10)) {
+    const s = validateUrl(url, `delivery_links.${k.slice(0, 30)}`);
+    if (s) out[k.slice(0, 30)] = s;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function validateWhatsApp(v: unknown): string | null {
   const s = text(v, 'whatsapp_number', 20);
   if (!s) return null;
@@ -129,7 +140,7 @@ export class AdminBranchesService {
     if (body.operating_hours !== undefined) branch.operating_hours = this.hours(body.operating_hours, 'Opening hours', false) as any;
     if (body.ramadan_hours !== undefined) branch.ramadan_hours = this.hours(body.ramadan_hours, 'Ramadan hours', true);
     if (body.amenities !== undefined) branch.amenities = amenities(body.amenities);
-    if (body.delivery_links !== undefined) branch.delivery_links = typeof body.delivery_links === 'object' && body.delivery_links !== null ? body.delivery_links as Record<string, string> : null;
+    if (body.delivery_links !== undefined) branch.delivery_links = validateLinks(body.delivery_links);
     return this.branches.save(branch);
   }
 

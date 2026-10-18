@@ -42,12 +42,14 @@ export class ProductsService {
   async search(query: string): Promise<Product[]> {
     return this.productsRepository
       .createQueryBuilder('product')
-      .where('product.name ILIKE :query OR product.description ILIKE :query', {
-        query: `%${query}%`,
+      // Escape LIKE wildcards so a search for "%" does not match everything; cap the length and results.
+      .where("(product.name ILIKE :query ESCAPE '\\' OR product.description ILIKE :query ESCAPE '\\')", {
+        query: `%${String(query ?? '').slice(0, 100).replace(/[\\%_]/g, (c) => `\\${c}`)}%`,
       })
       .andWhere('product.status = :status', { status: 'active' })
       .orderBy('product.display_order', 'ASC')
       .addOrderBy('product.name', 'ASC')
+      .take(50)
       .getMany();
   }
 
