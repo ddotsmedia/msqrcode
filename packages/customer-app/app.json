@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Milestones",
+    "slug": "milestones-coffee",
+    "version": "1.0.0",
+    "scheme": "milestones",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": { "backgroundColor": "#0b1a33" },
+    "ios": { "bundleIdentifier": "ae.coffeesales.app", "supportsTablet": false },
+    "android": {
+      "package": "ae.coffeesales.app",
+      "minSdkVersion": 26,
+      "adaptiveIcon": { "backgroundColor": "#0b1a33" }
+    },
+    "plugins": ["expo-router", ["expo-camera", { "cameraPermission": "Scan table and branch QR codes." }]],
+    "experiments": { "typedRoutes": true }
+  }
+}
