@@ -13,7 +13,7 @@
       "minSdkVersion": 26,
       "adaptiveIcon": { "backgroundColor": "#0b1a33" }
     },
-    "plugins": ["expo-router", ["expo-camera", { "cameraPermission": "Scan table and branch QR codes." }]],
+    "plugins": ["expo-router", ["expo-camera", { "cameraPermission": "Scan table and branch QR codes.", "recordAudioAndroid": false }]],
     "experiments": { "typedRoutes": true }
   }
 }
