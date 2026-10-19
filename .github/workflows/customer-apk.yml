@@ -1,0 +1,48 @@
+# Builds an installable Android APK of the customer app.
+# Run it from the Actions tab (Run workflow), or it runs on pushes that change the app.
+# Download the APK from the run's "Artifacts" section and install it on an Android phone
+# (allow "Install unknown apps" for the browser or file manager you open it with).
+name: customer-apk
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'packages/customer-app/**'
+      - '.github/workflows/customer-apk.yml'
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: packages/customer-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ${{ github.workspace }}
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install
+      - name: Build the APK
+        working-directory: packages/customer-app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease 2>&1 | tee "$RUNNER_TEMP/gradle.log"; status=${PIPESTATUS[0]}
+          # Surface the cause as annotations (readable without downloading logs).
+          [ "$status" = 0 ] || { grep -E -A8 "What went wrong|^e: |error:" "$RUNNER_TEMP/gradle.log" | head -40 | sed 's/^/::error::/'; exit "$status"; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: milestones-customer-apk
+          path: packages/customer-app/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
