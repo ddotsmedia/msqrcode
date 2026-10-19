@@ -630,6 +630,97 @@ function BranchCard({ b, km }: { b: SiteBranch; km: number | null }) {
   );
 }
 
+// Home: every section of the site, grouped (phone: icon tiles; desktop: columns with a short line each).
+const HP: Record<string, string> = {
+  clock: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 6v6l4 2',
+  qr: 'M4 3h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1M17 3h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1M4 16h3a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1M21 16h-3a2 2 0 0 0-2 2v3M12 7v3a2 2 0 0 1-2 2H7M16 12h1M12 21v-1',
+  menu: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',
+  pin: 'M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0M12 7a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
+  group: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
+  search: 'M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16M21 21l-4.3-4.3',
+  heart: 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
+  tag: 'M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42zM7.5 7.5h.01',
+  gift: 'M4 8h16a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7',
+  sparkle: 'M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z',
+  building: 'M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18ZM6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2M10 6h4M10 10h4M10 14h4',
+  cloche: 'M3 11h18M5 11a7 7 0 0 1 14 0M12 4V2M2 15h20M7 19h10',
+  cup: 'M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4ZM6 2v2M10 2v2M14 2v2',
+  image: 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M21 15l-5-5L5 21',
+  info: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M12 16v-4M12 8h.01',
+  case: 'M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2',
+  help: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z',
+};
+const HPath = ({ d, className = 'h-[22px] w-[22px]' }: { d: string; className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d={HP[d]} />
+  </svg>
+);
+// [title, accent ('navy' | 'copper'), [label, link, icon, short line][]]
+const HOME_GROUPS: [string, 'navy' | 'copper', [string, string, string, string][]][] = [
+  ['Order & visit', 'navy', [['Menu', '/menu', 'menu', 'Coffee, bakery, desserts'], ['Branches', '/branches', 'pin', 'Hours and directions'], ['Group order', '/branches', 'group', 'One order for the team'], ['Find your drink', '/find-your-drink', 'search', 'A 30-second quiz']]],
+  ['Rewards & offers', 'copper', [['Rewards', '/loyalty', 'heart', 'Stamps on your phone'], ['Offers', '/offers', 'tag', 'Happy hour and combos'], ['Gift cards', '/gift-cards', 'gift', 'Send one on WhatsApp'], ["What's New", '/news', 'sparkle', 'Seasonal drinks and news']]],
+  ['For business', 'navy', [['Business accounts', '/business', 'building', 'One monthly invoice'], ['Catering', '/catering', 'cloche', 'Events and coffee cart'], ['Careers', '/careers', 'case', 'Join the team']]],
+  ['Discover', 'copper', [['Brew guides', '/brew', 'cup', 'Make it at home'], ['Gallery', '/gallery', 'image', 'Our cafés'], ['About us', '/about', 'info', 'Our story']]],
+  ['Help', 'navy', [['FAQ', '/faq', 'help', 'Quick answers'], ['Feedback', '/feedback', 'chat', 'Tell us how we did'], ['Contact', '/contact', 'phone', 'Call or WhatsApp']]],
+];
+
+function HomeSections() {
+  const feature = 'flex flex-col gap-1.5 rounded-[20px] p-4 md:p-6 shadow-[0_14px_30px_rgba(10,26,51,0.14)] transition hover:-translate-y-0.5';
+  return (
+    <section className="relative z-10 -mt-10 md:-mt-14 max-w-6xl mx-auto px-4 space-y-3 md:space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+        <Link to="/branches" className={`${feature} bg-copper-700 text-white hover:bg-copper-500`}>
+          <HPath d="clock" />
+          <span className="hidden md:block text-xs uppercase tracking-[0.12em] text-copper-300">Skip the queue</span>
+          <span className="font-display text-lg md:text-2xl">Order ahead</span>
+          <span className="text-xs md:text-sm text-[#f5e6d3]">Pick up at your branch</span>
+        </Link>
+        <Link to="/scan" className={`${feature} bg-white text-brand-900`}>
+          <HPath d="qr" />
+          <span className="hidden md:block text-xs uppercase tracking-[0.12em] text-copper-700">At a table</span>
+          <span className="font-display text-lg md:text-2xl">Scan table QR</span>
+          <span className="text-xs md:text-sm text-slate-600">Order from your seat</span>
+        </Link>
+        <Link to="/loyalty" className={`${feature} hidden md:flex bg-brand-700 text-white hover:bg-brand-900`}>
+          <HPath d="heart" />
+          <span className="text-xs uppercase tracking-[0.12em] text-copper-300">Rewards</span>
+          <span className="font-display text-2xl">Your stamp card</span>
+          <span className="text-sm text-brand-200">Every drink earns a stamp</span>
+        </Link>
+      </div>
+      <div className="grid gap-3 md:gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {HOME_GROUPS.map(([title, tone, items]) => {
+          const ink = tone === 'copper' ? 'text-copper-700' : 'text-brand-700';
+          const tile = tone === 'copper' ? 'bg-[#f6ede3]' : 'bg-brand-50';
+          return (
+            <nav key={title} aria-label={title} className="h-full rounded-[22px] border border-[#e7ddd0] bg-white px-2.5 py-3.5 md:p-4">
+                <h2 className={`mx-1.5 mb-2.5 flex items-center gap-2 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${ink}`}>
+                  <span className={`h-2 w-2 rounded-full ${tone === 'copper' ? 'bg-copper-500' : 'bg-brand-700'}`} />
+                  {title}
+                </h2>
+                <div className="grid grid-cols-4 gap-y-3 md:grid-cols-1 md:gap-y-1">
+                  {items.map(([label, to, icon, line]) => (
+                    <Link key={label} to={to} className="flex flex-col items-center gap-1.5 rounded-[14px] md:flex-row md:gap-3 md:px-1.5 md:py-2 md:hover:bg-cream">
+                      <span className={`grid h-[52px] w-[52px] md:h-10 md:w-10 shrink-0 place-items-center rounded-[17px] md:rounded-[13px] ${tile} ${ink}`}>
+                        <HPath d={icon} className="h-[22px] w-[22px] md:h-5 md:w-5" />
+                      </span>
+                      <span className="min-w-0 text-center md:text-left">
+                        <span className="block text-[11.5px] md:text-sm font-semibold leading-tight text-brand-900">{label}</span>
+                        <span className="hidden md:block text-xs text-slate-500">{line}</span>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+            </nav>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function HomePage() {
   const [params] = useSearchParams();
   const { branches } = useBranches();
@@ -678,17 +769,11 @@ function HomePage() {
     reduceMotion
       ? {}
       : { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, delay, ease: 'easeOut' as const } };
-  const quick: [string, string, string, string, string][] = [
-    ['/menu', 'Menu', 'Coffee, bakery & desserts', 'Browse', 'coffee'],
-    ['/branches', 'Branches', 'Find the nearest café', 'Get directions', 'pin'],
-    ['/loyalty', 'Rewards', `${rules.stamps_target} stamps: ${rules.reward_name}`, 'Join free', 'gift'],
-    ['/scan', 'Scan table QR', 'Open your table’s menu', 'Open scanner', 'qr'],
-  ];
 
   return (
     <div>
       <section className="relative overflow-hidden bg-gradient-to-br from-brand-900 to-brand-600 text-white">
-        <div className="max-w-6xl mx-auto px-4 pt-12 pb-16 md:pt-20 md:pb-28 grid gap-12 md:grid-cols-[1fr_minmax(0,500px)] md:items-center">
+        <div className="max-w-6xl mx-auto px-4 pt-12 pb-24 md:pt-20 md:pb-36 grid gap-12 md:grid-cols-[1fr_minmax(0,500px)] md:items-center">
           <div>
             {branches && branches.length > 0 && (
               <motion.p
@@ -750,27 +835,7 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="max-w-6xl mx-auto px-4 pt-10 md:pt-12">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-          {quick.map(([to, title, sub, cta, icon], i) => (
-            <Reveal key={to} delay={i * 0.06}>
-              <Link
-                to={to}
-                className="flex h-full flex-col rounded-[20px] border border-brand-100 bg-white p-4 md:p-6 shadow-[0_8px_24px_rgba(10,26,51,0.06)] transition hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(10,26,51,0.12)]"
-              >
-                <span className="grid h-11 w-11 place-items-center rounded-[14px] bg-brand-50 text-brand-700">
-                  <Icon name={icon} className="h-[22px] w-[22px]" />
-                </span>
-                <p className="mt-4 font-display text-lg text-brand-900">{title}</p>
-                <p className="mt-1 text-sm text-slate-600">{sub}</p>
-                <p className="mt-auto pt-3 flex items-center gap-1.5 text-sm font-semibold text-copper-700">
-                  {cta} <Icon name="arrow" className="h-4 w-4" />
-                </p>
-              </Link>
-            </Reveal>
-          ))}
-        </div>
-      </section>
+      <HomeSections />
 
       <RamadanBand />
       <FeaturedMenu pick="seasonal" />
