@@ -659,15 +659,6 @@ const HPath = ({ d, className = 'h-[22px] w-[22px]' }: { d: string; className?: 
     <path d={HP[d]} />
   </svg>
 );
-// [title, accent ('navy' | 'copper'), [label, link, icon, short line][]]
-const HOME_GROUPS: [string, 'navy' | 'copper', [string, string, string, string][]][] = [
-  ['Order & visit', 'navy', [['Menu', '/menu', 'menu', 'Coffee, bakery, desserts'], ['Branches', '/branches', 'pin', 'Hours and directions'], ['Group order', '/branches', 'group', 'One order for the team'], ['Find your drink', '/find-your-drink', 'search', 'A 30-second quiz']]],
-  ['Rewards & offers', 'copper', [['Rewards', '/loyalty', 'heart', 'Stamps on your phone'], ['Offers', '/offers', 'tag', 'Happy hour and combos'], ['Gift cards', '/gift-cards', 'gift', 'Send one on WhatsApp'], ["What's New", '/news', 'sparkle', 'Seasonal drinks and news']]],
-  ['For business', 'navy', [['Business accounts', '/business', 'building', 'One monthly invoice'], ['Catering', '/catering', 'cloche', 'Events and coffee cart'], ['Careers', '/careers', 'case', 'Join the team']]],
-  ['Discover', 'copper', [['Brew guides', '/brew', 'cup', 'Make it at home'], ['Gallery', '/gallery', 'image', 'Our cafés'], ['About us', '/about', 'info', 'Our story']]],
-  ['Help', 'navy', [['FAQ', '/faq', 'help', 'Quick answers'], ['Feedback', '/feedback', 'chat', 'Tell us how we did'], ['Contact', '/contact', 'phone', 'Call or WhatsApp']]],
-];
-
 function HomeSections() {
   const feature = 'flex flex-col gap-1.5 rounded-[20px] p-4 md:p-6 shadow-[0_14px_30px_rgba(10,26,51,0.14)] transition hover:-translate-y-0.5';
   return (
@@ -691,33 +682,6 @@ function HomeSections() {
           <span className="font-display text-2xl">Your stamp card</span>
           <span className="text-sm text-brand-200">Every drink earns a stamp</span>
         </Link>
-      </div>
-      <div className="grid gap-3 md:gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {HOME_GROUPS.map(([title, tone, items]) => {
-          const ink = tone === 'copper' ? 'text-copper-700' : 'text-brand-700';
-          const tile = tone === 'copper' ? 'bg-[#f6ede3]' : 'bg-brand-50';
-          return (
-            <nav key={title} aria-label={title} className="h-full rounded-[22px] border border-[#e7ddd0] bg-white px-2.5 py-3.5 md:p-4">
-                <h2 className={`mx-1.5 mb-2.5 flex items-center gap-2 font-sans text-xs font-semibold uppercase tracking-[0.12em] ${ink}`}>
-                  <span className={`h-2 w-2 rounded-full ${tone === 'copper' ? 'bg-copper-500' : 'bg-brand-700'}`} />
-                  {title}
-                </h2>
-                <div className="grid grid-cols-4 gap-y-3 md:grid-cols-1 md:gap-y-1">
-                  {items.map(([label, to, icon, line]) => (
-                    <Link key={label} to={to} className="flex flex-col items-center gap-1.5 rounded-[14px] md:flex-row md:gap-3 md:px-1.5 md:py-2 md:hover:bg-cream">
-                      <span className={`grid h-[52px] w-[52px] md:h-10 md:w-10 shrink-0 place-items-center rounded-[17px] md:rounded-[13px] ${tile} ${ink}`}>
-                        <HPath d={icon} className="h-[22px] w-[22px] md:h-5 md:w-5" />
-                      </span>
-                      <span className="min-w-0 text-center md:text-left">
-                        <span className="block text-[11.5px] md:text-sm font-semibold leading-tight text-brand-900">{label}</span>
-                        <span className="hidden md:block text-xs text-slate-500">{line}</span>
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-            </nav>
-          );
-        })}
       </div>
     </section>
   );
