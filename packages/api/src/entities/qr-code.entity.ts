@@ -22,7 +22,10 @@ export class QrCode {
   branch: Branch;
 
   @Column({ type: 'varchar', length: 10, default: 'branch' })
-  kind: string; // branch | table
+  kind: string; // branch | table | feedback | promo
+
+  @Column({ type: 'uuid', nullable: true })
+  promotion_id: string | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   table_number: string | null;

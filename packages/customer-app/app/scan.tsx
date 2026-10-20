@@ -6,6 +6,7 @@ import { Alert } from 'react-native';
 import { API } from '../src/api';
 import { getCardToken } from '../src/storage';
 import { parseTableCode, setTable } from '../src/table';
+import { logScan } from '../src/scans';
 import { C } from '../src/theme';
 
 export default function ScanScreen() {
@@ -35,9 +36,26 @@ export default function ScanScreen() {
       ]);
       return;
     }
+    // Feedback code on a receipt or table card: open the feedback form for that branch.
+    const feedback = data.match(/[?&]branch=([a-f0-9-]{36})/i);
+    if (feedback && /[?&]feedback=1/.test(data)) {
+      setDone(true);
+      logScan({ kind: 'feedback', branch_id: feedback[1] });
+      router.replace(`/pages/feedback?branch=${feedback[1]}`);
+      return;
+    }
+    // Offer poster code: open the offers tab.
+    const promo = data.match(/[?&]promo=([a-f0-9-]{36})/i);
+    if (promo) {
+      setDone(true);
+      logScan({ kind: 'promo', promotion_id: promo[1] });
+      router.replace('/(tabs)/offers');
+      return;
+    }
     const session = parseTableCode(data);
     if (!session) return setMessage('That code is not a table code. Try the one on your table.');
     setDone(true);
+    logScan({ kind: 'table', branch_id: session.branchId, table: session.table });
     await setTable(session);
     router.replace('/(tabs)');
   };

@@ -6,6 +6,7 @@ import { setMetaDescription, setPageTitle } from './lib/seo';
 import { Icon } from './lib/Icon';
 import { readFavs } from './lib/favorites';
 import { trackOffer } from './lib/offerTrack';
+import { logScan } from './lib/qrScan';
 import { ensurePush } from './lib/push';
 import { bestDiscount } from './lib/happyHour';
 import { countdown, DAY_NAMES, daysLeft, dubaiDate, icsFor, isTimed, liveNow, timing, weekGrid, whenLabel, type Offer } from './lib/offers';
@@ -95,6 +96,11 @@ function readToken() {
 
 // Public Offers page: featured slider, live countdowns, filters, weekly happy-hour schedule, savings calculator and rewards.
 export default function OffersPage() {
+  // Offer posters carry /offers?promo=<id>: log that scan once.
+  useEffect(() => {
+    const promo = new URLSearchParams(window.location.search).get('promo');
+    if (promo && /^[a-f0-9-]{36}$/i.test(promo)) logScan({ kind: 'promo', promotion_id: promo });
+  }, []);
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [error, setError] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);

@@ -11,8 +11,10 @@ const DEFAULT_CAPTION = 'Scan to view the menu';
 // Posters and phone cameras need a web link: opening it lands on the branch menu.
 const MENU_URL = (process.env.MENU_PUBLIC_URL || 'https://coffeesales.ae').replace(/\/$/, '');
 
-export function qrPayload(branchId: string, kind: string, tableNumber: string | null): string {
+export function qrPayload(branchId: string, kind: string, tableNumber: string | null, promotionId?: string | null): string {
+  if (kind === 'promo' && promotionId) return `${MENU_URL}/offers?promo=${promotionId}`;
   const base = `${MENU_URL}/?branch=${branchId}`;
+  if (kind === 'feedback') return `${base}&feedback=1`;
   return kind === 'table' && tableNumber ? `${base}&table=${encodeURIComponent(tableNumber)}` : base;
 }
 
@@ -48,7 +50,7 @@ export class QrCodesService {
     });
     return rows.map((r) => ({
       ...r,
-      payload: qrPayload(r.branch_id, r.kind, r.table_number),
+      payload: qrPayload(r.branch_id, r.kind, r.table_number, r.promotion_id),
       has_artwork: !!r.artwork_name,
     }));
   }
@@ -109,23 +111,33 @@ export class QrCodesService {
     const branch = await this.branches.findOne({ where: { id: branchId } });
     if (!branch) throw new NotFoundException('Branch not found');
 
-    const kind = body.kind === 'table' ? 'table' : 'branch';
+    const kind = body.kind === 'table' || body.kind === 'feedback' || body.kind === 'promo' ? body.kind : 'branch';
     const tableNumber = kind === 'table' ? text(body.table_number, 'table_number', 20, true) : null;
+    const promotionId = kind === 'promo' ? text(body.promotion_id, 'promotion_id', 36, true) : null;
+    if (promotionId && !/^[a-f0-9-]{36}$/i.test(promotionId)) throw new BadRequestException('promotion_id is not valid');
 
     const existing = await this.qr.findOne({
-      where: { branch_id: branchId, kind, table_number: tableNumber ?? IsNull() },
+      where: { branch_id: branchId, kind, table_number: tableNumber ?? IsNull(), promotion_id: promotionId ?? IsNull() },
     });
     if (existing) {
       throw new BadRequestException(
-        kind === 'table' ? `Table ${tableNumber} already has a QR code` : 'This branch already has a branch QR code',
+        kind === 'table'
+          ? `Table ${tableNumber} already has a QR code`
+          : kind === 'promo'
+            ? 'This offer already has a QR code'
+            : kind === 'feedback'
+              ? 'This branch already has a feedback QR code'
+              : 'This branch already has a branch QR code',
       );
     }
 
-    const defaultLabel = kind === 'table' ? `${branch.name} · Table ${tableNumber}` : branch.name;
+    const defaultLabel =
+      kind === 'table' ? `${branch.name} · Table ${tableNumber}` : kind === 'feedback' ? `${branch.name} · Feedback` : kind === 'promo' ? `${branch.name} · Offer` : branch.name;
     const row = this.qr.create({
       branch_id: branchId,
       kind,
       table_number: tableNumber,
+      promotion_id: promotionId,
       label: text(body.label, 'label', 120) ?? defaultLabel,
       caption: text(body.caption, 'caption', 120) ?? DEFAULT_CAPTION,
       foreground: color(body.foreground, 'foreground') ?? '#111111',

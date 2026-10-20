@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import axios from 'axios';
+import { logScan } from './lib/qrScan';
 import { animate, motion, useReducedMotion } from 'motion/react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FeedbackForm, LoyaltyCard, MenuPage, QRScannerPage } from './App';
@@ -749,9 +750,21 @@ function HomePage() {
     setMetaDescription('Milestones Coffee menus, branches, opening hours, offers and rewards.');
   }, []);
 
+  // Log the scan once: table, branch or feedback code (offer codes are logged on the Offers page).
+  useEffect(() => {
+    const b = params.get('branch');
+    if (!b || !/^[a-f0-9-]{36}$/i.test(b)) return;
+    const table = params.get('table');
+    const kind = params.get('feedback') === '1' ? 'feedback' : table && /^[\w-]{1,20}$/.test(table) ? 'table' : 'branch';
+    logScan({ kind, branch_id: b, table: kind === 'table' ? table ?? undefined : undefined });
+    // Only the first render logs; the redirect below does not repeat it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Old QR codes point to /?branch=<id>&table=<n>: send them to the branch menu.
   const legacyBranch = params.get('branch');
   if (legacyBranch && /^[a-f0-9-]{8,}$/i.test(legacyBranch)) {
+    if (params.get('feedback') === '1') return <Navigate to={`/feedback?branch=${legacyBranch}`} replace />;
     const table = params.get('table');
     const safeTable = table && /^[\w-]{1,20}$/.test(table) ? `?table=${table}` : '';
     return <Navigate to={`/menu/${legacyBranch}${safeTable}`} replace />;
@@ -1101,7 +1114,9 @@ function BranchMenuPage() {
 
 function FeedbackPage() {
   const { branches } = useBranches();
-  const [branchId, setBranchId] = useState('');
+  const [params] = useSearchParams();
+  const preset = params.get('branch') ?? '';
+  const [branchId, setBranchId] = useState(/^[a-f0-9-]{36}$/i.test(preset) ? preset : '');
   setPageTitle('Feedback');
   return (
     <div className="space-y-4 max-w-md">

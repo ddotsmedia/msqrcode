@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { API, getJson, type Branch } from '../../src/api';
@@ -7,7 +8,8 @@ import { C } from '../../src/theme';
 
 export default function FeedbackScreen() {
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => getJson<Branch[]>('/branches') });
-  const [branchId, setBranchId] = useState('');
+  const { branch } = useLocalSearchParams<{ branch?: string }>();
+  const [branchId, setBranchId] = useState(typeof branch === 'string' && /^[a-f0-9-]{36}$/i.test(branch) ? branch : '');
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
