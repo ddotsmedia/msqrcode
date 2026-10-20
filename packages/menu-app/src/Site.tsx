@@ -116,6 +116,18 @@ const NAV: [string, string][] = [
   ['/loyalty', 'Rewards'],
   ['/offers', 'Offers'],
 ];
+const SIDE_ICONS: Record<string, string> = {
+  '/': 'home',
+  '/menu': 'book',
+  '/branches': 'pin',
+  '/loyalty': 'gift',
+  '/offers': 'qr',
+  '/gift-cards': 'gift',
+  '/business': 'clock',
+  '/catering': 'coffee',
+  '/feedback': 'check',
+  '/contact': 'phone',
+};
 const MORE: [string, string][] = [
   ['/news', "What's New"],
   ['/find-your-drink', 'Find your drink'],
@@ -238,11 +250,22 @@ function Layout() {
               key={to}
               to={to}
               aria-current={active(to) ? 'page' : undefined}
-              className={`block rounded-xl px-3 py-2 text-[15px] ${active(to) ? 'bg-brand-50 font-semibold text-brand-700' : 'text-slate-600 hover:bg-cream hover:text-brand-700'}`}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] ${active(to) ? 'bg-brand-50 font-semibold text-brand-700' : 'text-slate-600 hover:bg-cream hover:text-brand-700'}`}
             >
+              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${active(to) ? 'bg-brand-700 text-white' : 'bg-cream text-copper-700'}`}>
+                <Icon name={SIDE_ICONS[to] ?? 'arrow'} className="h-4 w-4" />
+              </span>
               {label}
             </Link>
           ))}
+          <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900 to-brand-700 p-4 text-white">
+            <Icon name="coffee" className="h-6 w-6 text-copper-700" />
+            <p className="mt-2 font-display text-[17px] leading-tight">Order ahead, skip the queue</p>
+            <p className="mt-1 text-[13px] text-brand-100/80">Pick up at your nearest branch.</p>
+            <Link to="/menu" className="mt-3 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-brand-700">
+              Order now <Icon name="arrow" className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </aside>
         <div className="flex-1 min-w-0 flex flex-col">
           <main className={isHome ? 'flex-1 w-full' : 'flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-8'}>
