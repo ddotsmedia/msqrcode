@@ -14,6 +14,7 @@ import { AdminModule } from './admin/admin.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { LoyaltyModule } from './loyalty/loyalty.module';
 import { PromotionsModule } from './promotions/promotions.module';
+import { QrScansModule } from './qr-scans/qr-scans.module';
 import { OrdersModule } from './orders/orders.module';
 import { ServiceRequestsModule } from './service-requests/service-requests.module';
 import { CateringModule } from './catering/catering.module';
@@ -56,6 +57,7 @@ import { GroupOrdersModule } from './group-orders/group-orders.module';
     FeedbackModule,
     LoyaltyModule,
     PromotionsModule,
+    QrScansModule,
     ServiceRequestsModule,
     CateringModule,
     RemindersModule,
