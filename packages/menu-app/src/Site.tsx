@@ -218,20 +218,6 @@ function Layout() {
                 {label}
               </Link>
             ))}
-            <div className="relative">
-              <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-expanded={moreOpen} className={tabClass(moreOpen)}>
-                More ▾
-              </button>
-              {moreOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-brand-100 bg-white text-brand-800 shadow-lg py-2">
-                  {MORE.map(([to, label]) => (
-                    <Link key={to} to={to} className="block px-4 py-2 text-sm hover:bg-cream">
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
           </nav>
           <div className="flex items-center gap-2">
             <InstallButton />
@@ -251,11 +237,28 @@ function Layout() {
         </div>
       </header>
 
-      <main className={isHome ? 'flex-1 w-full' : 'flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8'}>
-        <Outlet />
-      </main>
+      <div className="flex flex-1 min-w-0">
+        <aside aria-label="Site pages" className="hidden lg:block w-60 shrink-0 sticky top-[72px] h-[calc(100vh-72px)] overflow-y-auto border-r border-brand-100 bg-white py-5 px-3">
+          <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-copper-700">Explore</p>
+          {[...NAV, ...MORE].map(([to, label]) => (
+            <Link
+              key={to}
+              to={to}
+              aria-current={active(to) ? 'page' : undefined}
+              className={`block rounded-xl px-3 py-2 text-[15px] ${active(to) ? 'bg-brand-50 font-semibold text-brand-700' : 'text-slate-600 hover:bg-cream hover:text-brand-700'}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </aside>
+        <div className="flex-1 min-w-0 flex flex-col">
+          <main className={isHome ? 'flex-1 w-full' : 'flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8'}>
+            <Outlet />
+          </main>
 
-      <SiteFooter />
+          <SiteFooter />
+        </div>
+      </div>
 
       {moreOpen && (
         <div className="lg:hidden fixed inset-x-0 top-[72px] z-40 bg-white border-b border-brand-100 shadow-lg p-2">
