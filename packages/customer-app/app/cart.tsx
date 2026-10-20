@@ -7,6 +7,9 @@ import { useCart } from '../src/cart';
 import { getCardToken } from '../src/storage';
 import { getSavedOrders, placeOrder, requestService, type SavedOrder } from '../src/orders';
 import { clearTable, getTable, type TableSession } from '../src/table';
+import { getBusinessToken } from '../src/business';
+import { LAST_BRANCH } from '../src/favs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C } from '../src/theme';
 
 export default function CartScreen() {
@@ -21,11 +24,14 @@ export default function CartScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [recent, setRecent] = useState<SavedOrder[]>([]);
+  const [account, setAccount] = useState<string | null>(null);
+  const [onAccount, setOnAccount] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       getTable().then(setTableState);
       getSavedOrders().then(setRecent);
+      getBusinessToken().then(setAccount);
     }, []),
   );
   useEffect(() => {
@@ -33,6 +39,9 @@ export default function CartScreen() {
   }, [pickup, branchId]);
 
   const activeBranch = table ? table.branchId : branchId;
+  useEffect(() => {
+    if (activeBranch) AsyncStorage.setItem(LAST_BRANCH, activeBranch).catch(() => undefined);
+  }, [activeBranch]);
 
   const submit = async () => {
     setError('');
@@ -47,6 +56,7 @@ export default function CartScreen() {
         lines,
         loyaltyToken,
         table: table?.table ?? null,
+        accountToken: !table && onAccount ? account : null,
       });
       clear();
       router.replace(`/order/${o.id}`);
@@ -86,6 +96,8 @@ export default function CartScreen() {
           </View>
         )}
         {!!notice && <Text style={styles.notice}>{notice}</Text>}
+        {!table && <Pressable onPress={() => router.push('/group')}><Text style={styles.groupLink}>Start a group order →</Text></Pressable>}
+        {!table && <Pressable onPress={() => router.push('/business')}><Text style={styles.groupLink}>Business account →</Text></Pressable>}
 
         {lines.length === 0 ? (
           <Text style={styles.muted}>Your cart is empty.</Text>
@@ -130,6 +142,11 @@ export default function CartScreen() {
                 <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="05x xxx xxxx" placeholderTextColor={C.muted} />
                 <Text style={styles.note}>Ready in about 15 minutes. You will get a live status on this screen.</Text>
               </>
+            )}
+            {!table && account && (
+              <Pressable style={styles.toggle} onPress={() => setOnAccount((v) => !v)}>
+                <Text style={styles.toggleText}>{onAccount ? '✓ ' : ''}Charge to my company account (pickup)</Text>
+              </Pressable>
             )}
             {!!error && <Text style={styles.error}>{error}</Text>}
             <Pressable style={[styles.placeBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={submit}>
@@ -188,5 +205,8 @@ const styles = StyleSheet.create({
   placeBtn: { backgroundColor: C.navy2, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 16 },
   placeText: { color: C.white, fontWeight: '600', fontSize: 16 },
   clear: { color: C.muted, textAlign: 'center', marginTop: 14 },
+  toggle: { borderWidth: 1, borderColor: C.navy2, borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
+  toggleText: { color: C.navy2, fontWeight: '600' },
+  groupLink: { color: C.brown, fontWeight: '600', marginBottom: 10 },
   recent: { backgroundColor: C.white, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.line },
 });

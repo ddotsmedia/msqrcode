@@ -2,6 +2,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert } from 'react-native';
+import { API } from '../src/api';
+import { getCardToken } from '../src/storage';
 import { parseTableCode, setTable } from '../src/table';
 import { C } from '../src/theme';
 
@@ -12,6 +15,26 @@ export default function ScanScreen() {
 
   const onScanned = async ({ data }: { data: string }) => {
     if (done) return;
+    // Counter stamp code from the till screen: adds a stamp to the rewards card.
+    const stamp = data.match(/[?&]stamp=([a-f0-9-]{8,64}(?:\.|%2E)[A-Z2-9]{8})/i) ?? data.match(/^([a-f0-9-]{8,64}\.[A-Z2-9]{8})$/i);
+    if (stamp) {
+      setDone(true);
+      const token = await getCardToken();
+      if (!token) {
+        Alert.alert('Join rewards first', 'Create or link your rewards card, then scan again.', [{ text: 'OK', onPress: () => router.replace('/(tabs)/rewards') }]);
+        return;
+      }
+      const code = decodeURIComponent(stamp[1]);
+      const r = await fetch(`${API}/loyalty/self-stamp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ token, code }),
+      }).then((x) => x.json().catch(() => ({})));
+      Alert.alert(r.ok ? 'Stamp added' : 'Stamp not added', r.ok ? `You now have ${r.stamps} stamps.` : r.message || 'Please try again.', [
+        { text: 'OK', onPress: () => router.replace('/(tabs)/rewards') },
+      ]);
+      return;
+    }
     const session = parseTableCode(data);
     if (!session) return setMessage('That code is not a table code. Try the one on your table.');
     setDone(true);

@@ -34,6 +34,7 @@ export async function placeOrder(input: {
   lines: CartLine[];
   loyaltyToken?: string | null;
   table?: string | null; // set when ordering from a table; otherwise a pickup order
+  accountToken?: string | null; // company account: pickup only, billed monthly
 }) {
   const common = {
     branch_id: input.branchId,
@@ -44,7 +45,7 @@ export async function placeOrder(input: {
   };
   const body = input.table
     ? { ...common, table: input.table }
-    : { ...common, type: 'pickup', pickup_at: nextPickupTime() };
+    : { ...common, type: 'pickup', pickup_at: nextPickupTime(), account_token: input.accountToken || undefined };
   const res = await fetch(`${API}/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
