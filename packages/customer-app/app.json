@@ -6,14 +6,37 @@
     "scheme": "milestones",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": { "backgroundColor": "#0b1a33" },
-    "ios": { "bundleIdentifier": "ae.coffeesales.app", "supportsTablet": false },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#faf6f0"
+    },
+    "ios": {
+      "bundleIdentifier": "ae.coffeesales.app",
+      "supportsTablet": false
+    },
     "android": {
       "package": "ae.coffeesales.app",
       "minSdkVersion": 26,
-      "adaptiveIcon": { "backgroundColor": "#0b1a33" }
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#faf6f0"
+      }
     },
-    "plugins": ["expo-router", ["expo-camera", { "cameraPermission": "Scan table and branch QR codes.", "recordAudioAndroid": false }]],
-    "experiments": { "typedRoutes": true }
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan table and branch QR codes.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "icon": "./assets/icon.png"
   }
 }

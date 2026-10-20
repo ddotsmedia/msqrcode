@@ -20,7 +20,7 @@ export type Product = {
   is_popular?: boolean;
   is_new?: boolean;
 };
-export type Branch = { id: string; name: string; code?: string; address?: string; is_open?: boolean; pickup_enabled?: boolean; ordering_enabled?: boolean };
+export type Branch = { id: string; name: string; code?: string; address?: string; phone?: string; latitude?: number | null; longitude?: number | null; is_open?: boolean; pickup_enabled?: boolean; ordering_enabled?: boolean };
 export type Promotion = { id: string; title: string; description?: string; ends_at?: string };
 export type LoyaltyCard = { token: string; stamps?: number; points?: number; name?: string };
 
