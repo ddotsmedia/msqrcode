@@ -18,6 +18,7 @@ export default function RootLayout() {
             <Stack.Screen name="product/[id]" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="cart" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="scan" options={{ presentation: "modal", headerShown: false }} />
           </Stack>
         </CartProvider>
       </QueryClientProvider>

@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { clearTable, getTable, type TableSession } from '../../src/table';
 import { Image, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { getJson, money, type Category } from '../../src/api';
 import { useCart } from '../../src/cart';
@@ -8,6 +10,10 @@ import type { ProductFull } from '../../src/types';
 
 export default function MenuScreen() {
   const { count } = useCart();
+  const [table, setTableState] = useState<TableSession | null>(null);
+  useFocusEffect(useCallback(() => {
+    getTable().then(setTableState);
+  }, []));
   const categories = useQuery({ queryKey: ['categories'], queryFn: () => getJson<Category[]>('/categories') });
   const products = useQuery({ queryKey: ['products'], queryFn: () => getJson<ProductFull[]>('/products') });
 
@@ -23,11 +29,26 @@ export default function MenuScreen() {
       keyExtractor={(p) => p.id}
       stickySectionHeadersEnabled
       ListHeaderComponent={
+        <View>
         <View style={styles.headerRow}>
           <Text style={styles.hero}>Menu</Text>
-          <Pressable style={styles.cartBtn} onPress={() => router.push('/cart')}>
-            <Text style={styles.cartText}>Cart{count ? ` · ${count}` : ''}</Text>
-          </Pressable>
+          <View style={styles.btnRow}>
+            {!table && (
+              <Pressable style={styles.scanBtn} onPress={() => router.push('/scan')}>
+                <Text style={styles.scanText}>Scan table</Text>
+              </Pressable>
+            )}
+            <Pressable style={styles.cartBtn} onPress={() => router.push('/cart')}>
+              <Text style={styles.cartText}>Cart{count ? ` · ${count}` : ''}</Text>
+            </Pressable>
+          </View>
+        </View>
+        {table && (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>Ordering from table {table.table}</Text>
+            <Pressable onPress={() => clearTable().then(() => setTableState(null))}><Text style={styles.bannerLink}>Leave</Text></Pressable>
+          </View>
+        )}
         </View>
       }
       renderSectionHeader={({ section }) => <Text style={styles.section}>{section.title}</Text>}
@@ -51,6 +72,12 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 8 },
   hero: { fontSize: 28, fontWeight: '600', color: C.navy },
+  btnRow: { flexDirection: 'row', gap: 8 },
+  scanBtn: { borderWidth: 1, borderColor: C.navy2, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  scanText: { color: C.navy2, fontWeight: '600' },
+  banner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.navy2, borderRadius: 14, padding: 12, marginBottom: 10 },
+  bannerText: { color: C.white, fontWeight: '600' },
+  bannerLink: { color: C.gold, fontWeight: '600' },
   cartBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
   cartText: { color: C.white, fontWeight: '600' },
   section: { backgroundColor: C.cream, paddingVertical: 10, fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: C.brown },

@@ -1,38 +1,53 @@
 import { useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money, type Branch } from '../src/api';
 import { useCart } from '../src/cart';
 import { getCardToken } from '../src/storage';
-import { getSavedOrders, placeOrder, type SavedOrder } from '../src/orders';
+import { getSavedOrders, placeOrder, requestService, type SavedOrder } from '../src/orders';
+import { clearTable, getTable, type TableSession } from '../src/table';
 import { C } from '../src/theme';
 
 export default function CartScreen() {
   const { lines, setQty, clear, subtotal } = useCart();
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => getJson<Branch[]>('/branches') });
   const pickup = (branches.data ?? []).filter((b) => b.pickup_enabled !== false);
+  const [table, setTableState] = useState<TableSession | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [recent, setRecent] = useState<SavedOrder[]>([]);
 
+  useFocusEffect(
+    useCallback(() => {
+      getTable().then(setTableState);
+      getSavedOrders().then(setRecent);
+    }, []),
+  );
   useEffect(() => {
     if (!branchId && pickup.length) setBranchId(pickup[0].id);
   }, [pickup, branchId]);
-  useEffect(() => {
-    getSavedOrders().then(setRecent);
-  }, []);
+
+  const activeBranch = table ? table.branchId : branchId;
 
   const submit = async () => {
     setError('');
-    if (!branchId) return setError('Choose a branch');
+    if (!activeBranch) return setError('Choose a branch');
     setBusy(true);
     try {
       const loyaltyToken = await getCardToken();
-      const o = await placeOrder({ branchId, name: name.trim(), phone: phone.trim(), lines, loyaltyToken });
+      const o = await placeOrder({
+        branchId: activeBranch,
+        name: name.trim(),
+        phone: phone.trim(),
+        lines,
+        loyaltyToken,
+        table: table?.table ?? null,
+      });
       clear();
       router.replace(`/order/${o.id}`);
     } catch (e) {
@@ -42,11 +57,35 @@ export default function CartScreen() {
     }
   };
 
+  const service = async (kind: 'staff' | 'bill') => {
+    if (!table) return;
+    setError('');
+    setNotice('');
+    try {
+      await requestService(table.branchId, table.table, kind);
+      setNotice(kind === 'bill' ? 'The bill is on its way to your table.' : 'A member of staff is coming to your table.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send your request');
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable onPress={() => router.back()}><Text style={styles.close}>Back to menu</Text></Pressable>
         <Text style={styles.title}>Your order</Text>
+
+        {table && (
+          <View style={styles.tableBox}>
+            <Text style={styles.lineName}>Ordering from table {table.table}</Text>
+            <View style={styles.row}>
+              <Pressable style={styles.smallBtn} onPress={() => service('staff')}><Text style={styles.smallBtnText}>Call staff</Text></Pressable>
+              <Pressable style={styles.smallBtn} onPress={() => service('bill')}><Text style={styles.smallBtnText}>Request bill</Text></Pressable>
+            </View>
+            <Pressable onPress={() => clearTable().then(() => setTableState(null))}><Text style={styles.clear}>Leave table</Text></Pressable>
+          </View>
+        )}
+        {!!notice && <Text style={styles.notice}>{notice}</Text>}
 
         {lines.length === 0 ? (
           <Text style={styles.muted}>Your cart is empty.</Text>
@@ -70,29 +109,38 @@ export default function CartScreen() {
 
         {lines.length > 0 && (
           <>
-            <Text style={styles.label}>Pick up at</Text>
-            <View style={styles.chips}>
-              {pickup.map((b) => (
-                <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[styles.chip, branchId === b.id && styles.chipOn]}>
-                  <Text style={[styles.chipText, branchId === b.id && styles.chipTextOn]}>{b.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {branches.isError && <Text style={styles.error}>Could not load branches. Check your connection.</Text>}
+            {!table && (
+              <>
+                <Text style={styles.label}>Pick up at</Text>
+                <View style={styles.chips}>
+                  {pickup.map((b) => (
+                    <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[styles.chip, branchId === b.id && styles.chipOn]}>
+                      <Text style={[styles.chipText, branchId === b.id && styles.chipTextOn]}>{b.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {branches.isError && <Text style={styles.error}>Could not load branches. Check your connection.</Text>}
+              </>
+            )}
             <Text style={styles.label}>Name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor={C.muted} />
-            <Text style={styles.label}>Mobile number</Text>
-            <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="05x xxx xxxx" placeholderTextColor={C.muted} />
-            <Text style={styles.note}>Ready in about 15 minutes. You will get a live status on this screen.</Text>
+            {!table && (
+              <>
+                <Text style={styles.label}>Mobile number</Text>
+                <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="05x xxx xxxx" placeholderTextColor={C.muted} />
+                <Text style={styles.note}>Ready in about 15 minutes. You will get a live status on this screen.</Text>
+              </>
+            )}
             {!!error && <Text style={styles.error}>{error}</Text>}
             <Pressable style={[styles.placeBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={submit}>
-              <Text style={styles.placeText}>{busy ? 'Placing order…' : `Place order · ${money(subtotal)}`}</Text>
+              <Text style={styles.placeText}>{busy ? 'Placing order…' : `${table ? 'Send to kitchen' : 'Place order'} · ${money(subtotal)}`}</Text>
             </Pressable>
             <Pressable onPress={() => Alert.alert('Clear cart?', '', [{ text: 'Cancel' }, { text: 'Clear', style: 'destructive', onPress: clear }])}>
               <Text style={styles.clear}>Clear cart</Text>
             </Pressable>
           </>
         )}
+        {!!error && lines.length === 0 && <Text style={styles.error}>{error}</Text>}
 
         {recent.length > 0 && (
           <>
@@ -116,6 +164,11 @@ const styles = StyleSheet.create({
   close: { color: C.brown, fontWeight: '600', marginBottom: 12 },
   title: { fontSize: 26, fontWeight: '600', color: C.navy, marginBottom: 12 },
   muted: { color: C.muted, marginTop: 10 },
+  tableBox: { backgroundColor: C.white, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line, gap: 10 },
+  row: { flexDirection: 'row', gap: 10 },
+  smallBtn: { flex: 1, borderWidth: 1, borderColor: C.navy2, borderRadius: 12, padding: 10, alignItems: 'center' },
+  smallBtnText: { color: C.navy2, fontWeight: '600' },
+  notice: { color: C.green, marginBottom: 10 },
   line: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line },
   lineName: { fontSize: 16, fontWeight: '600', color: C.navy },
   lineSub: { fontSize: 13, color: C.muted, marginTop: 2 },

@@ -33,16 +33,18 @@ export async function placeOrder(input: {
   phone: string;
   lines: CartLine[];
   loyaltyToken?: string | null;
+  table?: string | null; // set when ordering from a table; otherwise a pickup order
 }) {
-  const body = {
-    type: 'pickup',
+  const common = {
     branch_id: input.branchId,
     customer_name: input.name,
-    phone: input.phone,
-    pickup_at: nextPickupTime(),
+    phone: input.phone || undefined,
     loyalty_token: input.loyaltyToken || undefined,
     items: input.lines.map((l) => ({ product_id: l.product_id, qty: l.qty, choices: l.choices, note: l.note || undefined })),
   };
+  const body = input.table
+    ? { ...common, table: input.table }
+    : { ...common, type: 'pickup', pickup_at: nextPickupTime() };
   const res = await fetch(`${API}/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -74,4 +76,16 @@ export async function trackOrder(id: string, token: string): Promise<TrackedOrde
   const res = await fetch(`${API}/orders/${id}?token=${encodeURIComponent(token)}`, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error('Order not found');
   return res.json();
+}
+
+// Table service: call a member of staff or ask for the bill. Staff see it on the counter screen.
+export async function requestService(branchId: string, table: string, kind: 'staff' | 'bill') {
+  const res = await fetch(`${API}/service-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ branch_id: branchId, table, type: kind }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.ok) throw new Error(json.message || 'Could not send your request');
+  return json.id as string;
 }
