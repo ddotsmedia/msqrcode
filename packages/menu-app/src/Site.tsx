@@ -164,7 +164,7 @@ function Logo({ dark = false }: { dark?: boolean }) {
 
 function SiteFooter() {
   return (
-    <footer className="bg-brand-900 text-brand-100 text-[15px] pb-20 md:pb-0 print:hidden">
+    <footer className="bg-brand-900 text-brand-100 text-[15px] print:hidden">
       <div className="max-w-6xl mx-auto px-4 pt-16 pb-10 grid gap-10 grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div className="col-span-2 md:col-span-1">
           <Logo dark />
@@ -199,13 +199,6 @@ function Layout() {
   const isHome = pathname === '/';
   const tabClass = (on: boolean) =>
     `px-4 py-2 rounded-full text-[15px] ${on ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-slate-600 font-medium hover:text-brand-700'}`;
-  const barItems: [string, string, string][] = [
-    ['/', 'Home', 'home'],
-    ['/menu', 'Menu', 'book'],
-    ['/scan', 'Scan', 'qr'],
-    ['/branches', 'Branches', 'pin'],
-    ['/loyalty', 'Rewards', 'gift'],
-  ];
 
   return (
     <div className="min-h-screen bg-cream flex flex-col">
@@ -252,7 +245,7 @@ function Layout() {
           ))}
         </aside>
         <div className="flex-1 min-w-0 flex flex-col">
-          <main className={isHome ? 'flex-1 w-full' : 'flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8'}>
+          <main className={isHome ? 'flex-1 w-full' : 'flex-1 w-full max-w-6xl mx-auto px-4 py-6 pb-8'}>
             <Outlet />
           </main>
 
@@ -269,24 +262,6 @@ function Layout() {
           ))}
         </div>
       )}
-      <nav aria-label="Mobile" className="print:hidden md:hidden fixed bottom-0 inset-x-0 z-40 h-[68px] bg-white border-t border-brand-100 grid grid-cols-5 items-center">
-        {barItems.map(([to, label, icon]) =>
-          to === '/scan' ? (
-            <Link key={to} to={to} aria-label="Scan QR" className="justify-self-center -mt-6 grid h-14 w-14 place-items-center rounded-full bg-copper-700 text-white shadow-[0_6px_14px_rgba(138,95,56,0.4)]">
-              <Icon name={icon} className="h-6 w-6" />
-            </Link>
-          ) : (
-            <Link
-              key={to}
-              to={to}
-              className={`flex flex-col items-center gap-1 text-[11px] ${active(to) ? 'text-brand-700 font-semibold' : 'text-slate-500 font-medium'}`}
-            >
-              <Icon name={icon} className="h-[22px] w-[22px]" />
-              {label}
-            </Link>
-          ),
-        )}
-      </nav>
     </div>
   );
 }
