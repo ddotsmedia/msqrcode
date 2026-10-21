@@ -16,6 +16,11 @@ export async function getSavedOrders(): Promise<SavedOrder[]> {
   }
 }
 
+// Removes the order list kept on this phone. The orders themselves stay on the server.
+export async function clearSavedOrders() {
+  await AsyncStorage.removeItem(KEY);
+}
+
 async function saveOrder(o: SavedOrder) {
   const all = await getSavedOrders();
   await AsyncStorage.setItem(KEY, JSON.stringify([o, ...all].slice(0, 30)));
@@ -70,7 +75,12 @@ export type TrackedOrder = {
   status: string;
   pickup_at: string | null;
   total: number;
-  items: { name: string; qty: number; options?: { choices?: { group: string; choice: string }[]; note?: string | null } }[];
+  items: {
+    product_id?: string;
+    name: string;
+    qty: number;
+    options?: { choices?: { group: string; choice: string }[]; note?: string | null };
+  }[];
 };
 
 export async function trackOrder(id: string, token: string): Promise<TrackedOrder> {

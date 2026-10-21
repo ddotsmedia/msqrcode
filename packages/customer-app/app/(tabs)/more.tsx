@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { C } from '../../src/theme';
 
 const ITEMS: { title: string; text: string; href: string }[] = [
+  { title: 'Order history', text: 'Your recent orders, with reorder', href: '/orders' },
   { title: 'Find your drink', text: 'Answer 3 quick questions for a suggestion', href: '/pages/quiz' },
   { title: 'Brew guides', text: 'V60, French press, cold brew, moka pot, Arabic coffee', href: '/pages/guides' },
   { title: 'Gift cards', text: 'Send a gift card or check a balance', href: '/gift' },
@@ -14,6 +15,7 @@ const ITEMS: { title: string; text: string; href: string }[] = [
   { title: 'Careers', text: 'Join the team in Abu Dhabi', href: '/pages/careers' },
   { title: 'Feedback', text: 'Rate your visit', href: '/pages/feedback' },
   { title: 'FAQ', text: 'Common questions answered', href: '/pages/faq' },
+  { title: 'Privacy policy', text: 'What we collect and how to delete it', href: '/pages/privacy' },
 ];
 
 export default function MoreScreen() {

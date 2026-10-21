@@ -29,6 +29,7 @@ export default function RootLayout() {
             <Stack.Screen name="group/[code]" options={{ headerShown: false }} />
             <Stack.Screen name="business" options={{ headerShown: false }} />
             <Stack.Screen name="pages" options={{ headerShown: false }} />
+            <Stack.Screen name="orders" options={{ headerShown: false }} />
           </Stack>
         </CartProvider>
       </QueryClientProvider>
