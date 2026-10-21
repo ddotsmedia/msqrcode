@@ -89,11 +89,38 @@ interface ProductAvailability {
   last_updated_at: string;
 }
 
-export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchId: string, table: string | null) => void }) {
+// Where a scanned Milestones QR should take the guest. Returns null for anything we do not recognise.
+export function routeForScan(text: string): string | null {
+  // Offer posters: /offers?promo=<id>
+  const promo = text.match(/\/offers\?[^#]*\bpromo=([a-f0-9-]{36})\b/i);
+  if (promo) return `/offers?promo=${promo[1]}`;
+  // Branch QR (menu link) or the older branch:<id> text format.
+  const branch = text.match(/[?&]branch=([a-f0-9-]+)/i) ?? text.match(/branch:([a-f0-9-]+)/i);
+  if (!branch) return null;
+  // Feedback QR: /?branch=<id>&feedback=1
+  if (/[?&;]feedback=1\b/i.test(text)) return `/feedback?branch=${branch[1]}`;
+  const table = text.match(/[?&;]table[=:]([\w-]{1,20})/i);
+  return menuPath(branch[1], table ? table[1] : null);
+}
+
+function menuPath(branchId: string, table: string | null): string {
+  return `/menu/${branchId}${table && /^[\w-]{1,20}$/.test(table) ? `?table=${table}` : ''}`;
+}
+
+export function QRScannerPage({ onRoute }: { onRoute: (path: string) => void }) {
   const [scanning, setScanning] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [manualBranchId, setManualBranchId] = useState('');
+  const [manualTable, setManualTable] = useState('');
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  useEffect(() => {
+    axios
+      .get<{ id: string; name: string }[]>(`${API_BASE_URL}/branches`)
+      .then((r) => setBranches(r.data))
+      .catch(() => setBranches([]));
+  }, []);
 
   useEffect(() => {
     if (!scanning) return;
@@ -117,14 +144,11 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
           window.location.href = `/loyalty?stamp=${stamp[1]}`;
           return;
         }
-        const link = decodedText.match(/[?&]branch=([a-f0-9-]+)/i);
-        const legacy = decodedText.match(/branch:([a-f0-9-]+)/i);
-        const branchMatch = link ?? legacy;
-        if (branchMatch) {
-          const tableMatch = decodedText.match(/[?&;]table[=:]([\w-]{1,20})/i);
+        const route = routeForScan(decodedText);
+        if (route) {
           scanner.clear().catch(() => {});
           setScanning(false);
-          onBranchDetected(branchMatch[1], tableMatch ? tableMatch[1] : null);
+          onRoute(route);
         } else {
           setError('Invalid QR code format. Please scan a Milestones Coffee QR code.');
         }
@@ -139,7 +163,7 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
         scannerRef.current.clear().catch(() => {});
       }
     };
-  }, [scanning, onBranchDetected]);
+  }, [scanning, onRoute]);
 
   // App: the phone's own scanner, same QR rules as above.
   const scanWithPhone = async () => {
@@ -151,16 +175,13 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
       window.location.href = `/loyalty?stamp=${stamp[1]}`;
       return;
     }
-    const m = text.match(/[?&]branch=([a-f0-9-]+)/i) ?? text.match(/branch:([a-f0-9-]+)/i);
-    if (!m) return setError('Invalid QR code format. Please scan a Milestones Coffee QR code.');
-    const t = text.match(/[?&;]table[=:]([\w-]{1,20})/i);
-    onBranchDetected(m[1], t ? t[1] : null);
+    const route = routeForScan(text);
+    if (!route) return setError('Invalid QR code format. Please scan a Milestones Coffee QR code.');
+    onRoute(route);
   };
 
   const handleManualEntry = () => {
-    if (manualBranchId.trim()) {
-      onBranchDetected(manualBranchId.trim(), null);
-    }
+    if (manualBranchId) onRoute(menuPath(manualBranchId, manualTable.trim() || null));
   };
 
   return (
@@ -185,25 +206,45 @@ export function QRScannerPage({ onBranchDetected }: { onBranchDetected: (branchI
             <div className="w-full border-t border-gray-300"></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">Or enter branch ID</span>
+            <span className="px-2 bg-white text-gray-500">Or choose your branch</span>
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <input
-            type="text"
+        <div className="space-y-2">
+          <select
             value={manualBranchId}
             onChange={(e) => setManualBranchId(e.target.value)}
-            placeholder="Branch ID"
-            className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-            onKeyPress={(e) => e.key === 'Enter' && handleManualEntry()}
-          />
-          <button
-            onClick={handleManualEntry}
-            className="shrink-0 px-5 py-2 bg-brand-700 text-white rounded-lg hover:bg-brand-600 font-medium"
+            aria-label="Branch"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500"
           >
-            Go
-          </button>
+            <option value="">{branches.length ? 'Choose a branch' : 'Loading branches…'}</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={manualTable}
+              onChange={(e) => setManualTable(e.target.value)}
+              placeholder="Table number (optional)"
+              maxLength={20}
+              aria-label="Table number"
+              className="flex-1 min-w-0 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              onKeyDown={(e) => e.key === 'Enter' && handleManualEntry()}
+            />
+            <button
+              type="button"
+              onClick={handleManualEntry}
+              disabled={!manualBranchId}
+              className="shrink-0 px-5 py-2 bg-brand-700 text-white rounded-lg hover:bg-brand-600 font-medium disabled:opacity-50"
+            >
+              Go
+            </button>
+          </div>
         </div>
 
         <p className="text-center text-xs text-gray-500 mt-6">
