@@ -116,18 +116,14 @@ const NAV: [string, string][] = [
   ['/loyalty', 'Rewards'],
   ['/offers', 'Offers'],
 ];
-const SIDE_ICONS: Record<string, string> = {
-  '/': 'home',
-  '/menu': 'book',
-  '/branches': 'pin',
-  '/loyalty': 'gift',
-  '/offers': 'qr',
-  '/gift-cards': 'gift',
-  '/business': 'clock',
-  '/catering': 'coffee',
-  '/feedback': 'check',
-  '/contact': 'phone',
-};
+// Desktop sidebar groups: [title, accent, [path, label, icon][]]
+const SIDE_GROUPS: [string, 'navy' | 'copper', [string, string, string][]][] = [
+  ['Order & visit', 'navy', [['/', 'Home', 'home'], ['/menu', 'Menu', 'menu'], ['/branches', 'Branches', 'pin'], ['/find-your-drink', 'Find your drink', 'search']]],
+  ['Rewards', 'copper', [['/loyalty', 'Rewards', 'heart'], ['/offers', 'Offers', 'tag'], ['/gift-cards', 'Gift cards', 'gift'], ['/news', "What's New", 'sparkle']]],
+  ['For business', 'navy', [['/business', 'Business accounts', 'building'], ['/catering', 'Catering', 'cloche'], ['/careers', 'Careers', 'case']]],
+  ['Discover', 'copper', [['/brew', 'Brew guides', 'cup'], ['/gallery', 'Gallery', 'image'], ['/about', 'About', 'info']]],
+  ['Help', 'navy', [['/faq', 'FAQ', 'help'], ['/feedback', 'Feedback', 'chat'], ['/contact', 'Contact', 'phone']]],
+];
 const MORE: [string, string][] = [
   ['/news', "What's New"],
   ['/find-your-drink', 'Find your drink'],
@@ -243,26 +239,42 @@ function Layout() {
       </header>
 
       <div className="flex flex-1 min-w-0">
-        <aside aria-label="Site pages" className="hidden lg:block w-60 shrink-0 sticky top-[72px] h-[calc(100vh-72px)] overflow-y-auto border-r border-brand-100 bg-white py-5 px-3">
-          <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-copper-700">Explore</p>
-          {[...NAV, ...MORE].map(([to, label]) => (
-            <Link
-              key={to}
-              to={to}
-              aria-current={active(to) ? 'page' : undefined}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] ${active(to) ? 'bg-brand-50 font-semibold text-brand-700' : 'text-slate-600 hover:bg-cream hover:text-brand-700'}`}
-            >
-              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${active(to) ? 'bg-brand-700 text-white' : 'bg-cream text-copper-700'}`}>
-                <Icon name={SIDE_ICONS[to] ?? 'arrow'} className="h-4 w-4" />
-              </span>
-              {label}
-            </Link>
+        <aside aria-label="Site pages" className="hidden lg:flex w-64 shrink-0 sticky top-[72px] h-[calc(100vh-72px)] flex-col overflow-y-auto border-r border-brand-100 bg-white px-3 py-5">
+          <p className="px-2 pb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-copper-700">Explore</p>
+          {SIDE_GROUPS.map(([title, tone, items]) => (
+            <div key={title} className="mb-4">
+              <p className={`flex items-center gap-2 px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] ${tone === 'copper' ? 'text-copper-700' : 'text-brand-700'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${tone === 'copper' ? 'bg-copper-500' : 'bg-brand-700'}`} />
+                {title}
+              </p>
+              <div className="space-y-0.5">
+                {items.map(([to, label, icon]) => {
+                  const on = active(to);
+                  return (
+                    <Link
+                      key={to}
+                      to={to}
+                      aria-current={on ? 'page' : undefined}
+                      className={`group relative flex items-center gap-3 rounded-xl py-1.5 pl-2 pr-3 text-[14.5px] transition ${on ? 'bg-brand-50 font-semibold text-brand-900' : 'text-slate-600 hover:bg-cream hover:text-brand-700'}`}
+                    >
+                      {on && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-copper-700" />}
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] transition ${on ? 'bg-brand-700 text-white shadow-[0_6px_14px_rgba(19,40,75,0.25)]' : `${tone === 'copper' ? 'bg-[#f6ede3] text-copper-700' : 'bg-brand-50 text-brand-700'} group-hover:bg-white`}`}>
+                        <HPath d={icon} className="h-[18px] w-[18px]" />
+                      </span>
+                      <span className="min-w-0 leading-tight">{label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           ))}
-          <div className="mt-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900 to-brand-700 p-4 text-white">
-            <Icon name="coffee" className="h-6 w-6 text-copper-700" />
-            <p className="mt-2 font-display text-[17px] leading-tight">Order ahead, skip the queue</p>
+          <div className="mt-auto overflow-hidden rounded-2xl bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 p-4 text-white shadow-[0_14px_30px_rgba(10,26,51,0.18)]">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-copper-300">
+              <HPath d="clock" className="h-5 w-5" />
+            </span>
+            <p className="mt-3 font-display text-[17px] leading-tight">Order ahead, skip the queue</p>
             <p className="mt-1 text-[13px] text-brand-100/80">Pick up at your nearest branch.</p>
-            <Link to="/menu" className="mt-3 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[13px] font-semibold text-brand-700">
+            <Link to="/menu" className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[13px] font-semibold text-brand-700 hover:bg-cream">
               Order now <Icon name="arrow" className="h-3.5 w-3.5" />
             </Link>
           </div>
