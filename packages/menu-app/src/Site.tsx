@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import axios from 'axios';
 import { logScan } from './lib/qrScan';
 import { animate, motion, useReducedMotion } from 'motion/react';
@@ -304,11 +304,12 @@ function Layout() {
 function ScanPage() {
   const navigate = useNavigate();
   useEffect(() => setPageTitle('Scan a branch QR'), []);
+  const onRoute = useCallback((path: string) => navigate(path), [navigate]);
   return (
     <section className="max-w-md mx-auto space-y-4">
       <h1 className="text-3xl font-semibold text-brand-800">Scan a branch QR</h1>
       <p className="text-slate-600">Point your camera at the QR code on your table to open that branch's menu.</p>
-      <QRScannerPage onBranchDetected={(id, table) => navigate(`/menu/${id}${table ? `?table=${table}` : ''}`)} />
+      <QRScannerPage onRoute={onRoute} />
     </section>
   );
 }
