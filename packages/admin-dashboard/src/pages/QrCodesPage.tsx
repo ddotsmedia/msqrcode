@@ -12,8 +12,9 @@ interface Branch {
 export interface QrRow {
   id: string;
   branch_id: string;
-  kind: 'branch' | 'table';
+  kind: QrKind;
   table_number: string | null;
+  promotion_id: string | null;
   label: string;
   caption: string;
   foreground: string;
@@ -24,10 +25,27 @@ export interface QrRow {
   branch: { id: string; name: string; code: string };
 }
 
+type QrKind = 'branch' | 'table' | 'feedback' | 'promo';
+
+interface PromoOption {
+  id: string;
+  title: string;
+  ends_on: string | null;
+}
+
+interface ScanStatsData {
+  days: number;
+  totals: { kind: string; count: number }[];
+  tables: { branch_id: string | null; table_number: string | null; count: number }[];
+  hours: { hour: number; count: number }[];
+  promotions: { promotion_id: string | null; count: number }[];
+}
+
 interface QrForm {
   id: string | null;
   branch_id: string;
-  kind: 'branch' | 'table';
+  kind: QrKind;
+  promotion_id: string;
   table_number: string;
   label: string;
   caption: string;
@@ -45,9 +63,18 @@ const MENU_URL = (
 const MENU_HOST = MENU_URL.replace(/^https?:\/\//, '');
 
 // Must match the API: a web link that opens the branch menu (and the table, if given).
-export function payloadFor(branchId: string, kind: 'branch' | 'table', table: string): string {
+export function payloadFor(branchId: string, kind: QrKind, table: string, promotionId = ''): string {
   const base = `${MENU_URL}/?branch=${branchId}`;
+  if (kind === 'feedback') return `${base}&feedback=1`;
+  if (kind === 'promo') return promotionId ? `${MENU_URL}/offers?promo=${promotionId}` : base;
   return kind === 'table' && table ? `${base}&table=${encodeURIComponent(table)}` : base;
+}
+
+const KIND_LABEL: Record<QrKind, string> = { branch: 'Branch', table: 'Table', feedback: 'Feedback', promo: 'Offer' };
+const SCAN_LABEL: Record<string, string> = { branch: 'Menu', table: 'Table', feedback: 'Feedback', promo: 'Offer', stamp: 'Stamp' };
+
+function kindLabel(r: QrRow): string {
+  return r.kind === 'table' ? `Table ${r.table_number}` : KIND_LABEL[r.kind];
 }
 
 function qrOptions(fg: string, bg: string) {
@@ -59,7 +86,9 @@ function esc(s: string): string {
 }
 
 function fileBase(row: QrRow): string {
-  return `${row.branch.code}-${row.kind === 'table' ? `table-${row.table_number}` : 'branch'}`;
+  const part =
+    row.kind === 'table' ? `table-${row.table_number}` : row.kind === 'promo' ? `offer-${row.id.slice(0, 8)}` : row.kind;
+  return `${row.branch.code}-${part}`;
 }
 
 function triggerDownload(href: string, name: string): void {
@@ -646,6 +675,98 @@ function Stat({ label, value }: { label: string; value: number }) {
 
 const inputClass = 'w-full border border-gray-300 rounded px-3 py-2 text-sm';
 
+function ScanStats({ token, branches, promotions }: { token: string; branches: Branch[]; promotions: PromoOption[] }) {
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState<ScanStatsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+    api<ScanStatsData>(`/admin/qr/scans/stats?days=${days}`, token)
+      .then(setData)
+      .catch((e: Error) => setError(e.message));
+  }, [token, days]);
+
+  const total = data?.totals.reduce((sum, t) => sum + t.count, 0) ?? 0;
+  const byHour = Array.from({ length: 24 }, (_, h) => data?.hours.find((x) => x.hour === h)?.count ?? 0);
+  const maxHour = Math.max(1, ...byHour);
+  const branchName = (id: string | null) => branches.find((b) => b.id === id)?.name ?? 'Unknown branch';
+  const offerName = (id: string | null) => promotions.find((p) => p.id === id)?.title ?? 'Removed offer';
+
+  return (
+    <details className="bg-white rounded-xl border shadow-sm p-4" open>
+      <summary className="cursor-pointer font-semibold text-gray-800">Scan analytics</summary>
+      <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-600">
+        Period
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="border border-gray-300 rounded px-2 py-1 text-sm">
+          <option value={7}>Last 7 days</option>
+          <option value={30}>Last 30 days</option>
+          <option value={90}>Last 90 days</option>
+        </select>
+      </label>
+
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {!error && !data && <p className="mt-3 text-sm text-gray-500">Loading scans…</p>}
+
+      {data && (
+        <div className="mt-4 space-y-5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <Stat label="Total scans" value={total} />
+            {data.totals.map((t) => (
+              <Stat key={t.kind} label={SCAN_LABEL[t.kind] ?? t.kind} value={t.count} />
+            ))}
+          </div>
+
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-2">Scans by hour (Dubai time)</p>
+            <div className="flex items-end gap-1 h-24">
+              {byHour.map((count, h) => (
+                <div key={h} className="flex-1 flex flex-col items-center justify-end h-full" title={`${h}:00 — ${count} scan(s)`}>
+                  <div className="w-full rounded-t bg-brand-600" style={{ height: `${(count / maxHour) * 100}%`, minHeight: count ? 2 : 0 }} />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+              <span>0:00</span>
+              <span>12:00</span>
+              <span>23:00</span>
+            </div>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Busiest tables</p>
+              {data.tables.length === 0 && <p className="text-sm text-gray-500">No table scans yet.</p>}
+              <ul className="text-sm divide-y">
+                {data.tables.slice(0, 10).map((t) => (
+                  <li key={`${t.branch_id}-${t.table_number}`} className="flex justify-between py-1.5">
+                    <span>
+                      {branchName(t.branch_id)} · Table {t.table_number}
+                    </span>
+                    <span className="font-semibold">{t.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-700 mb-2">Offer QR scans</p>
+              {data.promotions.length === 0 && <p className="text-sm text-gray-500">No offer scans yet.</p>}
+              <ul className="text-sm divide-y">
+                {data.promotions.map((p) => (
+                  <li key={p.promotion_id ?? 'none'} className="flex justify-between py-1.5">
+                    <span>{offerName(p.promotion_id)}</span>
+                    <span className="font-semibold">{p.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+    </details>
+  );
+}
+
 export default function QrCodesPage({ token }: { token: string }) {
   const [rows, setRows] = useState<QrRow[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -664,6 +785,14 @@ export default function QrCodesPage({ token }: { token: string }) {
   const [form, setForm] = useState<QrForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [promotions, setPromotions] = useState<PromoOption[]>([]);
+
+  useEffect(() => {
+    api<PromoOption[]>('/admin/promotions', token)
+      .then(setPromotions)
+      .catch(() => setPromotions([]));
+  }, [token]);
 
   const [tablesOpen, setTablesOpen] = useState(false);
   const [tableRange, setTableRange] = useState({ branch_id: '', from: '1', to: '10' });
@@ -716,7 +845,7 @@ export default function QrCodesPage({ token }: { token: string }) {
     });
   }
 
-  function openNew(kind: 'branch' | 'table', branchId?: string) {
+  function openNew(kind: QrKind, branchId?: string) {
     setFormError(null);
     setForm({
       id: null,
@@ -727,6 +856,7 @@ export default function QrCodesPage({ token }: { token: string }) {
         branches[0]?.id ||
         '',
       kind,
+      promotion_id: '',
       table_number: '',
       label: '',
       caption: DEFAULT_CAPTION,
@@ -741,6 +871,7 @@ export default function QrCodesPage({ token }: { token: string }) {
       id: r.id,
       branch_id: r.branch_id,
       kind: r.kind,
+      promotion_id: r.promotion_id ?? '',
       table_number: r.table_number ?? '',
       label: r.label,
       caption: r.caption,
@@ -772,6 +903,7 @@ export default function QrCodesPage({ token }: { token: string }) {
             branch_id: form.branch_id,
             kind: form.kind,
             table_number: form.table_number,
+            promotion_id: form.kind === 'promo' ? form.promotion_id : undefined,
             label: form.label,
             caption: form.caption,
             foreground: form.foreground,
@@ -823,7 +955,7 @@ export default function QrCodesPage({ token }: { token: string }) {
     }
   }
 
-  const previewPayload = form ? payloadFor(form.branch_id, form.kind, form.table_number) : '';
+  const previewPayload = form ? payloadFor(form.branch_id, form.kind, form.table_number, form.promotion_id) : '';
 
   async function exportAllPostersAsZip() {
     setError(null);
@@ -905,6 +1037,20 @@ export default function QrCodesPage({ token }: { token: string }) {
           </button>
           <button
             type="button"
+            onClick={() => openNew('feedback')}
+            className="bg-white border border-brand-600 text-brand-700 rounded px-3 py-2 text-sm font-semibold"
+          >
+            New feedback QR
+          </button>
+          <button
+            type="button"
+            onClick={() => openNew('promo')}
+            className="bg-white border border-brand-600 text-brand-700 rounded px-3 py-2 text-sm font-semibold"
+          >
+            New offer QR
+          </button>
+          <button
+            type="button"
             onClick={exportAllPostersAsZip}
             className="bg-gray-600 text-white rounded px-3 py-2 text-sm font-semibold hover:bg-gray-700"
           >
@@ -940,6 +1086,8 @@ export default function QrCodesPage({ token }: { token: string }) {
           </div>
         </div>
       )}
+
+      <ScanStats token={token} branches={branches} promotions={promotions} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Stat label="Total codes" value={stats.total} />
@@ -1029,7 +1177,7 @@ export default function QrCodesPage({ token }: { token: string }) {
               </label>
               <div className="flex gap-1 text-xs">
                 <span className="rounded-full bg-brand-50 text-brand-700 px-2 py-0.5 font-semibold">
-                  {r.kind === 'branch' ? 'Branch' : `Table ${r.table_number}`}
+                  {kindLabel(r)}
                 </span>
                 <span
                   className={`rounded-full px-2 py-0.5 font-semibold ${
@@ -1097,7 +1245,7 @@ export default function QrCodesPage({ token }: { token: string }) {
                     required
                     value={form.branch_id}
                     onChange={(e) => {
-                      setForm({ ...form, branch_id: e.target.value, kind: 'branch' });
+                      setForm({ ...form, branch_id: e.target.value });
                     }}
                     className={inputClass}
                   >
@@ -1111,7 +1259,7 @@ export default function QrCodesPage({ token }: { token: string }) {
                     ))}
                   </select>
                 </div>
-                {rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch') && (
+                {form.kind === 'branch' && rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch') && (
                   <p className="bg-amber-50 text-amber-900 rounded p-3 text-sm">
                     This branch already has its menu QR code. Pick another branch, or use Design poster on its card.
                   </p>
@@ -1119,6 +1267,27 @@ export default function QrCodesPage({ token }: { token: string }) {
               </>
             )}
 
+            {!form.id && form.kind === 'promo' && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Offer</label>
+                <select
+                  required
+                  value={form.promotion_id}
+                  onChange={(e) => setForm({ ...form, promotion_id: e.target.value })}
+                  className={inputClass}
+                >
+                  <option value="" disabled>
+                    {promotions.length ? 'Choose an offer' : 'No offers found'}
+                  </option>
+                  {promotions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                      {p.ends_on ? ` (ends ${p.ends_on})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">Label</label>
               <input
@@ -1184,7 +1353,7 @@ export default function QrCodesPage({ token }: { token: string }) {
               </button>
               <button
                 type="submit"
-                disabled={saving || (!form.id && rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch'))}
+                disabled={saving || (!form.id && form.kind === 'branch' && rows.some((r) => r.branch_id === form.branch_id && r.kind === 'branch'))}
                 className="bg-brand-600 text-white rounded px-4 py-2 text-sm font-semibold disabled:opacity-60"
               >
                 {saving ? 'Saving…' : 'Save'}
