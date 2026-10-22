@@ -2,6 +2,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { money } from '../src/api';
 import { useCart } from '../src/cart';
 import { clearSavedOrders, getSavedOrders, trackOrder, type SavedOrder } from '../src/orders';
@@ -41,6 +42,7 @@ export default function OrdersScreen() {
   });
 
   async function reorder(o: SavedOrder) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setBusy(o.id);
     try {
       const order = await trackOrder(o.id, o.access_token).catch(() => null);

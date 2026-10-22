@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { getJson, money } from '../../src/api';
 import { useCart } from '../../src/cart';
 import { C } from '../../src/theme';
@@ -29,6 +30,7 @@ export default function ProductScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable onPress={() => router.back()}><Text style={styles.close}>Close</Text></Pressable>
+        {!!p.image_url && <Image source={{ uri: p.image_url }} style={styles.hero} resizeMode="cover" />}
         <Text style={styles.title}>{p.name}</Text>
         {!!p.description && <Text style={styles.desc}>{p.description}</Text>}
 
@@ -61,7 +63,7 @@ export default function ProductScreen() {
           <Text style={styles.qtyNum}>{qty}</Text>
           <Pressable onPress={() => setQty((q) => Math.min(20, q + 1))}><Text style={styles.qtyBtn}>+</Text></Pressable>
         </View>
-        <Pressable style={styles.addBtn} onPress={() => { add(p, qty, picked, note.trim()); router.back(); }}>
+        <Pressable style={styles.addBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); add(p, qty, picked, note.trim()); router.back(); }}>
           <Text style={styles.addText}>Add · {money(unit * qty)}</Text>
         </Pressable>
       </View>
@@ -73,6 +75,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.cream },
   content: { padding: 20, paddingTop: 50, paddingBottom: 30 },
   close: { color: C.brown, fontWeight: '600', marginBottom: 12 },
+  hero: { width: '100%', height: 220, borderRadius: 16, marginBottom: 14 },
   title: { fontSize: 26, fontWeight: '600', color: C.navy },
   desc: { fontSize: 15, color: C.muted, marginTop: 6, lineHeight: 21 },
   group: { marginTop: 22 },

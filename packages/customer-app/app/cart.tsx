@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { getJson, money, type Branch } from '../src/api';
 import { useCart } from '../src/cart';
 import { getCardToken } from '../src/storage';
@@ -49,6 +50,7 @@ export default function CartScreen() {
     setError('');
     if (!activeBranch) return setError('Choose a branch');
     setBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const loyaltyToken = await getCardToken();
       const o = await placeOrder({
@@ -103,7 +105,13 @@ export default function CartScreen() {
         {!table && <Pressable onPress={() => router.push('/business')}><Text style={styles.groupLink}>Business account →</Text></Pressable>}
 
         {lines.length === 0 ? (
-          <Text style={styles.muted}>Your cart is empty.</Text>
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>Your cart is empty</Text>
+            <Text style={styles.emptySub}>Add something from the menu to get started.</Text>
+            <Pressable style={styles.emptyBtn} onPress={() => router.replace('/(tabs)')}>
+              <Text style={styles.emptyBtnText}>Browse the menu</Text>
+            </Pressable>
+          </View>
         ) : (
           lines.map((l) => (
             <View key={l.key} style={styles.line}>
@@ -195,6 +203,11 @@ const styles = StyleSheet.create({
   close: { color: C.brown, fontWeight: '600', marginBottom: 12 },
   title: { fontSize: 26, fontWeight: '600', color: C.navy, marginBottom: 12 },
   muted: { color: C.muted, marginTop: 10 },
+  emptyCard: { backgroundColor: C.white, borderRadius: 18, padding: 24, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: C.line },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: C.navy, marginBottom: 6 },
+  emptySub: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  emptyBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 11, paddingHorizontal: 28 },
+  emptyBtnText: { color: C.white, fontWeight: '600', fontSize: 15 },
   tableBox: { backgroundColor: C.white, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line, gap: 10 },
   row: { flexDirection: 'row', gap: 10 },
   smallBtn: { flex: 1, borderWidth: 1, borderColor: C.navy2, borderRadius: 12, padding: 10, alignItems: 'center' },

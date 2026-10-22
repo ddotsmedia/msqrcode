@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getJson, type Branch } from '../../src/api';
 import { C } from '../../src/theme';
 
@@ -19,6 +19,19 @@ export default function BranchesScreen() {
             {item.is_open !== undefined && <Text style={[styles.badge, { color: item.is_open ? C.green : C.muted }]}>{item.is_open ? 'Open now' : 'Closed'}</Text>}
           </View>
           {!!item.address && <Text style={styles.addr}>{item.address}</Text>}
+          {!!item.phone && <Text style={styles.addr}>📞 {item.phone}</Text>}
+          <View style={styles.btnRow}>
+            {!!item.address && (
+              <Pressable style={styles.dirBtn} onPress={() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent(item.address!)}`)}>
+                <Text style={styles.dirText}>Get directions</Text>
+              </Pressable>
+            )}
+            {!!item.phone && (
+              <Pressable style={styles.dirBtn} onPress={() => Linking.openURL(`tel:${item.phone}`)}>
+                <Text style={styles.dirText}>Call</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       )}
       ListEmptyComponent={<Text style={styles.empty}>{isLoading ? 'Loading…' : 'No branches found.'}</Text>}
@@ -35,5 +48,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 17, fontWeight: '600', color: C.navy },
   badge: { fontSize: 12, fontWeight: '600' },
   addr: { fontSize: 13, color: C.muted, marginTop: 4 },
+  btnRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  dirBtn: { borderWidth: 1, borderColor: C.line, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, backgroundColor: C.cream },
+  dirText: { color: C.navy2, fontWeight: '600', fontSize: 13 },
   empty: { textAlign: 'center', color: C.muted, marginTop: 40 },
 });

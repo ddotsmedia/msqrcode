@@ -83,6 +83,9 @@ export default function RewardsScreen() {
             <Text style={styles.cardLabel}>{d.name || 'Your card'}</Text>
             <Text style={styles.big}>{d.stamps} / {d.target}</Text>
             <Text style={styles.cardSub}>{d.stamps >= d.target ? `Ready: ${d.reward_name}` : `${d.target - d.stamps} more for ${d.reward_name}`}</Text>
+            <View style={styles.progressBg}>
+              <View style={[styles.progressFill, { width: `${Math.min(100, (d.stamps / d.target) * 100)}%` as any }]} />
+            </View>
             <View style={styles.dots}>
               {Array.from({ length: d.target }).map((_, i) => (
                 <View key={i} style={[styles.dot, i < d.stamps && styles.dotOn]} />
@@ -223,6 +226,8 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
   dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#4f6e9f' },
   dotOn: { backgroundColor: C.caramel, borderColor: C.caramel },
+  progressBg: { height: 8, backgroundColor: '#1e3a5f', borderRadius: 4, marginTop: 14, marginBottom: 10, overflow: 'hidden' },
+  progressFill: { height: 8, backgroundColor: C.caramel, borderRadius: 4 },
   badge: { color: C.gold, marginTop: 10, fontWeight: '600' },
   scanBtn: { backgroundColor: C.white, borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12, borderWidth: 1, borderColor: C.line },
   scanText: { color: C.navy2, fontWeight: '600' },
