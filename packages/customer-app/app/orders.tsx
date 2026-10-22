@@ -7,6 +7,7 @@ import { money } from '../src/api';
 import { useCart } from '../src/cart';
 import { clearSavedOrders, getSavedOrders, trackOrder, type SavedOrder } from '../src/orders';
 import { planReorder } from '../src/reorder';
+import { SkeletonCard } from '../src/skeleton';
 import { Page, ui } from '../src/ui';
 import { C } from '../src/theme';
 
@@ -31,7 +32,14 @@ export default function OrdersScreen() {
   const qc = useQueryClient();
   const { add } = useCart();
   const [busy, setBusy] = useState<string | null>(null);
-  const { data: saved = [], isLoading } = useQuery({ queryKey: ['saved-orders'], queryFn: getSavedOrders });
+  const [refreshing, setRefreshing] = useState(false);
+  const { data: saved = [], isLoading, refetch } = useQuery({ queryKey: ['saved-orders'], queryFn: getSavedOrders });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
 
   const results = useQueries({
     queries: saved.map((o: SavedOrder) => ({
@@ -76,8 +84,14 @@ export default function OrdersScreen() {
   }
 
   return (
-    <Page kicker="Account" title="Order history">
-      {isLoading ? <Text style={ui.lead}>Loading…</Text> : null}
+    <Page kicker="Account" title="Order history" onRefresh={onRefresh} refreshing={refreshing}>
+      {isLoading ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      ) : null}
       {!isLoading && !saved.length ? (
         <View style={ui.card}>
           <Text style={ui.name}>No orders yet</Text>

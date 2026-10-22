@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money, type Category } from '../../src/api';
 import { cachedJson } from '../../src/cache';
 import { useCart } from '../../src/cart';
 import { bestDealFor, discounted, type Promo } from '../../src/deals';
 import { getFavs, getLastBranch, toggleFav } from '../../src/favs';
+import { SkeletonRow } from '../../src/skeleton';
 import { getTable, clearTable, type TableSession } from '../../src/table';
 import { C } from '../../src/theme';
 import type { ProductFull } from '../../src/types';
@@ -60,6 +61,31 @@ export default function MenuScreen() {
 
   const onFav = async (id: string) => setFavs(await toggleFav(id));
 
+  const isFirstLoad = (categories.isLoading || products.isLoading) && !categories.data && !products.data;
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      categories.refetch(),
+      products.refetch(),
+      promos.refetch(),
+    ]);
+    setRefreshing(false);
+  };
+
+  if (isFirstLoad) {
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.content, { marginTop: 40 }]}>
+          <View style={[styles.headerRow, { marginTop: 0 }]}>
+            <Text style={styles.hero}>Menu</Text>
+          </View>
+          {[1, 2, 3, 4, 5].map((k) => <SkeletonRow key={k} />)}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <SectionList
       style={styles.screen}
@@ -68,6 +94,7 @@ export default function MenuScreen() {
       keyExtractor={(p) => p.id}
       stickySectionHeadersEnabled
       keyboardShouldPersistTaps="handled"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.navy2} />}
       ListHeaderComponent={
         <View>
           <View style={styles.headerRow}>
@@ -133,9 +160,18 @@ export default function MenuScreen() {
         );
       }}
       ListEmptyComponent={
-        <Text style={styles.empty}>
-          {searching ? `Nothing matches “${q}”.` : categories.isLoading || products.isLoading ? 'Loading…' : 'Menu unavailable right now.'}
-        </Text>
+        searching ? (
+          <View style={styles.noResultsCard}>
+            <Text style={styles.noResultsIcon}>🔍</Text>
+            <Text style={styles.noResultsTitle}>Nothing matched “{q}”</Text>
+            <Text style={styles.noResultsSub}>Try a different word, or browse the menu below.</Text>
+            <Pressable style={styles.noResultsBtn} onPress={() => setQ('')}>
+              <Text style={styles.noResultsBtnText}>Clear search</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={styles.empty}>Menu unavailable right now.</Text>
+        )
       }
     />
   );
@@ -167,4 +203,10 @@ const styles = StyleSheet.create({
   fav: { paddingLeft: 10 },
   favText: { fontSize: 22, color: C.muted },
   empty: { textAlign: 'center', color: C.muted, marginTop: 40 },
+  noResultsCard: { backgroundColor: C.white, borderRadius: 18, padding: 24, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: C.line },
+  noResultsIcon: { fontSize: 32, marginBottom: 10 },
+  noResultsTitle: { fontSize: 17, fontWeight: '600', color: C.navy, marginBottom: 6, textAlign: 'center' },
+  noResultsSub: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  noResultsBtn: { borderWidth: 1, borderColor: C.navy2, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 24 },
+  noResultsBtnText: { color: C.navy2, fontWeight: '600' },
 });

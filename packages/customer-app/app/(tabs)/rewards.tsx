@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { API, getJson } from '../../src/api';
 import { clearCardToken, getCardToken, setCardToken } from '../../src/storage';
 import { registerForPush } from '../../src/push';
+import { SkeletonCard } from '../../src/skeleton';
 import { C } from '../../src/theme';
 
 export type CardData = {
@@ -51,6 +52,13 @@ export default function RewardsScreen() {
   if (!ready) return null;
   if (!token) return <JoinCard onJoined={(t) => setToken(t)} />;
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await card.refetch();
+    setRefreshing(false);
+  };
+
   const unlink = async () => {
     await clearCardToken();
     qc.removeQueries({ queryKey: ['card'] });
@@ -73,9 +81,18 @@ export default function RewardsScreen() {
 
   const d = card.data;
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.navy2} />}
+    >
       <Text style={styles.hero}>Rewards</Text>
-      {card.isLoading && <ActivityIndicator color={C.navy2} />}
+      {card.isLoading && (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      )}
       {card.isError && <Text style={styles.lead}>We could not find this card. Check the code and try again.</Text>}
       {d && (
         <>

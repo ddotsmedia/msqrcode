@@ -1,12 +1,17 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text } from 'react-native';
 import { C } from './theme';
 
 // Shared page frame for the secondary screens (back link, kicker, title).
-export function Page({ title, kicker, children }: { title: string; kicker?: string; children: ReactNode }) {
+export function Page({ title, kicker, children, onRefresh, refreshing }: { title: string; kicker?: string; children: ReactNode; onRefresh?: () => void; refreshing?: boolean }) {
   return (
-    <ScrollView style={ui.screen} contentContainerStyle={ui.content} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={ui.screen}
+      contentContainerStyle={ui.content}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.navy2} /> : undefined}
+    >
       <Pressable onPress={() => router.back()} hitSlop={10}>
         <Text style={ui.back}>‹ Back</Text>
       </Pressable>
