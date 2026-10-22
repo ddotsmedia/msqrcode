@@ -11,6 +11,21 @@ import { C } from '../src/theme';
 
 const LABEL: Record<string, string> = { placed: 'Received', preparing: 'Being made', ready: 'Ready for pickup', completed: 'Collected', cancelled: 'Cancelled' };
 
+// Last six months of spend, oldest first, from the orders stored on this phone.
+function monthlySpend(orders: SavedOrder[]) {
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString([], { month: 'short' }), total: 0 };
+  });
+  for (const o of orders) {
+    const d = new Date(o.created_at);
+    const m = months.find((x) => x.key === `${d.getFullYear()}-${d.getMonth()}`);
+    if (m) m.total += Number(o.total) || 0;
+  }
+  return months;
+}
+
 export default function OrdersScreen() {
   const qc = useQueryClient();
   const { add } = useCart();
@@ -61,7 +76,43 @@ export default function OrdersScreen() {
   return (
     <Page kicker="Account" title="Order history">
       {isLoading ? <Text style={ui.lead}>Loading…</Text> : null}
-      {!isLoading && !saved.length ? <Text style={ui.lead}>No orders yet. Orders you place from this phone appear here.</Text> : null}
+      {!isLoading && !saved.length ? (
+        <View style={ui.card}>
+          <Text style={ui.name}>No orders yet</Text>
+          <Text style={ui.sub}>Orders you place from this phone appear here, with live status and one-tap reorder.</Text>
+          <Pressable style={[styles.btn, { marginTop: 12 }]} onPress={() => router.replace('/(tabs)')}>
+            <Text style={styles.btnText}>Browse the menu</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {saved.length > 0 ? (
+        <View style={[ui.card, styles.stats]}>
+          <View style={styles.statRow}>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{saved.length}</Text>
+              <Text style={styles.statLabel}>Orders</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{money(saved.reduce((s2, o) => s2 + (Number(o.total) || 0), 0))}</Text>
+              <Text style={styles.statLabel}>Total spent</Text>
+            </View>
+          </View>
+          <Text style={styles.chartTitle}>Last 6 months</Text>
+          <View style={styles.chart}>
+            {(() => {
+              const months = monthlySpend(saved);
+              const max = Math.max(1, ...months.map((m) => m.total));
+              return months.map((m) => (
+                <View key={m.key} style={styles.barCol}>
+                  <Text style={styles.barValue}>{m.total ? Math.round(m.total) : ''}</Text>
+                  <View style={[styles.bar, { height: Math.max(4, (m.total / max) * 90) }]} />
+                  <Text style={styles.barLabel}>{m.label}</Text>
+                </View>
+              ));
+            })()}
+          </View>
+        </View>
+      ) : null}
       {saved.map((o, i) => {
         const r = results[i];
         const order = r?.data;
@@ -102,6 +153,17 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
+  stats: { marginBottom: 14 },
+  statRow: { flexDirection: 'row', gap: 12 },
+  stat: { flex: 1, backgroundColor: C.cream, borderRadius: 14, padding: 12 },
+  statValue: { fontSize: 20, fontWeight: '700', color: C.navy },
+  statLabel: { fontSize: 12, color: C.muted, marginTop: 2 },
+  chartTitle: { fontSize: 13, fontWeight: '700', color: C.navy2, marginTop: 16, textTransform: 'uppercase', letterSpacing: 1 },
+  chart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 130, marginTop: 10 },
+  barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  bar: { width: '60%', borderRadius: 6, backgroundColor: C.caramel },
+  barValue: { fontSize: 10, color: C.muted, marginBottom: 4 },
+  barLabel: { fontSize: 11, color: C.muted, marginTop: 6 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   money: { fontSize: 15, fontWeight: '600', color: C.navy },
   items: { fontSize: 13, color: C.muted, marginTop: 6 },
