@@ -1,12 +1,38 @@
 import { useQuery } from '@tanstack/react-query';
-import { Image, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Dimensions, FlatList, Image, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SITE } from '../../src/api';
-import { Page, ui } from '../../src/ui';
+import { SkeletonCard } from '../../src/skeleton';
+import { C } from '../../src/theme';
+import { Page } from '../../src/ui';
 
 type Item = { src: string; alt: string; caption?: string };
 
+const GAP = 8;
+const COLS = 2;
+const { width } = Dimensions.get('window');
+const CELL = (width - 32 - GAP) / COLS; // 16px side padding each side
+
+function url(src: string) {
+  return src.startsWith('http') ? src : `${SITE}${src.startsWith('/') ? '' : '/'}${src}`;
+}
+
+function GalleryCell({ item }: { item: Item }) {
+  return (
+    <View style={s.cell}>
+      <Image
+        source={{ uri: url(item.src) }}
+        accessibilityLabel={item.alt}
+        style={s.img}
+        resizeMode="cover"
+      />
+      {!!item.caption && <Text style={s.caption} numberOfLines={2}>{item.caption}</Text>}
+    </View>
+  );
+}
+
 export default function GalleryScreen() {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['gallery'],
     queryFn: async (): Promise<Item[]> => {
       const r = await fetch(`${SITE}/gallery/gallery.json`);
@@ -15,18 +41,64 @@ export default function GalleryScreen() {
       return Array.isArray(j) ? j : [];
     },
   });
-  const url = (src: string) => (src.startsWith('http') ? src : `${SITE}${src.startsWith('/') ? '' : '/'}${src}`);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  const isFirstLoad = isLoading && !data;
+
   return (
-    <Page kicker="Inside Milestones" title="Gallery">
-      {isLoading && <Text style={ui.lead}>Loading…</Text>}
-      {isError && <Text style={ui.error}>Could not load the gallery. Please try again.</Text>}
-      {data && data.length === 0 && <Text style={ui.lead}>Photos coming soon.</Text>}
-      {(data ?? []).map((it) => (
-        <View key={it.src} style={{ marginBottom: 14 }}>
-          <Image source={{ uri: url(it.src) }} accessibilityLabel={it.alt} style={{ width: '100%', height: 220, borderRadius: 18 }} resizeMode="cover" />
-          {!!it.caption && <Text style={ui.sub}>{it.caption}</Text>}
+    <Page kicker="Inside Milestones" title="Gallery" refreshing={refreshing} onRefresh={onRefresh}>
+      {isFirstLoad && (
+        <>
+          <View style={s.row}>
+            <View style={s.skeletonCell}><SkeletonCard /></View>
+            <View style={s.skeletonCell}><SkeletonCard /></View>
+          </View>
+          <View style={s.row}>
+            <View style={s.skeletonCell}><SkeletonCard /></View>
+            <View style={s.skeletonCell}><SkeletonCard /></View>
+          </View>
+        </>
+      )}
+      {isError && <Text style={s.error}>Could not load the gallery. Pull down to try again.</Text>}
+      {!isFirstLoad && data && data.length === 0 && (
+        <View style={s.empty}>
+          <Text style={s.emptyIcon}>📸</Text>
+          <Text style={s.emptyTitle}>Photos coming soon</Text>
+          <Text style={s.emptySub}>Check back to see our branches.</Text>
         </View>
-      ))}
+      )}
+      {(data ?? []).length > 0 && (
+        <FlatList
+          data={data}
+          keyExtractor={(it) => it.src}
+          numColumns={COLS}
+          columnWrapperStyle={s.row}
+          scrollEnabled={false}
+          renderItem={({ item }) => <GalleryCell item={item} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.navy2} />
+          }
+        />
+      )}
     </Page>
   );
 }
+
+const s = StyleSheet.create({
+  row: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
+  cell: { flex: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: C.line },
+  img: { width: CELL, height: CELL, borderRadius: 16 },
+  caption: { fontSize: 11, color: C.muted, padding: 6, lineHeight: 15 },
+  skeletonCell: { flex: 1 },
+  error: { color: '#b91c1c', fontSize: 14, textAlign: 'center', marginTop: 16 },
+  empty: { alignItems: 'center', paddingTop: 24 },
+  emptyIcon: { fontSize: 40, marginBottom: 12 },
+  emptyTitle: { fontSize: 17, fontWeight: '600', color: C.navy, marginBottom: 6 },
+  emptySub: { fontSize: 14, color: C.muted },
+});

@@ -14,6 +14,7 @@ export type Promo = {
   combo_product_ids: string[] | null;
   combo_price: number | string | null;
   promo_code: string | null;
+  ends_at: string | null;
 };
 
 const toMin = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
