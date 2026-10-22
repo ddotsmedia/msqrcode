@@ -4,6 +4,8 @@ import { C } from '../../src/theme';
 
 const ITEMS: { title: string; text: string; href: string }[] = [
   { title: 'Order history', text: 'Your recent orders, with reorder', href: '/orders' },
+  { title: 'Favourites', text: 'Items you saved from the menu', href: '/pages/favourites' },
+  { title: 'Notifications', text: 'Manage what we send you', href: '/pages/notifications' },
   { title: 'Find your drink', text: 'Answer 3 quick questions for a suggestion', href: '/pages/quiz' },
   { title: 'Brew guides', text: 'V60, French press, cold brew, moka pot, Arabic coffee', href: '/pages/guides' },
   { title: 'Gift cards', text: 'Send a gift card or check a balance', href: '/gift' },
