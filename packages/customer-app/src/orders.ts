@@ -32,8 +32,18 @@ export function nextPickupTime(): string {
   return new Date(Math.ceil((Date.now() + 15 * 60_000) / slot) * slot).toISOString();
 }
 
+// Pickup slots from the next available one, every 15 minutes, for the next 8 hours.
+export function pickupSlots(): { iso: string; label: string }[] {
+  const first = Date.parse(nextPickupTime());
+  return Array.from({ length: 32 }, (_, i) => {
+    const d = new Date(first + i * 15 * 60_000);
+    return { iso: d.toISOString(), label: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+  });
+}
+
 export async function placeOrder(input: {
   branchId: string;
+  pickupAt?: string | null; // chosen slot; defaults to the next available one
   name: string;
   phone: string;
   lines: CartLine[];
@@ -50,7 +60,7 @@ export async function placeOrder(input: {
   };
   const body = input.table
     ? { ...common, table: input.table }
-    : { ...common, type: 'pickup', pickup_at: nextPickupTime(), account_token: input.accountToken || undefined };
+    : { ...common, type: 'pickup', pickup_at: input.pickupAt || nextPickupTime(), account_token: input.accountToken || undefined };
   const res = await fetch(`${API}/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
