@@ -5,7 +5,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { getJson, money, type Branch } from '../src/api';
 import { useCart } from '../src/cart';
 import { getCardToken } from '../src/storage';
-import { getSavedOrders, placeOrder, requestService, type SavedOrder } from '../src/orders';
+import { getSavedOrders, pickupSlots, placeOrder, requestService, type SavedOrder } from '../src/orders';
 import { clearTable, getTable, type TableSession } from '../src/table';
 import { getBusinessToken } from '../src/business';
 import { LAST_BRANCH } from '../src/favs';
@@ -26,6 +26,8 @@ export default function CartScreen() {
   const [recent, setRecent] = useState<SavedOrder[]>([]);
   const [account, setAccount] = useState<string | null>(null);
   const [onAccount, setOnAccount] = useState(false);
+  const [slot, setSlot] = useState<string | null>(null); // null = next available
+  const slots = pickupSlots();
 
   useFocusEffect(
     useCallback(() => {
@@ -51,6 +53,7 @@ export default function CartScreen() {
       const loyaltyToken = await getCardToken();
       const o = await placeOrder({
         branchId: activeBranch,
+        pickupAt: table ? null : slot,
         name: name.trim(),
         phone: phone.trim(),
         lines,
@@ -132,6 +135,17 @@ export default function CartScreen() {
                   ))}
                 </View>
                 {branches.isError && <Text style={styles.error}>Could not load branches. Check your connection.</Text>}
+                <Text style={styles.label}>Pickup time</Text>
+                <View style={styles.chips}>
+                  <Pressable onPress={() => setSlot(null)} style={[styles.chip, slot === null && styles.chipOn]}>
+                    <Text style={[styles.chipText, slot === null && styles.chipTextOn]}>As soon as possible</Text>
+                  </Pressable>
+                  {slots.slice(1, 16).map((s) => (
+                    <Pressable key={s.iso} onPress={() => setSlot(s.iso)} style={[styles.chip, slot === s.iso && styles.chipOn]}>
+                      <Text style={[styles.chipText, slot === s.iso && styles.chipTextOn]}>{s.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               </>
             )}
             <Text style={styles.label}>Name</Text>
@@ -140,7 +154,7 @@ export default function CartScreen() {
               <>
                 <Text style={styles.label}>Mobile number</Text>
                 <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="05x xxx xxxx" placeholderTextColor={C.muted} />
-                <Text style={styles.note}>Ready in about 15 minutes. You will get a live status on this screen.</Text>
+                <Text style={styles.note}>{slot ? `Ready for pickup at ${slots.find((x) => x.iso === slot)?.label ?? 'your chosen time'}.` : 'Ready in about 15 minutes. You will get a live status on this screen.'}</Text>
               </>
             )}
             {!table && account && (
