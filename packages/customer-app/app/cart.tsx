@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { getJson, money, type Branch } from '../src/api';
 import { useCart } from '../src/cart';
@@ -27,8 +27,21 @@ export default function CartScreen() {
   const [recent, setRecent] = useState<SavedOrder[]>([]);
   const [account, setAccount] = useState<string | null>(null);
   const [onAccount, setOnAccount] = useState(false);
-  const [slot, setSlot] = useState<string | null>(null); // null = next available
+  const [slot, setSlot] = useState<string | null>(null);
   const slots = pickupSlots();
+
+  // Animated subtotal
+  const subtotalScale = useRef(new Animated.Value(1)).current;
+  const prevSubtotal = useRef(subtotal);
+  useEffect(() => {
+    if (prevSubtotal.current !== subtotal) {
+      prevSubtotal.current = subtotal;
+      Animated.sequence([
+        Animated.spring(subtotalScale, { toValue: 1.12, useNativeDriver: true, friction: 6 }),
+        Animated.spring(subtotalScale, { toValue: 1, useNativeDriver: true, friction: 8 }),
+      ]).start();
+    }
+  }, [subtotal, subtotalScale]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,109 +98,200 @@ export default function CartScreen() {
   };
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()}><Text style={styles.close}>Back to menu</Text></Pressable>
-        <Text style={styles.title}>Your order</Text>
+    <View style={s.screen}>
+      <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <Pressable onPress={() => router.back()} style={s.backRow}>
+          <Text style={s.back}>← Back to menu</Text>
+        </Pressable>
+        <View style={s.titleRow}>
+          <Text style={s.title}>Your order</Text>
+          {lines.length > 0 && (
+            <Animated.View style={[s.totalBadge, { transform: [{ scale: subtotalScale }] }]}>
+              <Text style={s.totalBadgeText}>{money(subtotal)}</Text>
+            </Animated.View>
+          )}
+        </View>
 
+        {/* Table mode banner */}
         {table && (
-          <View style={styles.tableBox}>
-            <Text style={styles.lineName}>Ordering from table {table.table}</Text>
-            <View style={styles.row}>
-              <Pressable style={styles.smallBtn} onPress={() => service('staff')}><Text style={styles.smallBtnText}>Call staff</Text></Pressable>
-              <Pressable style={styles.smallBtn} onPress={() => service('bill')}><Text style={styles.smallBtnText}>Request bill</Text></Pressable>
+          <View style={s.tableCard}>
+            <View style={s.tableHead}>
+              <Text style={s.tableIcon}>🍽️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tableTitle}>Table {table.table}</Text>
+                <Text style={s.tableSub}>Staff will bring your order to you</Text>
+              </View>
             </View>
-            <Pressable onPress={() => clearTable().then(() => setTableState(null))}><Text style={styles.clear}>Leave table</Text></Pressable>
+            <View style={s.serviceRow}>
+              <Pressable style={s.serviceBtn} onPress={() => service('staff')}>
+                <Text style={s.serviceBtnIcon}>🔔</Text>
+                <Text style={s.serviceBtnText}>Call staff</Text>
+              </Pressable>
+              <Pressable style={[s.serviceBtn, s.serviceBtnAlt]} onPress={() => service('bill')}>
+                <Text style={s.serviceBtnIcon}>🧾</Text>
+                <Text style={[s.serviceBtnText, { color: C.navy2 }]}>Request bill</Text>
+              </Pressable>
+            </View>
+            <Pressable onPress={() => clearTable().then(() => setTableState(null))}>
+              <Text style={s.leaveTable}>Leave table</Text>
+            </Pressable>
           </View>
         )}
-        {!!notice && <Text style={styles.notice}>{notice}</Text>}
-        {!table && <Pressable onPress={() => router.push('/group')}><Text style={styles.groupLink}>Start a group order →</Text></Pressable>}
-        {!table && <Pressable onPress={() => router.push('/business')}><Text style={styles.groupLink}>Business account →</Text></Pressable>}
 
+        {!!notice && (
+          <View style={s.noticeCard}>
+            <Text style={s.noticeText}>✓ {notice}</Text>
+          </View>
+        )}
+
+        {!table && (
+          <View style={s.quickLinks}>
+            <Pressable style={s.quickLink} onPress={() => router.push('/group')}>
+              <Text style={s.quickLinkText}>👥 Group order</Text>
+            </Pressable>
+            <Pressable style={s.quickLink} onPress={() => router.push('/business')}>
+              <Text style={s.quickLinkText}>🏢 Business account</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Cart lines */}
         {lines.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Your cart is empty</Text>
-            <Text style={styles.emptySub}>Add something from the menu to get started.</Text>
-            <Pressable style={styles.emptyBtn} onPress={() => router.replace('/(tabs)')}>
-              <Text style={styles.emptyBtnText}>Browse the menu</Text>
+          <View style={s.emptyCard}>
+            <Text style={s.emptyIcon}>🛒</Text>
+            <Text style={s.emptyTitle}>Your cart is empty</Text>
+            <Text style={s.emptySub}>Add something from the menu to get started.</Text>
+            <Pressable style={s.emptyBtn} onPress={() => router.replace('/(tabs)')}>
+              <Text style={s.emptyBtnText}>Browse the menu</Text>
             </Pressable>
           </View>
         ) : (
-          lines.map((l) => (
-            <View key={l.key} style={styles.line}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.lineName}>{l.name}</Text>
-                {!!l.choiceLabels.length && <Text style={styles.lineSub}>{l.choiceLabels.join(' · ')}</Text>}
-                {!!l.note && <Text style={styles.lineSub}>“{l.note}”</Text>}
-                <Text style={styles.linePrice}>{money((l.base_price + l.adjustment) * l.qty)}</Text>
+          <>
+            {lines.map((l) => (
+              <View key={l.key} style={s.line}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lineName}>{l.name}</Text>
+                  {!!l.choiceLabels.length && <Text style={s.lineSub}>{l.choiceLabels.join(' · ')}</Text>}
+                  {!!l.note && <Text style={s.lineNote}>"{l.note}"</Text>}
+                  <Text style={s.linePrice}>{money((l.base_price + l.adjustment) * l.qty)}</Text>
+                </View>
+                <View style={s.qty}>
+                  <Pressable style={s.qtyBtnWrap} onPress={() => setQty(l.key, l.qty - 1)}>
+                    <Text style={s.qtyBtn}>−</Text>
+                  </Pressable>
+                  <Text style={s.qtyNum}>{l.qty}</Text>
+                  <Pressable style={s.qtyBtnWrap} onPress={() => setQty(l.key, l.qty + 1)}>
+                    <Text style={s.qtyBtn}>+</Text>
+                  </Pressable>
+                </View>
               </View>
-              <View style={styles.qty}>
-                <Pressable onPress={() => setQty(l.key, l.qty - 1)}><Text style={styles.qtyBtn}>−</Text></Pressable>
-                <Text style={styles.qtyNum}>{l.qty}</Text>
-                <Pressable onPress={() => setQty(l.key, l.qty + 1)}><Text style={styles.qtyBtn}>+</Text></Pressable>
-              </View>
+            ))}
+
+            {/* Subtotal bar */}
+            <View style={s.subtotalRow}>
+              <Text style={s.subtotalLabel}>Subtotal</Text>
+              <Animated.Text style={[s.subtotalValue, { transform: [{ scale: subtotalScale }] }]}>
+                {money(subtotal)}
+              </Animated.Text>
             </View>
-          ))
+          </>
         )}
 
+        {/* Order options */}
         {lines.length > 0 && (
           <>
             {!table && (
               <>
-                <Text style={styles.label}>Pick up at</Text>
-                <View style={styles.chips}>
+                <Text style={s.label}>Pick up at</Text>
+                <View style={s.chips}>
                   {pickup.map((b) => (
-                    <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[styles.chip, branchId === b.id && styles.chipOn]}>
-                      <Text style={[styles.chipText, branchId === b.id && styles.chipTextOn]}>{b.name}</Text>
+                    <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[s.chip, branchId === b.id && s.chipOn]}>
+                      <Text style={[s.chipText, branchId === b.id && s.chipTextOn]}>{b.name}</Text>
                     </Pressable>
                   ))}
                 </View>
-                {branches.isError && <Text style={styles.error}>Could not load branches. Check your connection.</Text>}
-                <Text style={styles.label}>Pickup time</Text>
-                <View style={styles.chips}>
-                  <Pressable onPress={() => setSlot(null)} style={[styles.chip, slot === null && styles.chipOn]}>
-                    <Text style={[styles.chipText, slot === null && styles.chipTextOn]}>As soon as possible</Text>
+                {branches.isError && <Text style={s.error}>Could not load branches. Check your connection.</Text>}
+                <Text style={s.label}>Pickup time</Text>
+                <View style={s.chips}>
+                  <Pressable onPress={() => setSlot(null)} style={[s.chip, slot === null && s.chipOn]}>
+                    <Text style={[s.chipText, slot === null && s.chipTextOn]}>As soon as possible</Text>
                   </Pressable>
-                  {slots.slice(1, 16).map((s) => (
-                    <Pressable key={s.iso} onPress={() => setSlot(s.iso)} style={[styles.chip, slot === s.iso && styles.chipOn]}>
-                      <Text style={[styles.chipText, slot === s.iso && styles.chipTextOn]}>{s.label}</Text>
+                  {slots.slice(1, 16).map((sl) => (
+                    <Pressable key={sl.iso} onPress={() => setSlot(sl.iso)} style={[s.chip, slot === sl.iso && s.chipOn]}>
+                      <Text style={[s.chipText, slot === sl.iso && s.chipTextOn]}>{sl.label}</Text>
                     </Pressable>
                   ))}
                 </View>
               </>
             )}
-            <Text style={styles.label}>Name</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Your name" placeholderTextColor={C.muted} />
+
+            <Text style={s.label}>Your name</Text>
+            <TextInput
+              style={s.input}
+              value={name}
+              onChangeText={setName}
+              placeholder="Your name"
+              placeholderTextColor={C.muted}
+            />
+
             {!table && (
               <>
-                <Text style={styles.label}>Mobile number</Text>
-                <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="05x xxx xxxx" placeholderTextColor={C.muted} />
-                <Text style={styles.note}>{slot ? `Ready for pickup at ${slots.find((x) => x.iso === slot)?.label ?? 'your chosen time'}.` : 'Ready in about 15 minutes. You will get a live status on this screen.'}</Text>
+                <Text style={s.label}>Mobile number</Text>
+                <TextInput
+                  style={s.input}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  placeholder="05x xxx xxxx"
+                  placeholderTextColor={C.muted}
+                />
+                <Text style={s.hint}>
+                  {slot
+                    ? `Ready for pickup at ${slots.find((x) => x.iso === slot)?.label ?? 'your chosen time'}.`
+                    : 'Ready in about 15 minutes. You will get a live status on this screen.'}
+                </Text>
               </>
             )}
+
             {!table && account && (
-              <Pressable style={styles.toggle} onPress={() => setOnAccount((v) => !v)}>
-                <Text style={styles.toggleText}>{onAccount ? '✓ ' : ''}Charge to my company account (pickup)</Text>
+              <Pressable style={[s.toggle, onAccount && s.toggleOn]} onPress={() => setOnAccount((v) => !v)}>
+                <Text style={[s.toggleText, onAccount && s.toggleTextOn]}>
+                  {onAccount ? '✓ ' : ''}Charge to my company account
+                </Text>
               </Pressable>
             )}
-            {!!error && <Text style={styles.error}>{error}</Text>}
-            <Pressable style={[styles.placeBtn, busy && { opacity: 0.6 }]} disabled={busy} onPress={submit}>
-              <Text style={styles.placeText}>{busy ? 'Placing order…' : `${table ? 'Send to kitchen' : 'Place order'} · ${money(subtotal)}`}</Text>
+
+            {!!error && <Text style={s.error}>{error}</Text>}
+
+            <Pressable
+              style={[s.placeBtn, busy && { opacity: 0.6 }]}
+              disabled={busy}
+              onPress={submit}>
+              <Text style={s.placeText}>
+                {busy ? 'Placing order…' : `${table ? 'Send to kitchen' : 'Place order'} · ${money(subtotal)}`}
+              </Text>
             </Pressable>
+
             <Pressable onPress={() => Alert.alert('Clear cart?', '', [{ text: 'Cancel' }, { text: 'Clear', style: 'destructive', onPress: clear }])}>
-              <Text style={styles.clear}>Clear cart</Text>
+              <Text style={s.clearBtn}>Clear cart</Text>
             </Pressable>
           </>
         )}
-        {!!error && lines.length === 0 && <Text style={styles.error}>{error}</Text>}
 
+        {!!error && lines.length === 0 && <Text style={s.error}>{error}</Text>}
+
+        {/* Recent orders */}
         {recent.length > 0 && (
           <>
-            <Text style={styles.label}>Recent orders</Text>
+            <Text style={s.label}>Recent orders</Text>
             {recent.slice(0, 5).map((o) => (
-              <Pressable key={o.id} style={styles.recent} onPress={() => router.push(`/order/${o.id}`)}>
-                <Text style={styles.lineName}>Order #{o.order_no}</Text>
-                <Text style={styles.lineSub}>{money(o.total)} · {new Date(o.created_at).toLocaleString()}</Text>
+              <Pressable key={o.id} style={s.recentCard} onPress={() => router.push(`/order/${o.id}`)}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.recentNo}>Order #{o.order_no}</Text>
+                  <Text style={s.recentSub}>{new Date(o.created_at).toLocaleDateString([], { day: 'numeric', month: 'short' })}</Text>
+                </View>
+                <Text style={s.recentTotal}>{money(o.total)}</Text>
               </Pressable>
             ))}
           </>
@@ -197,43 +301,189 @@ export default function CartScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.cream },
-  content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
-  close: { color: C.brown, fontWeight: '600', marginBottom: 12 },
-  title: { fontSize: 26, fontWeight: '600', color: C.navy, marginBottom: 12 },
-  muted: { color: C.muted, marginTop: 10 },
-  emptyCard: { backgroundColor: C.white, borderRadius: 18, padding: 24, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: C.line },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: C.navy, marginBottom: 6 },
-  emptySub: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
-  emptyBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 11, paddingHorizontal: 28 },
+  content: { padding: 20, paddingTop: 50, paddingBottom: 50 },
+
+  backRow: { marginBottom: 16 },
+  back: { color: C.brown, fontWeight: '600', fontSize: 15 },
+
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { fontSize: 28, fontWeight: '700', color: C.navy },
+  totalBadge: { backgroundColor: C.navy2, borderRadius: 14, paddingVertical: 7, paddingHorizontal: 14 },
+  totalBadgeText: { color: C.white, fontWeight: '700', fontSize: 16 },
+
+  // Table mode card
+  tableCard: {
+    backgroundColor: C.navy,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    gap: 14,
+  },
+  tableHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tableIcon: { fontSize: 26 },
+  tableTitle: { color: C.white, fontWeight: '700', fontSize: 17 },
+  tableSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 2 },
+  serviceRow: { flexDirection: 'row', gap: 10 },
+  serviceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: C.white,
+    borderRadius: 14,
+    paddingVertical: 12,
+  },
+  serviceBtnAlt: { backgroundColor: C.cream },
+  serviceBtnIcon: { fontSize: 16 },
+  serviceBtnText: { color: C.navy, fontWeight: '600', fontSize: 14 },
+  leaveTable: { color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: 13 },
+
+  noticeCard: {
+    backgroundColor: '#dcfce7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  noticeText: { color: '#15803d', fontWeight: '600', fontSize: 14 },
+
+  quickLinks: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  quickLink: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: C.white,
+  },
+  quickLinkText: { color: C.navy2, fontWeight: '600', fontSize: 13 },
+
+  // Empty state
+  emptyCard: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 28,
+    marginTop: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  emptyIcon: { fontSize: 44, marginBottom: 12 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: C.navy, marginBottom: 6 },
+  emptySub: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  emptyBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 },
   emptyBtnText: { color: C.white, fontWeight: '600', fontSize: 15 },
-  tableBox: { backgroundColor: C.white, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: C.line, gap: 10 },
-  row: { flexDirection: 'row', gap: 10 },
-  smallBtn: { flex: 1, borderWidth: 1, borderColor: C.navy2, borderRadius: 12, padding: 10, alignItems: 'center' },
-  smallBtnText: { color: C.navy2, fontWeight: '600' },
-  notice: { color: C.green, marginBottom: 10 },
-  line: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.line },
+
+  // Cart lines
+  line: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.white,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.line,
+    gap: 12,
+  },
   lineName: { fontSize: 16, fontWeight: '600', color: C.navy },
   lineSub: { fontSize: 13, color: C.muted, marginTop: 2 },
-  linePrice: { fontSize: 14, fontWeight: '600', color: C.navy2, marginTop: 4 },
-  qty: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingHorizontal: 10 },
-  qtyBtn: { fontSize: 20, color: C.navy2, fontWeight: '600' },
-  qtyNum: { fontSize: 15, fontWeight: '600', minWidth: 18, textAlign: 'center' },
-  label: { fontSize: 13, fontWeight: '700', color: C.navy2, textTransform: 'uppercase', letterSpacing: 1, marginTop: 18, marginBottom: 8 },
+  lineNote: { fontSize: 13, color: C.muted, fontStyle: 'italic', marginTop: 2 },
+  linePrice: { fontSize: 14, fontWeight: '700', color: C.navy2, marginTop: 5 },
+  qty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  qtyBtnWrap: { paddingHorizontal: 10, paddingVertical: 8, backgroundColor: C.cream },
+  qtyBtn: { fontSize: 20, color: C.navy2, fontWeight: '600', lineHeight: 24 },
+  qtyNum: { fontSize: 15, fontWeight: '700', minWidth: 22, textAlign: 'center', color: C.navy },
+
+  subtotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+    marginTop: 4,
+  },
+  subtotalLabel: { fontSize: 15, fontWeight: '600', color: C.navy, textTransform: 'uppercase', letterSpacing: 0.5 },
+  subtotalValue: { fontSize: 20, fontWeight: '700', color: C.navy2 },
+
+  // Form
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.navy2,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 18,
+    marginBottom: 8,
+  },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.white, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  chip: {
+    borderWidth: 1,
+    borderColor: C.line,
+    backgroundColor: C.white,
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+  },
   chipOn: { backgroundColor: C.navy2, borderColor: C.navy2 },
-  chipText: { color: C.navy, fontWeight: '600' },
+  chipText: { color: C.navy, fontWeight: '600', fontSize: 14 },
   chipTextOn: { color: C.white },
-  input: { backgroundColor: C.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.line, fontSize: 16, color: C.navy },
-  note: { fontSize: 13, color: C.muted, marginTop: 12 },
-  error: { color: '#b91c1c', marginTop: 10 },
-  placeBtn: { backgroundColor: C.navy2, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 16 },
-  placeText: { color: C.white, fontWeight: '600', fontSize: 16 },
-  clear: { color: C.muted, textAlign: 'center', marginTop: 14 },
-  toggle: { borderWidth: 1, borderColor: C.navy2, borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
+  input: {
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+    fontSize: 16,
+    color: C.navy,
+  },
+  hint: { fontSize: 13, color: C.muted, marginTop: 10, lineHeight: 18 },
+  error: { color: '#b91c1c', marginTop: 10, fontWeight: '500' },
+  toggle: {
+    borderWidth: 1,
+    borderColor: C.line,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: C.white,
+  },
+  toggleOn: { backgroundColor: C.navy2, borderColor: C.navy2 },
   toggleText: { color: C.navy2, fontWeight: '600' },
-  groupLink: { color: C.brown, fontWeight: '600', marginBottom: 10 },
-  recent: { backgroundColor: C.white, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.line },
+  toggleTextOn: { color: C.white },
+  placeBtn: {
+    backgroundColor: C.navy2,
+    borderRadius: 16,
+    padding: 17,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  placeText: { color: C.white, fontWeight: '700', fontSize: 16 },
+  clearBtn: { color: C.muted, textAlign: 'center', marginTop: 14, fontSize: 14 },
+
+  // Recent
+  recentCard: {
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.line,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recentNo: { fontSize: 14, fontWeight: '600', color: C.navy },
+  recentSub: { fontSize: 12, color: C.muted, marginTop: 2 },
+  recentTotal: { fontSize: 15, fontWeight: '700', color: C.navy2 },
 });
