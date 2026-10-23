@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { C } from '../../src/theme';
 
 // Pastel background tints for icon boxes — one per section group
@@ -46,31 +47,91 @@ const SECTIONS: Section[] = [
   },
 ];
 
+// Compute a global stagger index per section
+const SECTION_START = SECTIONS.reduce<number[]>((acc, sec, i) => {
+  acc.push(i === 0 ? 0 : acc[i - 1] + SECTIONS[i - 1].items.length + 1); // +1 for the heading
+  return acc;
+}, []);
+
+// Animated section block — fades + slides up
+function AnimatedSection({ sec, sectionIndex }: { sec: Section; sectionIndex: number }) {
+  const baseDelay = SECTION_START[sectionIndex] * 45;
+
+  // Heading entrance
+  const headOpacity = useRef(new Animated.Value(0)).current;
+  const headY = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headOpacity, { toValue: 1, duration: 200, delay: baseDelay, useNativeDriver: true }),
+      Animated.spring(headY, { toValue: 0, delay: baseDelay, useNativeDriver: true, friction: 8 }),
+    ]).start();
+  }, [headOpacity, headY, baseDelay]);
+
+  // Card entrance (slightly after heading)
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardY = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    const delay = baseDelay + 50;
+    Animated.parallel([
+      Animated.timing(cardOpacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.spring(cardY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  }, [cardOpacity, cardY, baseDelay]);
+
+  return (
+    <View style={styles.section}>
+      <Animated.Text
+        style={[styles.sectionLabel, { opacity: headOpacity, transform: [{ translateY: headY }] }]}
+      >
+        {sec.heading}
+      </Animated.Text>
+      <Animated.View style={[styles.card, { opacity: cardOpacity, transform: [{ translateY: cardY }] }]}>
+        {sec.items.map((it, idx) => (
+          <MoreRow key={it.href} it={it} isLast={idx === sec.items.length - 1} />
+        ))}
+      </Animated.View>
+    </View>
+  );
+}
+
+// Individual row with press scale feedback
+function MoreRow({ it, isLast }: { it: Item; isLast: boolean }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onPressIn = () =>
+    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, friction: 8 }).start();
+  const onPressOut = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        style={[styles.row, !isLast && styles.rowBorder]}
+        onPress={() => router.push(it.href as never)}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+      >
+        <View style={[styles.iconBox, { backgroundColor: ICON_BG[it.icon] ?? C.cream }]}>
+          <Text style={styles.icon}>{it.icon}</Text>
+        </View>
+        <View style={styles.info}>
+          <Text style={styles.title}>{it.title}</Text>
+          <Text style={styles.text}>{it.text}</Text>
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function MoreScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.hero}>More</Text>
-      {SECTIONS.map((sec) => (
-        <View key={sec.heading} style={styles.section}>
-          <Text style={styles.sectionLabel}>{sec.heading}</Text>
-          <View style={styles.card}>
-            {sec.items.map((it, idx) => (
-              <Pressable
-                key={it.href}
-                style={[styles.row, idx < sec.items.length - 1 && styles.rowBorder]}
-                onPress={() => router.push(it.href as never)}>
-                <View style={[styles.iconBox, { backgroundColor: ICON_BG[it.icon] ?? C.cream }]}>
-                  <Text style={styles.icon}>{it.icon}</Text>
-                </View>
-                <View style={styles.info}>
-                  <Text style={styles.title}>{it.title}</Text>
-                  <Text style={styles.text}>{it.text}</Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+      {SECTIONS.map((sec, i) => (
+        <AnimatedSection key={sec.heading} sec={sec} sectionIndex={i} />
       ))}
     </ScrollView>
   );

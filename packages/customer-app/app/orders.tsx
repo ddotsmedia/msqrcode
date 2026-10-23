@@ -1,7 +1,7 @@
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { money } from '../src/api';
 import { useCart } from '../src/cart';
@@ -26,6 +26,108 @@ function monthlySpend(orders: SavedOrder[]) {
     if (m) m.total += Number(o.total) || 0;
   }
   return months;
+}
+
+// Animated bar in the spend chart
+function ChartBar({ height, label, value, index }: { height: number; label: string; value: number; index: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: height,
+      duration: 400,
+      delay: index * 60,
+      useNativeDriver: false, // layout property
+    }).start();
+  }, [height, index, anim]);
+
+  return (
+    <View style={styles.barCol}>
+      <Text style={styles.barValue}>{value ? Math.round(value) : ''}</Text>
+      <Animated.View style={[styles.bar, { height: anim }]} />
+      <Text style={styles.barLabel}>{label}</Text>
+    </View>
+  );
+}
+
+type TrackResult = Awaited<ReturnType<typeof trackOrder>> | undefined;
+
+// Animated order card — slides up + fades in
+function OrderCard({
+  o,
+  index,
+  order,
+  isError,
+  busy,
+  onView,
+  onReorder,
+}: {
+  o: SavedOrder;
+  index: number;
+  order: TrackResult;
+  isError: boolean;
+  busy: string | null;
+  onView: () => void;
+  onReorder: () => void;
+}) {
+  const translateY = useRef(new Animated.Value(24)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = Math.min(index * 60, 360);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 240, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Flash on reorder tap
+  const reorderScale = useRef(new Animated.Value(1)).current;
+  const handleReorder = () => {
+    Animated.sequence([
+      Animated.spring(reorderScale, { toValue: 0.94, useNativeDriver: true, friction: 6 }),
+      Animated.spring(reorderScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+    ]).start();
+    onReorder();
+  };
+
+  const statusText = isError ? 'Status unavailable' : order ? (LABEL[order.status] ?? order.status) : 'Checking…';
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      <View style={ui.card}>
+        <View style={styles.row}>
+          <Text style={ui.name}>Order #{o.order_no}</Text>
+          <Text style={styles.money}>{money(o.total)}</Text>
+        </View>
+        <Text style={ui.sub}>
+          {new Date(o.created_at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
+          {' · '}
+          {statusText}
+        </Text>
+        {order?.items?.length ? (
+          <Text style={styles.items} numberOfLines={2}>
+            {order.items.map((it) => `${it.qty} × ${it.name}`).join(', ')}
+          </Text>
+        ) : null}
+        <View style={styles.actions}>
+          <Pressable style={styles.btnGhost} onPress={onView}>
+            <Text style={styles.btnGhostText}>View</Text>
+          </Pressable>
+          <Animated.View style={{ flex: 1, transform: [{ scale: reorderScale }] }}>
+            <Pressable
+              style={[styles.btn, busy !== null && styles.btnDisabled]}
+              disabled={busy !== null}
+              onPress={handleReorder}
+            >
+              <Text style={styles.btnText}>{busy === o.id ? 'Adding…' : 'Reorder'}</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </View>
+    </Animated.View>
+  );
 }
 
 export default function OrdersScreen() {
@@ -118,12 +220,14 @@ export default function OrdersScreen() {
             {(() => {
               const months = monthlySpend(saved);
               const max = Math.max(1, ...months.map((m) => m.total));
-              return months.map((m) => (
-                <View key={m.key} style={styles.barCol}>
-                  <Text style={styles.barValue}>{m.total ? Math.round(m.total) : ''}</Text>
-                  <View style={[styles.bar, { height: Math.max(4, (m.total / max) * 90) }]} />
-                  <Text style={styles.barLabel}>{m.label}</Text>
-                </View>
+              return months.map((m, i) => (
+                <ChartBar
+                  key={m.key}
+                  index={i}
+                  height={Math.max(4, (m.total / max) * 90)}
+                  label={m.label}
+                  value={m.total}
+                />
               ));
             })()}
           </View>
@@ -131,32 +235,17 @@ export default function OrdersScreen() {
       ) : null}
       {saved.map((o, i) => {
         const r = results[i];
-        const order = r?.data;
         return (
-          <View key={o.id} style={ui.card}>
-            <View style={styles.row}>
-              <Text style={ui.name}>Order #{o.order_no}</Text>
-              <Text style={styles.money}>{money(o.total)}</Text>
-            </View>
-            <Text style={ui.sub}>
-              {new Date(o.created_at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
-              {' · '}
-              {r?.isError ? 'Status unavailable' : order ? LABEL[order.status] ?? order.status : 'Checking…'}
-            </Text>
-            {order?.items?.length ? (
-              <Text style={styles.items} numberOfLines={2}>
-                {order.items.map((it) => `${it.qty} × ${it.name}`).join(', ')}
-              </Text>
-            ) : null}
-            <View style={styles.actions}>
-              <Pressable style={styles.btnGhost} onPress={() => router.push(`/order/${o.id}` as never)}>
-                <Text style={styles.btnGhostText}>View</Text>
-              </Pressable>
-              <Pressable style={[styles.btn, busy !== null && styles.btnDisabled]} disabled={busy !== null} onPress={() => reorder(o)}>
-                <Text style={styles.btnText}>{busy === o.id ? 'Adding…' : 'Reorder'}</Text>
-              </Pressable>
-            </View>
-          </View>
+          <OrderCard
+            key={o.id}
+            o={o}
+            index={i}
+            order={r?.data}
+            isError={!!r?.isError}
+            busy={busy}
+            onView={() => router.push(`/order/${o.id}` as never)}
+            onReorder={() => reorder(o)}
+          />
         );
       })}
       {saved.length > 0 ? (

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Image, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money, type Category } from '../../src/api';
 import { cachedJson } from '../../src/cache';
 import { useCart } from '../../src/cart';
@@ -13,6 +13,163 @@ import { C } from '../../src/theme';
 import type { ProductFull } from '../../src/types';
 
 type Availability = { product_id: string; is_available: boolean };
+
+// Animated cart button — badge bounces when count changes
+function CartButton({ count }: { count: number }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const prevCount = useRef(count);
+
+  useEffect(() => {
+    if (count !== prevCount.current && count > 0) {
+      Animated.sequence([
+        Animated.spring(scale, { toValue: 1.25, useNativeDriver: true, friction: 4 }),
+        Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+      ]).start();
+    }
+    prevCount.current = count;
+  }, [count, scale]);
+
+  return (
+    <Pressable
+      style={styles.cartBtn}
+      onPress={() => router.push('/cart')}
+      hitSlop={6}
+    >
+      <Animated.View style={{ transform: [{ scale }] }}>
+        {count > 0 ? (
+          <View style={styles.cartInner}>
+            <Text style={styles.cartText}>Cart</Text>
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{count}</Text>
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.cartText}>Cart</Text>
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// Animated product row — slides up + fades in on first render
+function ProductRow({
+  item,
+  index,
+  isOut,
+  isFav,
+  onFav,
+  promos,
+}: {
+  item: ProductFull;
+  index: number;
+  isOut: boolean;
+  isFav: boolean;
+  onFav: () => void;
+  promos: Promo[];
+}) {
+  const translateY = useRef(new Animated.Value(18)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = Math.min(index * 35, 350); // cap stagger at 350ms
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const deal = bestDealFor(promos, item.category_id);
+  const list = Number(item.base_price);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      <Pressable
+        style={[styles.row, isOut && { opacity: 0.55 }]}
+        onPress={() => router.push(`/product/${item.id}`)}
+      >
+        {item.image_url ? (
+          <Image source={{ uri: item.image_url }} style={styles.thumb} />
+        ) : (
+          <View style={styles.thumb} />
+        )}
+        <View style={styles.body}>
+          <Text style={styles.name}>{item.name}</Text>
+          {isOut ? (
+            <Text style={styles.soldOut}>Sold out at this branch</Text>
+          ) : null}
+          {!!item.description && !isOut && (
+            <Text numberOfLines={2} style={styles.desc}>{item.description}</Text>
+          )}
+        </View>
+        {deal?.discount_percent ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.strike}>{money(list)}</Text>
+            <Text style={styles.price}>{money(discounted(list, deal.discount_percent))}</Text>
+          </View>
+        ) : (
+          <Text style={styles.price}>{money(list)}</Text>
+        )}
+        <Pressable
+          hitSlop={10}
+          onPress={onFav}
+          style={styles.fav}
+          accessibilityLabel={isFav ? 'Remove favourite' : 'Add favourite'}
+        >
+          <Text style={[styles.favText, isFav && { color: C.gold }]}>{isFav ? '★' : '☆'}</Text>
+        </Pressable>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// Animated table banner — springs down from above
+function TableBanner({ table, onLeave }: { table: TableSession; onLeave: () => void }) {
+  const translateY = useRef(new Animated.Value(-24)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, friction: 7 }),
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+  }, [translateY, opacity]);
+
+  return (
+    <Animated.View style={[styles.banner, { opacity, transform: [{ translateY }] }]}>
+      <Text style={styles.bannerText}>Ordering from table {table.table}</Text>
+      <Pressable onPress={onLeave}>
+        <Text style={styles.bannerLink}>Leave</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// Animated search bar — expands slightly when focused
+function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const onFocus = () =>
+    Animated.spring(scale, { toValue: 1.015, useNativeDriver: true, friction: 8 }).start();
+  const onBlur = () =>
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 8 }).start();
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TextInput
+        style={styles.search}
+        placeholder="Search drinks and food"
+        placeholderTextColor={C.muted}
+        value={value}
+        onChangeText={onChange}
+        clearButtonMode="while-editing"
+        autoCorrect={false}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+    </Animated.View>
+  );
+}
 
 export default function MenuScreen() {
   const { count } = useCart();
@@ -31,14 +188,16 @@ export default function MenuScreen() {
   const products = useQuery({ queryKey: ['products'], queryFn: () => cachedJson<ProductFull[]>('products', '/products') });
   const promos = useQuery({ queryKey: ['promotions'], queryFn: () => cachedJson<Promo[]>('promotions', '/promotions') });
 
-  // Sold-out flags come from the branch the customer is ordering from (table, or last pickup branch).
   const branchId = table?.branchId ?? lastBranch;
   const avail = useQuery({
     queryKey: ['availability', branchId],
     enabled: !!branchId,
     queryFn: () => getJson<Availability[]>(`/branches/${branchId}/products/availability`),
   });
-  const soldOut = useMemo(() => new Set((avail.data ?? []).filter((a) => !a.is_available).map((a) => a.product_id)), [avail.data]);
+  const soldOut = useMemo(
+    () => new Set((avail.data ?? []).filter((a) => !a.is_available).map((a) => a.product_id)),
+    [avail.data],
+  );
 
   const live = useMemo(() => (products.data ?? []).filter((p) => p.status === 'active'), [products.data]);
   const term = q.trim().toLowerCase();
@@ -65,13 +224,21 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      categories.refetch(),
-      products.refetch(),
-      promos.refetch(),
-    ]);
+    await Promise.all([categories.refetch(), products.refetch(), promos.refetch()]);
     setRefreshing(false);
   };
+
+  // Running index across all sections for stagger calculation
+  const itemIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let idx = 0;
+    for (const sec of sections) {
+      for (const p of sec.data) {
+        map.set(p.id, idx++);
+      }
+    }
+    return map;
+  }, [sections]);
 
   if (isFirstLoad) {
     return (
@@ -105,65 +272,36 @@ export default function MenuScreen() {
                   <Text style={styles.scanText}>Scan table</Text>
                 </Pressable>
               )}
-              <Pressable style={styles.cartBtn} onPress={() => router.push('/cart')}>
-                <Text style={styles.cartText}>Cart{count ? ` · ${count}` : ''}</Text>
-              </Pressable>
+              <CartButton count={count} />
             </View>
           </View>
           {table && (
-            <View style={styles.banner}>
-              <Text style={styles.bannerText}>Ordering from table {table.table}</Text>
-              <Pressable onPress={() => clearTable().then(() => setTableState(null))}>
-                <Text style={styles.bannerLink}>Leave</Text>
-              </Pressable>
-            </View>
+            <TableBanner
+              table={table}
+              onLeave={() => clearTable().then(() => setTableState(null))}
+            />
           )}
-          <TextInput
-            style={styles.search}
-            placeholder="Search drinks and food"
-            placeholderTextColor={C.muted}
-            value={q}
-            onChangeText={setQ}
-            clearButtonMode="while-editing"
-            autoCorrect={false}
-          />
+          <SearchBar value={q} onChange={setQ} />
         </View>
       }
-      renderSectionHeader={({ section }) => <Text style={styles.section}>{section.title}</Text>}
-      renderItem={({ item }) => {
-        const isOut = soldOut.has(item.id);
-        const isFav = favs.includes(item.id);
-        return (
-          <Pressable style={[styles.row, isOut && { opacity: 0.55 }]} onPress={() => router.push(`/product/${item.id}`)}>
-            {item.image_url ? <Image source={{ uri: item.image_url }} style={styles.thumb} /> : <View style={styles.thumb} />}
-            <View style={styles.body}>
-              <Text style={styles.name}>{item.name}</Text>
-              {isOut ? <Text style={styles.soldOut}>Sold out at this branch</Text> : null}
-              {!!item.description && !isOut && <Text numberOfLines={2} style={styles.desc}>{item.description}</Text>}
-            </View>
-            {(() => {
-              const deal = bestDealFor(promos.data ?? [], item.category_id);
-              const list = Number(item.base_price);
-              return deal?.discount_percent ? (
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.strike}>{money(list)}</Text>
-                  <Text style={styles.price}>{money(discounted(list, deal.discount_percent))}</Text>
-                </View>
-              ) : (
-                <Text style={styles.price}>{money(list)}</Text>
-              );
-            })()}
-            <Pressable hitSlop={10} onPress={() => onFav(item.id)} style={styles.fav} accessibilityLabel={isFav ? 'Remove favourite' : 'Add favourite'}>
-              <Text style={[styles.favText, isFav && { color: C.gold }]}>{isFav ? '★' : '☆'}</Text>
-            </Pressable>
-          </Pressable>
-        );
-      }}
+      renderSectionHeader={({ section }) => (
+        <Text style={styles.section}>{section.title}</Text>
+      )}
+      renderItem={({ item }) => (
+        <ProductRow
+          item={item}
+          index={itemIndexMap.get(item.id) ?? 0}
+          isOut={soldOut.has(item.id)}
+          isFav={favs.includes(item.id)}
+          onFav={() => onFav(item.id)}
+          promos={promos.data ?? []}
+        />
+      )}
       ListEmptyComponent={
         searching ? (
           <View style={styles.noResultsCard}>
             <Text style={styles.noResultsIcon}>🔍</Text>
-            <Text style={styles.noResultsTitle}>Nothing matched “{q}”</Text>
+            <Text style={styles.noResultsTitle}>Nothing matched "{q}"</Text>
             <Text style={styles.noResultsSub}>Try a different word, or browse the menu below.</Text>
             <Pressable style={styles.noResultsBtn} onPress={() => setQ('')}>
               <Text style={styles.noResultsBtnText}>Clear search</Text>
@@ -185,13 +323,21 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: 'row', gap: 8 },
   scanBtn: { borderWidth: 1, borderColor: C.navy2, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
   scanText: { color: C.navy2, fontWeight: '600' },
+  // Cart button
+  cartBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  cartInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cartText: { color: C.white, fontWeight: '600' },
+  cartBadge: { backgroundColor: C.gold, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  cartBadgeText: { color: C.navy, fontSize: 11, fontWeight: '800' },
+  // Banner
   banner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.navy2, borderRadius: 14, padding: 12, marginBottom: 10 },
   bannerText: { color: C.white, fontWeight: '600' },
   bannerLink: { color: C.gold, fontWeight: '600' },
-  cartBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
-  cartText: { color: C.white, fontWeight: '600' },
+  // Search
   search: { backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16, color: C.navy, marginBottom: 6 },
+  // Section
   section: { backgroundColor: C.cream, paddingVertical: 10, fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: C.brown },
+  // Product row
   row: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderRadius: 16, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.line },
   thumb: { width: 56, height: 56, borderRadius: 12, backgroundColor: C.line, marginRight: 12 },
   body: { flex: 1, paddingRight: 8 },
@@ -202,6 +348,7 @@ const styles = StyleSheet.create({
   price: { fontSize: 14, fontWeight: '600', color: C.navy2 },
   fav: { paddingLeft: 10 },
   favText: { fontSize: 22, color: C.muted },
+  // Empty
   empty: { textAlign: 'center', color: C.muted, marginTop: 40 },
   noResultsCard: { backgroundColor: C.white, borderRadius: 18, padding: 24, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: C.line },
   noResultsIcon: { fontSize: 32, marginBottom: 10 },
