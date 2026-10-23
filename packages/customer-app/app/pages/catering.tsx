@@ -1,24 +1,27 @@
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { API, getJson, type Branch } from '../../src/api';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { API } from '../../src/api';
 import { Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
 
 const KINDS = [
-  { id: 'office', title: 'Office coffee', text: 'Coffee and pastries for meetings, trainings and team mornings, delivered and set up.' },
-  { id: 'event', title: 'Events & weddings', text: 'A barista team serving specialty coffee to your guests, from 20 to 2,000 people.' },
-  { id: 'cart', title: 'Coffee cart', text: 'Our mobile coffee bar at your venue, launch or exhibition stand, fully branded.' },
+  { id: 'office', icon: '🏢', title: 'Office coffee', text: 'Coffee and pastries for meetings, trainings and team mornings.' },
+  { id: 'event', icon: '🎉', title: 'Events & weddings', text: 'A barista team serving specialty coffee to your guests, from 20 to 2,000 people.' },
+  { id: 'cart', icon: '☕', title: 'Coffee cart', text: 'Our mobile coffee bar at your venue, launch or exhibition stand, fully branded.' },
 ];
-const STEPS = ['Tell us about your event', 'We call you within one working day with a quote', 'We set up, serve and clear away'];
+
+const HOW = [
+  { icon: '📝', step: '1', text: 'Tell us about your event' },
+  { icon: '📞', step: '2', text: 'We call you within one working day with a quote' },
+  { icon: '✅', step: '3', text: 'We set up, serve and clear away' },
+];
 
 export default function CateringScreen() {
-  const branches = useQuery({ queryKey: ['branches'], queryFn: () => getJson<Branch[]>('/branches') });
   const [f, setF] = useState({ kind: 'office', name: '', phone: '', email: '', company: '', event_date: '', guests: '30', location: '', message: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
-  const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k: keyof typeof f) => (v: string) => setF((prev) => ({ ...prev, [k]: v }));
 
   const send = async () => {
     setError('');
@@ -41,21 +44,47 @@ export default function CateringScreen() {
 
   return (
     <Page kicker="For your event" title="Catering">
+      {/* Service type */}
+      <Text style={ui.label}>What do you need?</Text>
       {KINDS.map((k) => (
-        <Pressable key={k.id} style={[ui.card, f.kind === k.id && { borderColor: C.navy2, borderWidth: 2 }]} onPress={() => set('kind')(k.id)}>
-          <Text style={ui.name}>{k.title}</Text>
-          <Text style={ui.sub}>{k.text}</Text>
+        <Pressable
+          key={k.id}
+          style={[s.kindCard, f.kind === k.id && s.kindCardOn]}
+          onPress={() => set('kind')(k.id)}
+        >
+          <Text style={s.kindIcon}>{k.icon}</Text>
+          <View style={s.kindBody}>
+            <Text style={[s.kindTitle, f.kind === k.id && s.kindTitleOn]}>{k.title}</Text>
+            <Text style={s.kindText}>{k.text}</Text>
+          </View>
+          {f.kind === k.id && <Text style={s.kindCheck}>✓</Text>}
         </Pressable>
       ))}
-      <Text style={ui.label}>How it works</Text>
-      {STEPS.map((s, i) => (
-        <Text key={s} style={ui.sub}>{i + 1}. {s}</Text>
-      ))}
+
+      {/* How it works */}
+      <Text style={[ui.label, { marginTop: 20 }]}>How it works</Text>
+      <View style={s.howBox}>
+        {HOW.map((h, i) => (
+          <View key={h.step} style={[s.howRow, i < HOW.length - 1 && s.howRowBorder]}>
+            <View style={s.howBadge}>
+              <Text style={s.howBadgeText}>{h.step}</Text>
+            </View>
+            <Text style={s.howIcon}>{h.icon}</Text>
+            <Text style={s.howText}>{h.text}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Form */}
       {sent ? (
-        <Text style={ui.ok}>Thank you. We will call you within one working day with a quote.</Text>
+        <View style={s.successCard}>
+          <Text style={s.successIcon}>🎉</Text>
+          <Text style={s.successTitle}>Enquiry sent!</Text>
+          <Text style={s.successSub}>We will call you within one working day with a quote.</Text>
+        </View>
       ) : (
         <>
-          <Text style={ui.label}>Your enquiry</Text>
+          <Text style={[ui.label, { marginTop: 20 }]}>Your enquiry</Text>
           <TextInput style={ui.input} placeholder="Your name" placeholderTextColor={C.muted} value={f.name} onChangeText={set('name')} />
           <TextInput style={ui.input} placeholder="Mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={f.phone} onChangeText={set('phone')} />
           <TextInput style={ui.input} placeholder="Email" placeholderTextColor={C.muted} autoCapitalize="none" keyboardType="email-address" value={f.email} onChangeText={set('email')} />
@@ -74,3 +103,63 @@ export default function CateringScreen() {
     </Page>
   );
 }
+
+const s = StyleSheet.create({
+  kindCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: C.white,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: C.line,
+  },
+  kindCardOn: { borderColor: C.navy2, backgroundColor: '#f0f4ff' },
+  kindIcon: { fontSize: 24 },
+  kindBody: { flex: 1 },
+  kindTitle: { fontSize: 15, fontWeight: '700', color: C.navy },
+  kindTitleOn: { color: C.navy2 },
+  kindText: { fontSize: 13, color: C.muted, marginTop: 2, lineHeight: 18 },
+  kindCheck: { fontSize: 18, color: C.navy2, fontWeight: '700' },
+
+  howBox: {
+    backgroundColor: C.white,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  howRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  howRowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  howBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.navy2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  howBadgeText: { fontSize: 13, fontWeight: '700', color: C.white },
+  howIcon: { fontSize: 18 },
+  howText: { flex: 1, fontSize: 14, color: C.navy, lineHeight: 20 },
+
+  successCard: {
+    backgroundColor: C.white,
+    borderRadius: 18,
+    padding: 28,
+    alignItems: 'center',
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  successIcon: { fontSize: 44, marginBottom: 12 },
+  successTitle: { fontSize: 20, fontWeight: '700', color: C.navy, marginBottom: 6 },
+  successSub: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 21 },
+});

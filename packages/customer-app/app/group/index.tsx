@@ -24,6 +24,8 @@ export default function GroupStart() {
     getGroups().then(setRecent);
   }, []);
 
+  const branchName = (id: string) => branches.data?.find((b) => b.id === id)?.name ?? id;
+
   const start = async () => {
     setError('');
     if (!branchId) return setError('Choose a branch');
@@ -45,64 +47,170 @@ export default function GroupStart() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Pressable onPress={() => router.back()}><Text style={styles.close}>Back</Text></Pressable>
-      <Text style={styles.hero}>Group order</Text>
-      <Text style={styles.lead}>Everyone adds their own drinks, then one person sends the order to the branch.</Text>
-
-      <Text style={styles.label}>Start a group</Text>
-      <View style={styles.chips}>
-        {pickup.map((b) => (
-          <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[styles.chip, branchId === b.id && styles.chipOn]}>
-            <Text style={[styles.chipText, branchId === b.id && styles.chipTextOn]}>{b.name}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <TextInput style={styles.input} placeholder="Your name" placeholderTextColor={C.muted} value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Your mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
-      {!!error && <Text style={styles.error}>{error}</Text>}
-      <Pressable style={[styles.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={start}>
-        <Text style={styles.buttonText}>{busy ? 'Starting…' : 'Start group order'}</Text>
+    <ScrollView style={s.screen} contentContainerStyle={s.content}>
+      <Pressable onPress={() => router.back()}>
+        <Text style={s.back}>← Back</Text>
       </Pressable>
 
-      <Text style={styles.label}>Join with a code</Text>
-      <View style={styles.row}>
-        <TextInput style={[styles.input, { flex: 1 }]} placeholder="Group code" placeholderTextColor={C.muted} autoCapitalize="characters" value={code} onChangeText={setCode} />
-        <Pressable style={styles.smallBtn} onPress={join}><Text style={styles.buttonText}>Join</Text></Pressable>
-      </View>
+      <Text style={s.hero}>Group order</Text>
+      <Text style={s.lead}>
+        Everyone adds their own drinks, then one person sends the order to the branch.
+      </Text>
 
-      {recent.length > 0 && (
-        <>
-          <Text style={styles.label}>Your groups</Text>
-          {recent.map((g) => (
-            <Pressable key={g.code} style={styles.recent} onPress={() => router.push(`/group/${g.code}`)}>
-              <Text style={styles.recentText}>{g.code}</Text>
+      {/* --- Start a group --- */}
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>Start a group</Text>
+
+        <Text style={s.fieldLabel}>Branch</Text>
+        <View style={s.chips}>
+          {pickup.map((b) => (
+            <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[s.chip, branchId === b.id && s.chipOn]}>
+              <Text style={[s.chipText, branchId === b.id && s.chipTextOn]}>{b.name}</Text>
             </Pressable>
           ))}
-        </>
+        </View>
+
+        <Text style={s.fieldLabel}>Your name</Text>
+        <TextInput
+          style={s.input}
+          placeholder="e.g. Ahmed"
+          placeholderTextColor={C.muted}
+          value={name}
+          onChangeText={setName}
+        />
+        <Text style={s.fieldLabel}>Your mobile</Text>
+        <TextInput
+          style={s.input}
+          placeholder="+971 50 …"
+          placeholderTextColor={C.muted}
+          keyboardType="phone-pad"
+          value={phone}
+          onChangeText={setPhone}
+        />
+        {!!error && <Text style={s.error}>{error}</Text>}
+        <Pressable style={[s.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={start}>
+          <Text style={s.btnText}>{busy ? 'Starting…' : '☕  Start group order'}</Text>
+        </Pressable>
+      </View>
+
+      {/* --- Join with code --- */}
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>Join with a code</Text>
+        <View style={s.joinRow}>
+          <TextInput
+            style={[s.input, { flex: 1, marginBottom: 0 }]}
+            placeholder="Group code"
+            placeholderTextColor={C.muted}
+            autoCapitalize="characters"
+            value={code}
+            onChangeText={setCode}
+          />
+          <Pressable style={s.joinBtn} onPress={join}>
+            <Text style={s.btnText}>Join</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* --- Recent groups --- */}
+      {recent.length > 0 && (
+        <View style={s.section}>
+          <Text style={s.sectionLabel}>Your recent groups</Text>
+          {recent.map((g) => (
+            <Pressable key={g.code} style={s.recentCard} onPress={() => router.push(`/group/${g.code}`)}>
+              <View style={s.recentLeft}>
+                <Text style={s.recentCode}>{g.code}</Text>
+                {!!g.name && <Text style={s.recentName}>{g.name}</Text>}
+              </View>
+              <Text style={s.recentArrow}>›</Text>
+            </Pressable>
+          ))}
+        </View>
       )}
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.cream },
   content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
-  close: { color: C.brown, fontWeight: '600', marginBottom: 10 },
-  hero: { fontSize: 26, fontWeight: '600', color: C.navy },
-  lead: { fontSize: 14, color: C.muted, marginTop: 6, marginBottom: 6, lineHeight: 20 },
-  label: { fontSize: 13, fontWeight: '700', color: C.navy2, textTransform: 'uppercase', letterSpacing: 1, marginTop: 18, marginBottom: 8 },
+  back: { color: C.brown, fontWeight: '600', fontSize: 15, marginBottom: 14 },
+  hero: { fontSize: 28, fontWeight: '700', color: C.navy },
+  lead: { fontSize: 14, color: C.muted, marginTop: 6, marginBottom: 20, lineHeight: 21 },
+
+  section: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.brown,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 14,
+  },
+
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: C.navy, marginBottom: 6, marginTop: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.white, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  chip: {
+    borderWidth: 1,
+    borderColor: C.line,
+    backgroundColor: C.cream,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
   chipOn: { backgroundColor: C.navy2, borderColor: C.navy2 },
-  chipText: { color: C.navy, fontWeight: '600' },
+  chipText: { color: C.navy, fontWeight: '600', fontSize: 13 },
   chipTextOn: { color: C.white },
-  input: { backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14, fontSize: 16, color: C.navy, marginTop: 8 },
-  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  button: { backgroundColor: C.navy2, borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12 },
-  smallBtn: { backgroundColor: C.navy2, borderRadius: 14, padding: 14, marginTop: 8 },
-  buttonText: { color: C.white, fontWeight: '600', fontSize: 16 },
-  error: { color: '#b91c1c', marginTop: 10 },
-  recent: { backgroundColor: C.white, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: C.line },
-  recentText: { color: C.navy, fontWeight: '600', letterSpacing: 1 },
+
+  input: {
+    backgroundColor: C.cream,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.line,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: C.navy,
+    marginBottom: 2,
+  },
+
+  joinRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  joinBtn: {
+    backgroundColor: C.navy2,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
+  },
+
+  button: {
+    backgroundColor: C.navy2,
+    borderRadius: 14,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  btnText: { color: C.white, fontWeight: '700', fontSize: 16 },
+  error: { color: '#b91c1c', marginTop: 8, fontSize: 13 },
+
+  recentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.cream,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  recentLeft: { flex: 1 },
+  recentCode: { fontSize: 16, fontWeight: '700', color: C.navy, letterSpacing: 1.5 },
+  recentName: { fontSize: 13, color: C.muted, marginTop: 2 },
+  recentArrow: { fontSize: 22, color: C.muted, fontWeight: '300' },
 });
