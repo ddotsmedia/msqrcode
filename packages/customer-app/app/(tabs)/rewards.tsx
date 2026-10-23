@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { API, getJson } from '../../src/api';
 import { clearCardToken, getCardToken, setCardToken } from '../../src/storage';
 import { registerForPush } from '../../src/push';
 import { SkeletonCard } from '../../src/skeleton';
+import { Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
 
 export type CardData = {
@@ -28,6 +29,22 @@ const post = async (path: string, body: object) => {
   });
   return res.json().catch(() => ({}));
 };
+
+// Animated stamp dot
+function StampDot({ filled, index }: { filled: boolean; index: number }) {
+  const scale = useRef(new Animated.Value(filled ? 1 : 0.8)).current;
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: filled ? 1 : 0.8,
+      delay: index * 30,
+      useNativeDriver: true,
+      friction: 6,
+    }).start();
+  }, [filled, index, scale]);
+  return (
+    <Animated.View style={[s.dot, filled && s.dotOn, { transform: [{ scale }] }]} />
+  );
+}
 
 export default function RewardsScreen() {
   const qc = useQueryClient();
@@ -80,69 +97,142 @@ export default function RewardsScreen() {
     ]);
 
   const d = card.data;
+  const progress = d ? Math.min(1, d.stamps / d.target) : 0;
+  const isReady = d ? d.stamps >= d.target : false;
+
   return (
     <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
+      style={s.screen}
+      contentContainerStyle={s.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.navy2} />}
     >
-      <Text style={styles.hero}>Rewards</Text>
+      <Text style={s.hero}>Rewards</Text>
+
       {card.isLoading && (
         <>
           <SkeletonCard />
           <SkeletonCard />
         </>
       )}
-      {card.isError && <Text style={styles.lead}>We could not find this card. Check the code and try again.</Text>}
+      {card.isError && (
+        <View style={s.errorCard}>
+          <Text style={s.errorIcon}>⚠️</Text>
+          <Text style={s.errorText}>We could not find this card. Check the code and try again.</Text>
+        </View>
+      )}
+
       {d && (
         <>
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>{d.name || 'Your card'}</Text>
-            <Text style={styles.big}>{d.stamps} / {d.target}</Text>
-            <Text style={styles.cardSub}>{d.stamps >= d.target ? `Ready: ${d.reward_name}` : `${d.target - d.stamps} more for ${d.reward_name}`}</Text>
-            <View style={styles.progressBg}>
-              <View style={[styles.progressFill, { width: `${Math.min(100, (d.stamps / d.target) * 100)}%` as any }]} />
+          {/* Main loyalty card */}
+          <View style={s.card}>
+            {/* Banners */}
+            {d.double_now && (
+              <View style={s.bannerRow}>
+                <Text style={s.bannerText}>⚡ Double stamps today</Text>
+              </View>
+            )}
+            {d.birthday_week && (
+              <View style={[s.bannerRow, s.bannerBirthday]}>
+                <Text style={s.bannerText}>🎂 Birthday week — a treat is waiting!</Text>
+              </View>
+            )}
+
+            <Text style={s.cardLabel}>{d.name || 'Your card'}</Text>
+
+            {/* Stamp counter */}
+            <View style={s.stampRow}>
+              <Text style={s.stampBig}>{d.stamps}</Text>
+              <Text style={s.stampOf}>/ {d.target}</Text>
             </View>
-            <View style={styles.dots}>
+            <Text style={s.cardSub}>
+              {isReady
+                ? `🎉 Ready to redeem: ${d.reward_name}`
+                : `${d.target - d.stamps} more stamp${d.target - d.stamps !== 1 ? 's' : ''} for ${d.reward_name}`}
+            </Text>
+
+            {/* Progress bar */}
+            <View style={s.progressBg}>
+              <View style={[s.progressFill, { width: `${Math.round(progress * 100)}%` as any }]} />
+            </View>
+
+            {/* Animated dots grid */}
+            <View style={s.dotsGrid}>
               {Array.from({ length: d.target }).map((_, i) => (
-                <View key={i} style={[styles.dot, i < d.stamps && styles.dotOn]} />
+                <StampDot key={i} filled={i < d.stamps} index={i} />
               ))}
             </View>
-            {d.double_now && <Text style={styles.badge}>Double stamps today</Text>}
-            {d.birthday_week && <Text style={styles.badge}>Birthday week: a treat is waiting</Text>}
           </View>
 
-          <Pressable style={styles.scanBtn} onPress={() => router.push('/scan')}>
-            <Text style={styles.scanText}>Scan counter code to add a stamp</Text>
+          {/* Action buttons */}
+          <Pressable style={s.primaryBtn} onPress={() => router.push('/scan')}>
+            <Text style={s.primaryBtnIcon}>📷</Text>
+            <Text style={s.primaryBtnText}>Scan counter code to add a stamp</Text>
           </Pressable>
-          <Pressable style={styles.scanBtn} onPress={() => router.push('/gift')}>
-            <Text style={styles.scanText}>Gift cards</Text>
+          <Pressable style={s.ghostBtn} onPress={() => router.push('/gift')}>
+            <Text style={s.ghostBtnIcon}>🎁</Text>
+            <Text style={s.ghostBtnText}>Gift cards</Text>
           </Pressable>
 
-          {!d.has_birthday && <BirthdayForm token={token} onSaved={() => qc.invalidateQueries({ queryKey: ['card', token] })} />}
+          {/* Birthday form */}
+          {!d.has_birthday && (
+            <BirthdayForm token={token} onSaved={() => qc.invalidateQueries({ queryKey: ['card', token] })} />
+          )}
 
+          {/* Referral card */}
           {!!d.referral_code && (
-            <View style={styles.box}>
-              <Text style={styles.label}>Your referral code</Text>
-              <Text style={styles.code}>{d.referral_code}</Text>
-              <Text style={styles.lead}>Friends who join with this code give you a bonus stamp.</Text>
+            <View style={s.referralCard}>
+              <View style={s.referralTop}>
+                <Text style={s.referralLabel}>Your referral code</Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() =>
+                    Share.share({ message: `Use my referral code ${d.referral_code} to join Milestones Rewards!` })
+                  }>
+                  <Text style={s.shareLink}>Share ↗</Text>
+                </Pressable>
+              </View>
+              <Text style={s.referralCode}>{d.referral_code}</Text>
+              <Text style={s.referralSub}>Friends who join with this code give you a bonus stamp.</Text>
             </View>
           )}
 
-          <Text style={styles.label}>History</Text>
-          {d.history.length === 0 && <Text style={styles.lead}>No activity yet.</Text>}
-          {d.history.map((h, i) => (
-            <View key={i} style={styles.hist}>
-              <Text style={styles.histText}>{h.type.replace(/_/g, ' ')}</Text>
-              <Text style={styles.histDelta}>{h.delta > 0 ? `+${h.delta}` : h.delta}</Text>
-              <Text style={styles.histDate}>{new Date(h.created_at).toLocaleDateString()}</Text>
+          {/* History */}
+          <Text style={s.sectionLabel}>Stamp history</Text>
+          {d.history.length === 0 && (
+            <View style={s.emptyHistory}>
+              <Text style={s.emptyHistIcon}>📋</Text>
+              <Text style={s.emptyHistText}>No activity yet — start collecting!</Text>
             </View>
-          ))}
+          )}
+          {d.history.map((h, i) => {
+            const isPositive = h.delta > 0;
+            return (
+              <View key={i} style={s.histRow}>
+                <View style={[s.histIcon, isPositive ? s.histIconPos : s.histIconNeg]}>
+                  <Text style={s.histIconText}>{isPositive ? '☕' : '🎁'}</Text>
+                </View>
+                <View style={s.histBody}>
+                  <Text style={s.histType}>{h.type.replace(/_/g, ' ')}</Text>
+                  <Text style={s.histDate}>{new Date(h.created_at).toLocaleDateString()}</Text>
+                </View>
+                <Text style={[s.histDelta, isPositive ? s.histDeltaPos : s.histDeltaNeg]}>
+                  {isPositive ? `+${h.delta}` : String(h.delta)}
+                </Text>
+              </View>
+            );
+          })}
         </>
       )}
 
-      <Pressable onPress={unlink} style={styles.linkOut}><Text style={styles.linkOutText}>Use a different card</Text></Pressable>
-      <Pressable onPress={remove} style={styles.linkOut}><Text style={styles.danger}>Delete my card</Text></Pressable>
+      <View style={s.footer}>
+        <Pressable onPress={unlink} style={s.footerLink}>
+          <Text style={s.footerLinkText}>Use a different card</Text>
+        </Pressable>
+        <Text style={s.footerDivider}>·</Text>
+        <Pressable onPress={remove} style={s.footerLink}>
+          <Text style={s.danger}>Delete my card</Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -182,26 +272,59 @@ function JoinCard({ onJoined }: { onJoined: (token: string) => void }) {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.hero}>Rewards</Text>
-      <Text style={styles.lead}>Collect a stamp with every drink. Join in seconds.</Text>
-      <View style={styles.tabs}>
-        <Pressable onPress={() => setMode('join')} style={[styles.tab, mode === 'join' && styles.tabOn]}><Text style={[styles.tabText, mode === 'join' && styles.tabTextOn]}>Join</Text></Pressable>
-        <Pressable onPress={() => setMode('link')} style={[styles.tab, mode === 'link' && styles.tabOn]}><Text style={[styles.tabText, mode === 'link' && styles.tabTextOn]}>I have a card</Text></Pressable>
+    <ScrollView style={s.screen} contentContainerStyle={s.content}>
+      {/* Hero */}
+      <View style={s.joinHero}>
+        <Text style={s.joinEmoji}>☕</Text>
+        <Text style={s.hero}>Rewards</Text>
+        <Text style={s.joinSub}>Collect a stamp with every drink. 10 stamps = a free drink.</Text>
       </View>
+
+      {/* Perks row */}
+      <View style={s.perksRow}>
+        {[['🎂', 'Birthday treat'], ['⚡', 'Double stamp days'], ['🎁', 'Gift cards']].map(([icon, label]) => (
+          <View key={label} style={s.perk}>
+            <Text style={s.perkIcon}>{icon}</Text>
+            <Text style={s.perkLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Mode tabs */}
+      <View style={s.tabs}>
+        <Pressable onPress={() => setMode('join')} style={[s.tab, mode === 'join' && s.tabOn]}>
+          <Text style={[s.tabText, mode === 'join' && s.tabTextOn]}>New card</Text>
+        </Pressable>
+        <Pressable onPress={() => setMode('link')} style={[s.tab, mode === 'link' && s.tabOn]}>
+          <Text style={[s.tabText, mode === 'link' && s.tabTextOn]}>I have a card</Text>
+        </Pressable>
+      </View>
+
       {mode === 'join' ? (
         <>
-          <TextInput style={styles.input} placeholder="Name" placeholderTextColor={C.muted} value={name} onChangeText={setName} />
-          <TextInput style={styles.input} placeholder="Mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
-          <TextInput style={styles.input} placeholder="Birthday (optional) YYYY-MM-DD" placeholderTextColor={C.muted} value={birthday} onChangeText={setBirthday} />
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <Pressable style={[styles.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={join}><Text style={styles.buttonText}>{busy ? 'Joining…' : 'Join rewards'}</Text></Pressable>
+          <TextInput style={ui.input} placeholder="Your name" placeholderTextColor={C.muted} value={name} onChangeText={setName} />
+          <TextInput style={ui.input} placeholder="Mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+          <TextInput style={ui.input} placeholder="Birthday (optional) YYYY-MM-DD" placeholderTextColor={C.muted} value={birthday} onChangeText={setBirthday} />
+          {!!error && <Text style={ui.error}>{error}</Text>}
+          <Pressable style={[ui.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={join}>
+            <Text style={ui.btnText}>{busy ? 'Joining…' : 'Join rewards'}</Text>
+          </Pressable>
         </>
       ) : (
         <>
-          <TextInput style={styles.input} placeholder="Card code" placeholderTextColor={C.muted} autoCapitalize="characters" autoCorrect={false} value={code} onChangeText={setCode} />
-          {!!error && <Text style={styles.error}>{error}</Text>}
-          <Pressable style={styles.button} onPress={link}><Text style={styles.buttonText}>Link my card</Text></Pressable>
+          <TextInput
+            style={ui.input}
+            placeholder="Card code"
+            placeholderTextColor={C.muted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            value={code}
+            onChangeText={setCode}
+          />
+          {!!error && <Text style={ui.error}>{error}</Text>}
+          <Pressable style={ui.button} onPress={link}>
+            <Text style={ui.btnText}>Link my card</Text>
+          </Pressable>
         </>
       )}
     </ScrollView>
@@ -221,50 +344,207 @@ function BirthdayForm({ token, onSaved }: { token: string; onSaved: () => void }
     onSaved();
   };
   return (
-    <View style={styles.box}>
-      <Text style={styles.label}>Add your birthday for a treat</Text>
-      <Text style={styles.lead}>You can add it once.</Text>
-      <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={C.muted} value={value} onChangeText={setValue} />
-      {!!error && <Text style={styles.error}>{error}</Text>}
-      <Pressable style={styles.button} onPress={save}><Text style={styles.buttonText}>Save birthday</Text></Pressable>
+    <View style={s.birthdayBox}>
+      <View style={s.birthdayHead}>
+        <Text style={s.birthdayIcon}>🎂</Text>
+        <View>
+          <Text style={s.birthdayTitle}>Add your birthday</Text>
+          <Text style={s.birthdaySub}>Get a free treat during your birthday week.</Text>
+        </View>
+      </View>
+      <TextInput
+        style={ui.input}
+        placeholder="YYYY-MM-DD"
+        placeholderTextColor={C.muted}
+        value={value}
+        onChangeText={setValue}
+      />
+      {!!error && <Text style={ui.error}>{error}</Text>}
+      <Pressable style={ui.button} onPress={save}>
+        <Text style={ui.btnText}>Save birthday</Text>
+      </Pressable>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.cream },
   content: { padding: 16, paddingTop: 40, paddingBottom: 40 },
-  hero: { fontSize: 28, fontWeight: '600', color: C.navy, marginBottom: 10 },
-  lead: { fontSize: 14, color: C.muted, marginBottom: 12, lineHeight: 20 },
-  card: { backgroundColor: C.navy2, borderRadius: 22, padding: 20 },
-  cardLabel: { color: C.gold, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase' },
-  big: { color: C.white, fontSize: 34, fontWeight: '600', marginTop: 4 },
-  cardSub: { color: '#b3c2dc', marginTop: 2 },
-  dots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#4f6e9f' },
+  hero: { fontSize: 28, fontWeight: '700', color: C.navy, marginBottom: 8 },
+
+  // Loyalty card
+  card: {
+    backgroundColor: C.navy,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  bannerRow: {
+    backgroundColor: C.navy2,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  bannerBirthday: { backgroundColor: '#7c3aed' },
+  bannerText: { color: C.gold, fontSize: 12, fontWeight: '700' },
+  cardLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 },
+  stampRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginBottom: 4 },
+  stampBig: { color: C.white, fontSize: 42, fontWeight: '700', lineHeight: 48 },
+  stampOf: { color: 'rgba(255,255,255,0.5)', fontSize: 20, fontWeight: '500', paddingBottom: 6 },
+  cardSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 16 },
+  progressBg: { height: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 999, marginBottom: 16, overflow: 'hidden' },
+  progressFill: { height: 6, backgroundColor: C.caramel, borderRadius: 999 },
+  dotsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'transparent',
+  },
   dotOn: { backgroundColor: C.caramel, borderColor: C.caramel },
-  progressBg: { height: 8, backgroundColor: '#1e3a5f', borderRadius: 4, marginTop: 14, marginBottom: 10, overflow: 'hidden' },
-  progressFill: { height: 8, backgroundColor: C.caramel, borderRadius: 4 },
-  badge: { color: C.gold, marginTop: 10, fontWeight: '600' },
-  scanBtn: { backgroundColor: C.white, borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 12, borderWidth: 1, borderColor: C.line },
-  scanText: { color: C.navy2, fontWeight: '600' },
-  box: { backgroundColor: C.white, borderRadius: 16, padding: 14, marginTop: 14, borderWidth: 1, borderColor: C.line },
-  label: { fontSize: 13, fontWeight: '700', color: C.navy2, textTransform: 'uppercase', letterSpacing: 1, marginTop: 14, marginBottom: 6 },
-  code: { fontSize: 22, fontWeight: '700', color: C.navy, letterSpacing: 2 },
-  hist: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.white, borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: C.line, gap: 10 },
-  histText: { flex: 1, color: C.navy, textTransform: 'capitalize' },
-  histDelta: { color: C.green, fontWeight: '600' },
-  histDate: { color: C.muted, fontSize: 12 },
-  input: { backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14, fontSize: 16, color: C.navy, marginBottom: 10 },
-  button: { backgroundColor: C.navy2, borderRadius: 14, padding: 14, alignItems: 'center' },
-  buttonText: { color: C.white, fontWeight: '600', fontSize: 16 },
-  error: { color: '#b91c1c', marginBottom: 8 },
-  tabs: { flexDirection: 'row', backgroundColor: '#eef2f8', borderRadius: 14, padding: 4, marginBottom: 14 },
+
+  // Buttons
+  primaryBtn: {
+    backgroundColor: C.navy2,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  primaryBtnIcon: { fontSize: 18 },
+  primaryBtnText: { color: C.white, fontWeight: '600', fontSize: 15, flex: 1 },
+  ghostBtn: {
+    backgroundColor: C.white,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  ghostBtnIcon: { fontSize: 18 },
+  ghostBtnText: { color: C.navy2, fontWeight: '600', fontSize: 15, flex: 1 },
+
+  // Referral
+  referralCard: {
+    backgroundColor: C.navy2,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+  },
+  referralTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  referralLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  shareLink: { color: C.gold, fontSize: 13, fontWeight: '600' },
+  referralCode: { color: C.white, fontSize: 26, fontWeight: '700', letterSpacing: 3, marginBottom: 6 },
+  referralSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 18 },
+
+  // History
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: C.brown,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  histRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: C.line,
+    gap: 12,
+  },
+  histIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  histIconPos: { backgroundColor: '#dcfce7' },
+  histIconNeg: { backgroundColor: '#fef3c7' },
+  histIconText: { fontSize: 18 },
+  histBody: { flex: 1 },
+  histType: { fontSize: 14, fontWeight: '600', color: C.navy, textTransform: 'capitalize', marginBottom: 2 },
+  histDate: { fontSize: 12, color: C.muted },
+  histDelta: { fontSize: 16, fontWeight: '700' },
+  histDeltaPos: { color: C.green },
+  histDeltaNeg: { color: C.brown },
+  emptyHistory: {
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.line,
+    marginBottom: 8,
+  },
+  emptyHistIcon: { fontSize: 28, marginBottom: 8 },
+  emptyHistText: { fontSize: 14, color: C.muted },
+
+  // Birthday box
+  birthdayBox: {
+    backgroundColor: C.white,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  birthdayHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  birthdayIcon: { fontSize: 28 },
+  birthdayTitle: { fontSize: 15, fontWeight: '700', color: C.navy, marginBottom: 2 },
+  birthdaySub: { fontSize: 13, color: C.muted },
+
+  // Error card
+  errorCard: { backgroundColor: C.white, borderRadius: 14, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: C.line },
+  errorIcon: { fontSize: 24, marginBottom: 8 },
+  errorText: { fontSize: 14, color: C.muted, textAlign: 'center' },
+
+  // Join screen hero
+  joinHero: { alignItems: 'center', paddingVertical: 20 },
+  joinEmoji: { fontSize: 48, marginBottom: 8 },
+  joinSub: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20 },
+
+  // Perks row
+  perksRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  perk: {
+    flex: 1,
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  perkIcon: { fontSize: 22, marginBottom: 4 },
+  perkLabel: { fontSize: 11, fontWeight: '600', color: C.navy, textAlign: 'center' },
+
+  // Tabs
+  tabs: { flexDirection: 'row', backgroundColor: C.line, borderRadius: 14, padding: 4, marginBottom: 16 },
   tab: { flex: 1, padding: 10, borderRadius: 10, alignItems: 'center' },
   tabOn: { backgroundColor: C.white },
-  tabText: { color: '#4f6e9f', fontWeight: '600' },
+  tabText: { color: C.muted, fontWeight: '600', fontSize: 14 },
   tabTextOn: { color: C.navy },
-  linkOut: { marginTop: 18, alignItems: 'center' },
-  linkOutText: { color: C.brown, fontWeight: '600' },
-  danger: { color: '#b91c1c', fontWeight: '600' },
+
+  // Footer
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24 },
+  footerLink: { paddingVertical: 4 },
+  footerLinkText: { color: C.brown, fontWeight: '600', fontSize: 14 },
+  footerDivider: { color: C.muted },
+  danger: { color: '#b91c1c', fontWeight: '600', fontSize: 14 },
 });

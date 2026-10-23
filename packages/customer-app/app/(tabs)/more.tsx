@@ -2,6 +2,14 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { C } from '../../src/theme';
 
+// Pastel background tints for icon boxes — one per section group
+const ICON_BG: Record<string, string> = {
+  '🧾': '#fef9ec', '❤️': '#fee2e2', '🔔': '#f0fdf4', '🎁': '#fdf4ff', '🏢': '#eff6ff',
+  '☕': '#fef9ec', '📖': '#fff7ed', '🤝': '#f0fdf4', '🍽️': '#fff1f2', '📍': '#f0f9ff',
+  '📸': '#fdf4ff', '💼': '#f9fafb',
+  '⭐': '#fefce8', '❓': '#f0f9ff', '🔒': '#f9fafb',
+};
+
 type Item = { icon: string; title: string; text: string; href: string };
 type Section = { heading: string; items: Item[] };
 
@@ -51,7 +59,9 @@ export default function MoreScreen() {
                 key={it.href}
                 style={[styles.row, idx < sec.items.length - 1 && styles.rowBorder]}
                 onPress={() => router.push(it.href as never)}>
-                <Text style={styles.icon}>{it.icon}</Text>
+                <View style={[styles.iconBox, { backgroundColor: ICON_BG[it.icon] ?? C.cream }]}>
+                  <Text style={styles.icon}>{it.icon}</Text>
+                </View>
                 <View style={styles.info}>
                   <Text style={styles.title}>{it.title}</Text>
                   <Text style={styles.text}>{it.text}</Text>
@@ -89,7 +99,8 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
-  icon: { fontSize: 22, width: 32, textAlign: 'center' },
+  iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  icon: { fontSize: 20 },
   info: { flex: 1 },
   title: { fontSize: 15, fontWeight: '600', color: C.navy },
   text: { fontSize: 12, color: C.muted, marginTop: 2 },

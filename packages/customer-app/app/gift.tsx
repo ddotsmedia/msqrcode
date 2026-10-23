@@ -1,143 +1,313 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { API, getJson, money } from '../src/api';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { API, money } from '../src/api';
+import { Page, ui } from '../src/ui';
 import { C } from '../src/theme';
 
 const AMOUNTS = [50, 100, 200, 500];
-const DESIGNS = [['classic', 'Classic'], ['birthday', 'Birthday'], ['eid', 'Eid'], ['thanks', 'Thank you']] as const;
+const DESIGNS = [
+  ['classic',  '☕', 'Classic',  '#1e3a5f'],
+  ['birthday', '🎂', 'Birthday', '#7c3aed'],
+  ['eid',      '🌙', 'Eid',      '#065f46'],
+  ['thanks',   '💛', 'Thank You','#92400e'],
+] as const;
 
-type GiftCard = { code: string; amount: number; balance: number; status: string; design: string; from: string; to: string | null; message: string | null; expires_on: string | null };
+type Design = typeof DESIGNS[number][0];
+
+function GiftCardPreview({ design, amount }: { design: Design; amount: number }) {
+  const row = DESIGNS.find((d) => d[0] === design) ?? DESIGNS[0];
+  const scale = useRef(new Animated.Value(0.95)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 7 }),
+      Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+    ]).start();
+  }, [design]);
+
+  return (
+    <Animated.View style={[s.previewCard, { backgroundColor: row[3], transform: [{ scale }], opacity }]}>
+      <View style={s.previewTop}>
+        <Text style={s.previewEmoji}>{row[1]}</Text>
+        <View>
+          <Text style={s.previewBrand}>MILESTONES COFFEE</Text>
+          <Text style={s.previewDesignName}>{row[2]}</Text>
+        </View>
+      </View>
+      <Text style={s.previewAmount}>{money(amount)}</Text>
+      <Text style={s.previewCode}>••••  ••••  ••••</Text>
+    </Animated.View>
+  );
+}
+
+function SuccessView({ code, amount }: { code: string; amount: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(24)).current;
+  const scale = useRef(new Animated.Value(0.9)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, friction: 6 }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }),
+    ]).start();
+  }, [opacity, translateY, scale]);
+
+  return (
+    <Animated.View style={[s.successWrap, { opacity, transform: [{ translateY }, { scale }] }]}>
+      <Text style={s.successEmoji}>🎁</Text>
+      <Text style={s.successTitle}>Gift card created!</Text>
+      <Text style={s.successSub}>Share this code with your recipient.</Text>
+      <View style={s.codeCard}>
+        <Text style={s.codeLabel}>GIFT CARD CODE</Text>
+        <Text style={s.codeValue}>{code}</Text>
+        <Text style={s.codeAmount}>{money(amount)}</Text>
+      </View>
+      <Text style={s.successHint}>Take a screenshot to save the code.</Text>
+    </Animated.View>
+  );
+}
+
+function BalanceResult({ balance }: { balance: number }) {
+  const scale = useRef(new Animated.Value(0.9)).current;
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+  }, []);
+  return (
+    <Animated.View style={[s.balanceResult, { transform: [{ scale }] }]}>
+      <Text style={s.balanceIcon}>💳</Text>
+      <Text style={s.balanceLabel}>Current balance</Text>
+      <Text style={s.balanceAmount}>{money(balance)}</Text>
+    </Animated.View>
+  );
+}
 
 export default function GiftScreen() {
   const [amount, setAmount] = useState(100);
-  const [custom, setCustom] = useState('');
-  const [design, setDesign] = useState<(typeof DESIGNS)[number][0]>('classic');
-  const [buyer, setBuyer] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
-  const [to, setTo] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [customRaw, setCustomRaw] = useState('');
+  const [design, setDesign] = useState<Design>('classic');
+  const [recipientName, setRecipientName] = useState('');
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState<GiftCard | null>(null);
-  const [lookup, setLookup] = useState('');
-  const [found, setFound] = useState<GiftCard | null>(null);
-  const [lookupError, setLookupError] = useState('');
+  const [error, setError] = useState('');
+  const [created, setCreated] = useState<{ code: string } | null>(null);
 
-  const chosen = custom.trim() ? Number(custom) : amount;
+  const [balanceCode, setBalanceCode] = useState('');
+  const [checkBusy, setCheckBusy] = useState(false);
+  const [balanceError, setBalanceError] = useState('');
+  const [found, setFound] = useState<{ balance: number } | null>(null);
 
-  const buy = async () => {
+  const effectiveAmount = customRaw
+    ? Math.max(10, Math.min(5000, Number(customRaw.replace(/[^\d]/g, '')) || amount))
+    : amount;
+
+  const create = async () => {
     setError('');
     setBusy(true);
-    const res = await fetch(`${API}/gift-cards/request`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ amount: chosen, design, buyer_name: buyer.trim(), buyer_phone: buyerPhone.trim(), recipient_name: to.trim() || undefined, message: message.trim() || undefined }),
-    });
-    const json = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) return setError(Array.isArray(json.message) ? json.message[0] : json.message || 'Could not create the gift card');
-    setCreated(json);
+    try {
+      const res = await fetch(`${API}/gift-cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          amount: effectiveAmount,
+          design,
+          recipient_name: recipientName.trim() || undefined,
+          note: note.trim() || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || 'Could not create gift card');
+      setCreated(json);
+    } catch (e: any) {
+      setError(e.message || 'Something went wrong. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const check = async () => {
-    setLookupError('');
+  const checkBalance = async () => {
+    setBalanceError('');
     setFound(null);
+    const t = balanceCode.trim();
+    if (!t) return;
+    setCheckBusy(true);
     try {
-      setFound(await getJson<GiftCard>(`/gift-cards/${lookup.trim().toUpperCase()}`));
-    } catch {
-      setLookupError('We could not find a gift card with that code.');
+      const res = await fetch(`${API}/gift-cards/${t}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.message || 'Card not found');
+      setFound(json);
+    } catch (e: any) {
+      setBalanceError(e.message || 'Card not found. Check the code and try again.');
+    } finally {
+      setCheckBusy(false);
     }
   };
 
   if (created) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()}><Text style={styles.close}>Back</Text></Pressable>
-        <Text style={styles.hero}>Gift card ready</Text>
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Code</Text>
-          <Text style={styles.code}>{created.code}</Text>
-          <Text style={styles.cardSub}>Value {money(created.amount)}</Text>
-        </View>
-        <Text style={styles.lead}>Pay at any Milestones branch and our staff will activate the card. Share the code with the recipient.</Text>
-      </ScrollView>
+      <Page kicker="Gift" title="Gift Card">
+        <SuccessView code={created.code} amount={effectiveAmount} />
+      </Page>
     );
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Pressable onPress={() => router.back()}><Text style={styles.close}>Back</Text></Pressable>
-      <Text style={styles.hero}>Gift cards</Text>
+    <Page kicker="Gift" title="Gift Card">
+      {/* Design picker */}
+      <Text style={ui.label}>Design</Text>
+      <View style={s.designRow}>
+        {DESIGNS.map(([id, icon, label, color]) => (
+          <Pressable
+            key={id}
+            style={[s.designChip, design === id && { borderColor: color, borderWidth: 2 }]}
+            onPress={() => setDesign(id)}>
+            <View style={[s.designIconBox, { backgroundColor: color }]}>
+              <Text style={s.designIcon}>{icon}</Text>
+            </View>
+            <Text style={[s.designLabel, design === id && { color: C.navy, fontWeight: '700' }]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
 
-      <Text style={styles.label}>Amount</Text>
-      <View style={styles.chips}>
+      {/* Live preview */}
+      <GiftCardPreview design={design} amount={effectiveAmount} />
+
+      {/* Amount picker */}
+      <Text style={ui.label}>Amount (AED)</Text>
+      <View style={ui.chips}>
         {AMOUNTS.map((a) => (
-          <Pressable key={a} onPress={() => { setAmount(a); setCustom(''); }} style={[styles.chip, !custom && amount === a && styles.chipOn]}>
-            <Text style={[styles.chipText, !custom && amount === a && styles.chipTextOn]}>{money(a)}</Text>
+          <Pressable
+            key={a}
+            style={[ui.chip, amount === a && !customRaw && ui.chipOn]}
+            onPress={() => { setAmount(a); setCustomRaw(''); }}>
+            <Text style={[ui.chipText, amount === a && !customRaw && ui.chipTextOn]}>{a}</Text>
           </Pressable>
         ))}
       </View>
-      <TextInput style={styles.input} placeholder="Other amount (AED 25 to 2000)" placeholderTextColor={C.muted} keyboardType="number-pad" value={custom} onChangeText={setCustom} />
+      <TextInput
+        style={ui.input}
+        placeholder="Or enter custom amount…"
+        placeholderTextColor={C.muted}
+        keyboardType="number-pad"
+        value={customRaw}
+        onChangeText={setCustomRaw}
+      />
 
-      <Text style={styles.label}>Design</Text>
-      <View style={styles.chips}>
-        {DESIGNS.map(([id, name]) => (
-          <Pressable key={id} onPress={() => setDesign(id)} style={[styles.chip, design === id && styles.chipOn]}>
-            <Text style={[styles.chipText, design === id && styles.chipTextOn]}>{name}</Text>
-          </Pressable>
-        ))}
-      </View>
+      {/* Optional details */}
+      <Text style={ui.label}>Recipient name (optional)</Text>
+      <TextInput
+        style={ui.input}
+        placeholder="e.g. Sarah"
+        placeholderTextColor={C.muted}
+        value={recipientName}
+        onChangeText={setRecipientName}
+      />
+      <Text style={ui.label}>Personal note (optional)</Text>
+      <TextInput
+        style={[ui.input, ui.area]}
+        placeholder="A short message for the recipient…"
+        placeholderTextColor={C.muted}
+        multiline
+        maxLength={200}
+        value={note}
+        onChangeText={setNote}
+      />
 
-      <Text style={styles.label}>From</Text>
-      <TextInput style={styles.input} placeholder="Your name" placeholderTextColor={C.muted} value={buyer} onChangeText={setBuyer} />
-      <TextInput style={styles.input} placeholder="Your mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={buyerPhone} onChangeText={setBuyerPhone} />
-      <Text style={styles.label}>To (optional)</Text>
-      <TextInput style={styles.input} placeholder="Recipient name" placeholderTextColor={C.muted} value={to} onChangeText={setTo} />
-      <TextInput style={styles.input} placeholder="Message (optional)" placeholderTextColor={C.muted} value={message} onChangeText={setMessage} multiline />
-      {!!error && <Text style={styles.error}>{error}</Text>}
-      <Pressable style={[styles.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={buy}>
-        <Text style={styles.buttonText}>{busy ? 'Creating…' : `Create gift card · ${money(chosen || 0)}`}</Text>
+      {!!error && <Text style={ui.error}>{error}</Text>}
+      <Pressable style={[ui.button, busy && { opacity: 0.6 }]} onPress={create} disabled={busy}>
+        <Text style={ui.btnText}>{busy ? 'Creating…' : `Create ${money(effectiveAmount)} Gift Card`}</Text>
       </Pressable>
 
-      <Text style={styles.label}>Check a balance</Text>
-      <View style={styles.row}>
-        <TextInput style={[styles.input, { flex: 1 }]} placeholder="Gift card code" placeholderTextColor={C.muted} autoCapitalize="characters" value={lookup} onChangeText={setLookup} />
-        <Pressable style={styles.smallBtn} onPress={check}><Text style={styles.buttonText}>Check</Text></Pressable>
+      {/* Divider */}
+      <View style={s.divider}>
+        <View style={s.dividerLine} />
+        <Text style={s.dividerLabel}>CHECK A BALANCE</Text>
+        <View style={s.dividerLine} />
       </View>
-      {!!lookupError && <Text style={styles.error}>{lookupError}</Text>}
-      {found && (
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Balance</Text>
-          <Text style={styles.big}>{money(found.balance)}</Text>
-          <Text style={styles.cardSub}>Status: {found.status}{found.expires_on ? ` · valid until ${found.expires_on}` : ''}</Text>
-        </View>
-      )}
-    </ScrollView>
+
+      {/* Balance check */}
+      <View style={s.balanceSection}>
+        <TextInput
+          style={ui.input}
+          placeholder="Enter gift card code…"
+          placeholderTextColor={C.muted}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          value={balanceCode}
+          onChangeText={(t) => { setBalanceCode(t); setFound(null); setBalanceError(''); }}
+        />
+        {!!balanceError && <Text style={ui.error}>{balanceError}</Text>}
+        <Pressable
+          style={[ui.button, { backgroundColor: C.navy }, checkBusy && { opacity: 0.6 }]}
+          onPress={checkBalance}
+          disabled={checkBusy}>
+          <Text style={ui.btnText}>{checkBusy ? 'Checking…' : 'Check balance'}</Text>
+        </Pressable>
+        {found && <BalanceResult balance={found.balance} />}
+      </View>
+    </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.cream },
-  content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
-  close: { color: C.brown, fontWeight: '600', marginBottom: 10 },
-  hero: { fontSize: 26, fontWeight: '600', color: C.navy, marginBottom: 6 },
-  lead: { fontSize: 14, color: C.muted, marginTop: 12, lineHeight: 20 },
-  label: { fontSize: 13, fontWeight: '700', color: C.navy2, textTransform: 'uppercase', letterSpacing: 1, marginTop: 18, marginBottom: 8 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: C.line, backgroundColor: C.white, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
-  chipOn: { backgroundColor: C.navy2, borderColor: C.navy2 },
-  chipText: { color: C.navy, fontWeight: '600' },
-  chipTextOn: { color: C.white },
-  input: { backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14, fontSize: 16, color: C.navy, marginTop: 8 },
-  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  button: { backgroundColor: C.navy2, borderRadius: 14, padding: 14, alignItems: 'center', marginTop: 14 },
-  smallBtn: { backgroundColor: C.navy2, borderRadius: 14, padding: 14, marginTop: 8 },
-  buttonText: { color: C.white, fontWeight: '600', fontSize: 16 },
-  error: { color: '#b91c1c', marginTop: 10 },
-  card: { backgroundColor: C.navy2, borderRadius: 22, padding: 20, marginTop: 14 },
-  cardLabel: { color: C.gold, fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase' },
-  code: { color: C.white, fontSize: 26, fontWeight: '700', letterSpacing: 2, marginTop: 4 },
-  big: { color: C.white, fontSize: 30, fontWeight: '600', marginTop: 4 },
-  cardSub: { color: '#b3c2dc', marginTop: 4 },
+const s = StyleSheet.create({
+  // Design picker
+  designRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  designChip: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: C.white,
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: C.line,
+    gap: 6,
+  },
+  designIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  designIcon: { fontSize: 18 },
+  designLabel: { fontSize: 11, color: C.muted, textAlign: 'center' },
+
+  // Card preview
+  previewCard: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    minHeight: 140,
+    justifyContent: 'space-between',
+  },
+  previewTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  previewEmoji: { fontSize: 32 },
+  previewBrand: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '700', letterSpacing: 2 },
+  previewDesignName: { color: C.white, fontSize: 16, fontWeight: '700', marginTop: 2 },
+  previewAmount: { color: C.white, fontSize: 32, fontWeight: '700', letterSpacing: 1 },
+  previewCode: { color: 'rgba(255,255,255,0.4)', fontSize: 14, letterSpacing: 4, marginTop: 8 },
+
+  // Divider
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 24 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: C.line },
+  dividerLabel: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1.5 },
+
+  // Balance section
+  balanceSection: { marginBottom: 8 },
+  balanceResult: {
+    backgroundColor: C.navy,
+    borderRadius: 18,
+    padding: 20,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  balanceIcon: { fontSize: 32, marginBottom: 8 },
+  balanceLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  balanceAmount: { color: C.white, fontSize: 32, fontWeight: '700' },
+
+  // Success
+  successWrap: { alignItems: 'center', paddingTop: 20 },
+  successEmoji: { fontSize: 64, marginBottom: 16 },
+  successTitle: { fontSize: 26, fontWeight: '700', color: C.navy, marginBottom: 8 },
+  successSub: { fontSize: 15, color: C.muted, textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+  codeCard: { backgroundColor: C.navy, borderRadius: 20, padding: 24, alignItems: 'center', width: '100%', marginBottom: 16 },
+  codeLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', letterSpacing: 2, marginBottom: 10 },
+  codeValue: { color: C.white, fontSize: 28, fontWeight: '700', letterSpacing: 4, marginBottom: 8 },
+  codeAmount: { color: C.gold, fontSize: 20, fontWeight: '700' },
+  successHint: { fontSize: 13, color: C.muted, textAlign: 'center' },
 });
