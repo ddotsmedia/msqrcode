@@ -6,12 +6,8 @@ import { C } from '../../src/theme';
 
 const KEY = 'msq_notif_prefs';
 
-type Prefs = {
-  orderUpdates: boolean;
-  promotions: boolean;
-  loyaltyNews: boolean;
-};
-
+type PrefKey = 'orderUpdates' | 'promotions' | 'loyaltyNews';
+type Prefs = Record<PrefKey, boolean>;
 const DEFAULT: Prefs = { orderUpdates: true, promotions: true, loyaltyNews: true };
 
 async function loadPrefs(): Promise<Prefs> {
@@ -21,10 +17,15 @@ async function loadPrefs(): Promise<Prefs> {
     return DEFAULT;
   }
 }
-
 async function savePrefs(p: Prefs) {
   await AsyncStorage.setItem(KEY, JSON.stringify(p));
 }
+
+const ROWS: { key: PrefKey; icon: string; title: string; sub: string }[] = [
+  { key: 'orderUpdates', icon: '🛎️', title: 'Order updates', sub: 'When your order is ready for pickup or at your table.' },
+  { key: 'promotions',   icon: '🏷️', title: 'Promotions',   sub: 'Special offers, limited drinks, and branch events.' },
+  { key: 'loyaltyNews',  icon: '⭐', title: 'Loyalty & rewards', sub: 'Stamp milestones, birthday treats, and double-stamp days.' },
+];
 
 export default function NotificationsScreen() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT);
@@ -32,50 +33,139 @@ export default function NotificationsScreen() {
 
   useEffect(() => { loadPrefs().then((p) => { setPrefs(p); setReady(true); }); }, []);
 
-  const toggle = async (key: keyof Prefs) => {
-    const next = { ...prefs, [key]: !prefs[key] };
+  const allOn = Object.values(prefs).every(Boolean);
+  const allOff = Object.values(prefs).every((v) => !v);
+
+  const toggleAll = async () => {
+    const next: Prefs = { orderUpdates: !allOn, promotions: !allOn, loyaltyNews: !allOn };
     setPrefs(next);
     await savePrefs(next);
   };
 
-  const rows: { key: keyof Prefs; title: string; sub: string }[] = [
-    { key: 'orderUpdates', title: 'Order updates', sub: 'When your order is ready for pickup or at your table.' },
-    { key: 'promotions', title: 'Promotions', sub: 'Special offers, limited drinks, and branch events.' },
-    { key: 'loyaltyNews', title: 'Loyalty & rewards', sub: 'Stamp milestones, birthday treats, and double-stamp days.' },
-  ];
+  const toggle = async (key: PrefKey) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    await savePrefs(next);
+  };
 
   if (!ready) return null;
 
   return (
     <Page kicker="Account" title="Notifications">
       <Text style={ui.lead}>
-        These preferences are saved on this phone. Your device notification settings control whether notifications can arrive at all.
+        Saved on this phone. Your device settings control whether notifications arrive at all.
       </Text>
 
-      {rows.map((r) => (
-        <View key={r.key} style={styles.row}>
-          <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={ui.name}>{r.title}</Text>
-            <Text style={ui.sub}>{r.sub}</Text>
+      {/* Master toggle */}
+      <Pressable style={s.masterRow} onPress={toggleAll}>
+        <View style={s.masterLeft}>
+          <Text style={s.masterIcon}>🔔</Text>
+          <View>
+            <Text style={s.masterTitle}>{allOff ? 'All notifications off' : allOn ? 'All notifications on' : 'Some notifications on'}</Text>
+            <Text style={s.masterSub}>Tap to {allOn ? 'turn all off' : 'turn all on'}</Text>
           </View>
-          <Switch
-            value={prefs[r.key]}
-            onValueChange={() => toggle(r.key)}
-            trackColor={{ true: C.navy2, false: C.line }}
-            thumbColor={C.white}
-          />
         </View>
-      ))}
-
-      <Pressable style={styles.settingsBtn} onPress={() => Linking.openSettings()}>
-        <Text style={styles.settingsText}>Open device notification settings</Text>
+        <Switch
+          value={allOn}
+          onValueChange={toggleAll}
+          trackColor={{ true: C.navy2, false: C.line }}
+          thumbColor={C.white}
+        />
       </Pressable>
+
+      <Text style={s.sectionLabel}>Choose what you receive</Text>
+
+      <View style={s.card}>
+        {ROWS.map((r, i) => (
+          <View key={r.key} style={[s.row, i < ROWS.length - 1 && s.rowBorder]}>
+            <View style={s.iconBox}>
+              <Text style={s.icon}>{r.icon}</Text>
+            </View>
+            <View style={s.rowBody}>
+              <Text style={s.rowTitle}>{r.title}</Text>
+              <Text style={s.rowSub}>{r.sub}</Text>
+            </View>
+            <Switch
+              value={prefs[r.key]}
+              onValueChange={() => toggle(r.key)}
+              trackColor={{ true: C.navy2, false: C.line }}
+              thumbColor={C.white}
+            />
+          </View>
+        ))}
+      </View>
+
+      <Pressable style={s.deviceBtn} onPress={() => Linking.openSettings()}>
+        <Text style={s.deviceIcon}>⚙️</Text>
+        <Text style={s.deviceText}>Open device notification settings</Text>
+        <Text style={s.deviceChevron}>›</Text>
+      </Pressable>
+
+      <Text style={s.footNote}>
+        Even with all toggles on, notifications only appear if you have allowed them in your device settings for this app.
+      </Text>
     </Page>
   );
 }
 
-const styles = StyleSheet.create({
-  row: { backgroundColor: C.white, borderRadius: 16, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: C.line, flexDirection: 'row', alignItems: 'center' },
-  settingsBtn: { marginTop: 8, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 14, alignItems: 'center' },
-  settingsText: { color: C.navy2, fontWeight: '600' },
+const s = StyleSheet.create({
+  masterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.navy,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 20,
+  },
+  masterLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  masterIcon: { fontSize: 24 },
+  masterTitle: { fontSize: 15, fontWeight: '700', color: C.white, marginBottom: 2 },
+  masterSub: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: C.brown,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  card: {
+    backgroundColor: C.white,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.line,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: C.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  icon: { fontSize: 20 },
+  rowBody: { flex: 1 },
+  rowTitle: { fontSize: 15, fontWeight: '600', color: C.navy, marginBottom: 2 },
+  rowSub: { fontSize: 12, color: C.muted, lineHeight: 17 },
+  deviceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: C.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+    padding: 14,
+    marginBottom: 16,
+  },
+  deviceIcon: { fontSize: 18 },
+  deviceText: { flex: 1, color: C.navy2, fontWeight: '600', fontSize: 14 },
+  deviceChevron: { fontSize: 20, color: C.muted },
+  footNote: { fontSize: 12, color: C.muted, lineHeight: 18, textAlign: 'center', paddingHorizontal: 8 },
 });
