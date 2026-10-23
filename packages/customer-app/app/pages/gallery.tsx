@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Dimensions, FlatList, Image, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, FlatList, Image, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SITE } from '../../src/api';
 import { SkeletonCard } from '../../src/skeleton';
 import { C } from '../../src/theme';
@@ -17,9 +17,22 @@ function url(src: string) {
   return src.startsWith('http') ? src : `${SITE}${src.startsWith('/') ? '' : '/'}${src}`;
 }
 
-function GalleryCell({ item }: { item: Item }) {
+// Animated gallery cell — fades in with stagger
+function GalleryCell({ item, index }: { item: Item; index: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.92)).current;
+
+  useEffect(() => {
+    const delay = Math.min(index * 40, 320);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 280, delay, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <View style={s.cell}>
+    <Animated.View style={[s.cell, { opacity, transform: [{ scale }] }]}>
       <Image
         source={{ uri: url(item.src) }}
         accessibilityLabel={item.alt}
@@ -27,7 +40,7 @@ function GalleryCell({ item }: { item: Item }) {
         resizeMode="cover"
       />
       {!!item.caption && <Text style={s.caption} numberOfLines={2}>{item.caption}</Text>}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -80,7 +93,7 @@ export default function GalleryScreen() {
           numColumns={COLS}
           columnWrapperStyle={s.row}
           scrollEnabled={false}
-          renderItem={({ item }) => <GalleryCell item={item} />}
+          renderItem={({ item, index }) => <GalleryCell item={item} index={index} />}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.navy2} />
           }

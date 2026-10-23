@@ -1,13 +1,80 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getJson, money } from '../../src/api';
 import { getFavs, toggleFav } from '../../src/favs';
 import { useCart } from '../../src/cart';
 import { Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
 import type { ProductFull } from '../../src/types';
+
+// Animated favourite row — slides up + fades in
+function FavRow({
+  item,
+  index,
+  adding,
+  onAdd,
+  onRemove,
+}: {
+  item: ProductFull;
+  index: number;
+  adding: string | null;
+  onAdd: () => void;
+  onRemove: () => void;
+}) {
+  const translateY = useRef(new Animated.Value(20)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = Math.min(index * 50, 300);
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Add-to-cart spring flash
+  const addScale = useRef(new Animated.Value(1)).current;
+  const handleAdd = () => {
+    Animated.sequence([
+      Animated.spring(addScale, { toValue: 0.88, useNativeDriver: true, friction: 6 }),
+      Animated.spring(addScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+    ]).start();
+    onAdd();
+  };
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      <View style={s.row}>
+        <Pressable style={s.rowMain} onPress={() => router.push(`/product/${item.id}` as never)}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.name}>{item.name}</Text>
+            {!!item.description && (
+              <Text numberOfLines={1} style={s.desc}>{item.description}</Text>
+            )}
+            <Text style={s.price}>{money(Number(item.base_price))}</Text>
+          </View>
+        </Pressable>
+        <View style={s.rowActions}>
+          <Animated.View style={{ transform: [{ scale: addScale }] }}>
+            <Pressable
+              style={[s.addBtn, adding === item.id && { opacity: 0.6 }]}
+              disabled={adding === item.id}
+              onPress={handleAdd}
+            >
+              <Text style={s.addText}>{adding === item.id ? '…' : '+'}</Text>
+            </Pressable>
+          </Animated.View>
+          <Pressable hitSlop={12} onPress={onRemove} style={s.removeBtn}>
+            <Text style={s.removeStar}>★</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
 
 export default function FavouritesScreen() {
   const qc = useQueryClient();
@@ -60,29 +127,14 @@ export default function FavouritesScreen() {
             data={favProducts}
             keyExtractor={(p) => p.id}
             scrollEnabled={false}
-            renderItem={({ item }) => (
-              <View style={s.row}>
-                <Pressable style={s.rowMain} onPress={() => router.push(`/product/${item.id}` as never)}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.name}>{item.name}</Text>
-                    {!!item.description && (
-                      <Text numberOfLines={1} style={s.desc}>{item.description}</Text>
-                    )}
-                    <Text style={s.price}>{money(Number(item.base_price))}</Text>
-                  </View>
-                </Pressable>
-                <View style={s.rowActions}>
-                  <Pressable
-                    style={[s.addBtn, adding === item.id && { opacity: 0.6 }]}
-                    disabled={adding === item.id}
-                    onPress={() => onAddToCart(item)}>
-                    <Text style={s.addText}>{adding === item.id ? '…' : '+'}</Text>
-                  </Pressable>
-                  <Pressable hitSlop={12} onPress={() => onRemove(item.id)} style={s.removeBtn}>
-                    <Text style={s.removeStar}>★</Text>
-                  </Pressable>
-                </View>
-              </View>
+            renderItem={({ item, index }) => (
+              <FavRow
+                item={item}
+                index={index}
+                adding={adding}
+                onAdd={() => onAddToCart(item)}
+                onRemove={() => onRemove(item.id)}
+              />
             )}
           />
         </>

@@ -1,10 +1,31 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, type Branch } from '../../src/api';
 import { getGroups, groupCall, saveGroup, type SavedGroup } from '../../src/groups';
 import { C } from '../../src/theme';
+
+// Animated section card — staggered entrance
+function AnimSection({ children, index }: { children: React.ReactNode; index: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    const delay = index * 80;
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 240, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View style={[s.section, { opacity, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function GroupStart() {
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => getJson<Branch[]>('/branches') });
@@ -23,6 +44,26 @@ export default function GroupStart() {
   useEffect(() => {
     getGroups().then(setRecent);
   }, []);
+
+  // Hero header entrance
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const heroY = useRef(new Animated.Value(-12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(heroOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+      Animated.spring(heroY, { toValue: 0, useNativeDriver: true, friction: 7 }),
+    ]).start();
+  }, [heroOpacity, heroY]);
+
+  // Start button scale
+  const startScale = useRef(new Animated.Value(1)).current;
+  const handleStart = () => {
+    Animated.sequence([
+      Animated.spring(startScale, { toValue: 0.95, useNativeDriver: true, friction: 6 }),
+      Animated.spring(startScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+    ]).start();
+    start();
+  };
 
   const branchName = (id: string) => branches.data?.find((b) => b.id === id)?.name ?? id;
 
@@ -52,13 +93,15 @@ export default function GroupStart() {
         <Text style={s.back}>← Back</Text>
       </Pressable>
 
-      <Text style={s.hero}>Group order</Text>
-      <Text style={s.lead}>
-        Everyone adds their own drinks, then one person sends the order to the branch.
-      </Text>
+      <Animated.View style={{ opacity: heroOpacity, transform: [{ translateY: heroY }] }}>
+        <Text style={s.hero}>Group order</Text>
+        <Text style={s.lead}>
+          Everyone adds their own drinks, then one person sends the order to the branch.
+        </Text>
+      </Animated.View>
 
       {/* --- Start a group --- */}
-      <View style={s.section}>
+      <AnimSection index={0}>
         <Text style={s.sectionLabel}>Start a group</Text>
 
         <Text style={s.fieldLabel}>Branch</Text>
@@ -88,13 +131,15 @@ export default function GroupStart() {
           onChangeText={setPhone}
         />
         {!!error && <Text style={s.error}>{error}</Text>}
-        <Pressable style={[s.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={start}>
-          <Text style={s.btnText}>{busy ? 'Starting…' : '☕  Start group order'}</Text>
-        </Pressable>
-      </View>
+        <Animated.View style={{ transform: [{ scale: startScale }] }}>
+          <Pressable style={[s.button, busy && { opacity: 0.6 }]} disabled={busy} onPress={handleStart}>
+            <Text style={s.btnText}>{busy ? 'Starting…' : '☕  Start group order'}</Text>
+          </Pressable>
+        </Animated.View>
+      </AnimSection>
 
       {/* --- Join with code --- */}
-      <View style={s.section}>
+      <AnimSection index={1}>
         <Text style={s.sectionLabel}>Join with a code</Text>
         <View style={s.joinRow}>
           <TextInput
@@ -109,11 +154,11 @@ export default function GroupStart() {
             <Text style={s.btnText}>Join</Text>
           </Pressable>
         </View>
-      </View>
+      </AnimSection>
 
       {/* --- Recent groups --- */}
       {recent.length > 0 && (
-        <View style={s.section}>
+        <AnimSection index={2}>
           <Text style={s.sectionLabel}>Your recent groups</Text>
           {recent.map((g) => (
             <Pressable key={g.code} style={s.recentCard} onPress={() => router.push(`/group/${g.code}`)}>
@@ -124,7 +169,7 @@ export default function GroupStart() {
               <Text style={s.recentArrow}>›</Text>
             </Pressable>
           ))}
-        </View>
+        </AnimSection>
       )}
     </ScrollView>
   );

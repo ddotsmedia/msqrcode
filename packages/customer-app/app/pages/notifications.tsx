@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
@@ -27,11 +27,78 @@ const ROWS: { key: PrefKey; icon: string; title: string; sub: string }[] = [
   { key: 'loyaltyNews',  icon: '⭐', title: 'Loyalty & rewards', sub: 'Stamp milestones, birthday treats, and double-stamp days.' },
 ];
 
+// Animated notification row — staggered slide-up
+function NotifRow({
+  r,
+  index,
+  isLast,
+  value,
+  onToggle,
+}: {
+  r: typeof ROWS[number];
+  index: number;
+  isLast: boolean;
+  value: boolean;
+  onToggle: () => void;
+}) {
+  const translateY = useRef(new Animated.Value(16)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = index * 60;
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View style={[s.row, !isLast && s.rowBorder, { opacity, transform: [{ translateY }] }]}>
+      <View style={s.iconBox}>
+        <Text style={s.icon}>{r.icon}</Text>
+      </View>
+      <View style={s.rowBody}>
+        <Text style={s.rowTitle}>{r.title}</Text>
+        <Text style={s.rowSub}>{r.sub}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ true: C.navy2, false: C.line }}
+        thumbColor={C.white}
+      />
+    </Animated.View>
+  );
+}
+
 export default function NotificationsScreen() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT);
   const [ready, setReady] = useState(false);
 
   useEffect(() => { loadPrefs().then((p) => { setPrefs(p); setReady(true); }); }, []);
+
+  // Master row entrance
+  const masterOpacity = useRef(new Animated.Value(0)).current;
+  const masterY = useRef(new Animated.Value(-16)).current;
+  useEffect(() => {
+    if (!ready) return;
+    Animated.parallel([
+      Animated.timing(masterOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.spring(masterY, { toValue: 0, useNativeDriver: true, friction: 7 }),
+    ]).start();
+  }, [ready, masterOpacity, masterY]);
+
+  // Card entrance (after master)
+  const cardOpacity = useRef(new Animated.Value(0)).current;
+  const cardY = useRef(new Animated.Value(16)).current;
+  useEffect(() => {
+    if (!ready) return;
+    Animated.parallel([
+      Animated.timing(cardOpacity, { toValue: 1, duration: 220, delay: 80, useNativeDriver: true }),
+      Animated.spring(cardY, { toValue: 0, delay: 80, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  }, [ready, cardOpacity, cardY]);
 
   const allOn = Object.values(prefs).every(Boolean);
   const allOff = Object.values(prefs).every((v) => !v);
@@ -56,44 +123,40 @@ export default function NotificationsScreen() {
         Saved on this phone. Your device settings control whether notifications arrive at all.
       </Text>
 
-      {/* Master toggle */}
-      <Pressable style={s.masterRow} onPress={toggleAll}>
-        <View style={s.masterLeft}>
-          <Text style={s.masterIcon}>🔔</Text>
-          <View>
-            <Text style={s.masterTitle}>{allOff ? 'All notifications off' : allOn ? 'All notifications on' : 'Some notifications on'}</Text>
-            <Text style={s.masterSub}>Tap to {allOn ? 'turn all off' : 'turn all on'}</Text>
+      {/* Master toggle — springs down from above */}
+      <Animated.View style={{ opacity: masterOpacity, transform: [{ translateY: masterY }] }}>
+        <Pressable style={s.masterRow} onPress={toggleAll}>
+          <View style={s.masterLeft}>
+            <Text style={s.masterIcon}>🔔</Text>
+            <View>
+              <Text style={s.masterTitle}>{allOff ? 'All notifications off' : allOn ? 'All notifications on' : 'Some notifications on'}</Text>
+              <Text style={s.masterSub}>Tap to {allOn ? 'turn all off' : 'turn all on'}</Text>
+            </View>
           </View>
-        </View>
-        <Switch
-          value={allOn}
-          onValueChange={toggleAll}
-          trackColor={{ true: C.navy2, false: C.line }}
-          thumbColor={C.white}
-        />
-      </Pressable>
+          <Switch
+            value={allOn}
+            onValueChange={toggleAll}
+            trackColor={{ true: C.navy2, false: C.line }}
+            thumbColor={C.white}
+          />
+        </Pressable>
+      </Animated.View>
 
       <Text style={s.sectionLabel}>Choose what you receive</Text>
 
-      <View style={s.card}>
+      {/* Card fades in, rows stagger inside */}
+      <Animated.View style={[s.card, { opacity: cardOpacity, transform: [{ translateY: cardY }] }]}>
         {ROWS.map((r, i) => (
-          <View key={r.key} style={[s.row, i < ROWS.length - 1 && s.rowBorder]}>
-            <View style={s.iconBox}>
-              <Text style={s.icon}>{r.icon}</Text>
-            </View>
-            <View style={s.rowBody}>
-              <Text style={s.rowTitle}>{r.title}</Text>
-              <Text style={s.rowSub}>{r.sub}</Text>
-            </View>
-            <Switch
-              value={prefs[r.key]}
-              onValueChange={() => toggle(r.key)}
-              trackColor={{ true: C.navy2, false: C.line }}
-              thumbColor={C.white}
-            />
-          </View>
+          <NotifRow
+            key={r.key}
+            r={r}
+            index={i}
+            isLast={i === ROWS.length - 1}
+            value={prefs[r.key]}
+            onToggle={() => toggle(r.key)}
+          />
         ))}
-      </View>
+      </Animated.View>
 
       <Pressable style={s.deviceBtn} onPress={() => Linking.openSettings()}>
         <Text style={s.deviceIcon}>⚙️</Text>
