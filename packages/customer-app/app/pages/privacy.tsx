@@ -1,57 +1,98 @@
-import { Linking, Pressable, Text, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
 import { Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
 
-const SECTIONS: { title: string; body: string[] }[] = [
+const SECTIONS = [
   {
+    icon: '📋',
     title: 'What we collect',
-    body: [
-      'When you place an order, we keep your name, phone number (if you give one), the items and options you chose, and the pickup or table details.',
-      'When you join the rewards programme, we keep your phone number and your stamps and points.',
-      'When you leave feedback, send a gift card or join a group order, we keep the details you enter for that request.',
-      'The app may ask to send you notifications about your orders. You can turn these off in your phone settings at any time.',
-    ],
+    body: 'When you use this app we collect: your name and mobile number (when you join Rewards), orders you place (stored on this device), your branch visit feedback, and app usage data to improve the experience.',
   },
   {
-    title: 'What stays on your phone',
-    body: [
-      'Your cart, the list of orders you placed from this phone, your rewards card link, your favourite products and your last chosen branch.',
-      'This information is stored only on your phone. You can remove the order list from Order history, and you can delete your rewards card from the Rewards tab.',
-    ],
-  },
-  {
+    icon: '☕',
     title: 'How we use it',
-    body: [
-      'To prepare and collect your orders, to track your stamps and points, to answer your feedback and to keep our branches running well.',
-      'We do not sell your personal information.',
-    ],
+    body: 'We use your data to process orders, maintain your loyalty stamps, send you updates about your orders, and (with your permission) notify you about promotions and events at your branch.',
   },
   {
-    title: 'Your choices',
-    body: [
-      'Delete your rewards card: Rewards tab, then “Delete my card”. Your stamps and history for that card are removed.',
-      'Clear your order history on this phone: More, then Order history, then “Clear order history on this phone”. Orders already placed stay on our system.',
-      'For any other request, such as access to or deletion of the personal information we hold, email hello@coffeesales.ae.',
-    ],
+    icon: '🔒',
+    title: 'How we protect it',
+    body: 'Data is transmitted over encrypted connections. We do not sell your information to third parties. Payment processing is handled by our payment provider and we do not store card details.',
+  },
+  {
+    icon: '🗑️',
+    title: 'Your rights',
+    body: 'You can request a copy of your data or ask us to delete your account at any time. To delete your Rewards card, go to the Rewards tab and choose "Delete my card". For all other data requests, contact us using the email below.',
   },
 ];
 
 export default function PrivacyScreen() {
   return (
-    <Page kicker="Help" title="Privacy policy">
-      {SECTIONS.map((s) => (
-        <View key={s.title}>
-          <Text style={ui.label}>{s.title}</Text>
-          {s.body.map((line, i) => (
-            <Text key={i} style={[ui.lead, { color: C.navy2 }]}>
-              {line}
-            </Text>
-          ))}
+    <Page kicker="Legal" title="Privacy policy">
+      <Text style={ui.lead}>
+        Milestones Coffee takes your privacy seriously. Here is a plain-language summary of how we handle your data.
+      </Text>
+
+      {SECTIONS.map((sec) => (
+        <View key={sec.title} style={s.card}>
+          <View style={s.cardHead}>
+            <Text style={s.icon}>{sec.icon}</Text>
+            <Text style={s.title}>{sec.title}</Text>
+          </View>
+          <Text style={s.body}>{sec.body}</Text>
         </View>
       ))}
-      <Pressable onPress={() => Linking.openURL('mailto:hello@coffeesales.ae')} style={{ marginTop: 8 }}>
-        <Text style={{ color: C.brown, fontWeight: '600' }}>Email hello@coffeesales.ae</Text>
-      </Pressable>
+
+      <View style={s.contact}>
+        <Text style={s.contactLabel}>Questions or data requests</Text>
+        <Text
+          style={s.email}
+          onPress={() => Linking.openURL('mailto:privacy@milestonescoffee.ae')}>
+          privacy@milestonescoffee.ae
+        </Text>
+        <Text style={s.contactSub}>We aim to respond within 5 working days.</Text>
+      </View>
     </Page>
   );
 }
+
+const s = StyleSheet.create({
+  card: {
+    backgroundColor: C.white,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  cardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  icon: { fontSize: 22 },
+  title: { fontSize: 16, fontWeight: '700', color: C.navy },
+  body: { fontSize: 14, color: C.muted, lineHeight: 22 },
+  contact: {
+    backgroundColor: C.navy,
+    borderRadius: 18,
+    padding: 20,
+    marginTop: 4,
+    alignItems: 'center',
+  },
+  contactLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 8,
+  },
+  email: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.gold,
+    marginBottom: 6,
+  },
+  contactSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
+});

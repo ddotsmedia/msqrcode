@@ -1,13 +1,80 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { money } from '../../src/api';
 import { getSavedOrders, trackOrder } from '../../src/orders';
 import { C } from '../../src/theme';
 
 const STEPS = ['placed', 'preparing', 'ready', 'completed'] as const;
-const LABEL: Record<string, string> = { placed: 'Received', preparing: 'Being made', ready: 'Ready for pickup', completed: 'Collected', cancelled: 'Cancelled' };
+const LABEL: Record<string, string> = {
+  placed: 'Order received',
+  preparing: 'Being prepared',
+  ready: 'Ready for pickup',
+  completed: 'Collected',
+  cancelled: 'Cancelled',
+};
+const STEP_ICON: Record<string, string> = {
+  placed: '✅',
+  preparing: '☕',
+  ready: '🛎️',
+  completed: '🎉',
+};
+const STEP_SUB: Record<string, string> = {
+  placed: 'We have your order',
+  preparing: 'Your drinks are being made',
+  ready: 'Come and collect your order',
+  completed: 'Thanks for visiting',
+};
+
+function TrackStep({ step, index, stepIndex, total }: {
+  step: typeof STEPS[number];
+  index: number;
+  stepIndex: number;
+  total: number;
+}) {
+  const done = index <= stepIndex;
+  const active = index === stepIndex;
+
+  const scale = useRef(new Animated.Value(done ? 1 : 0.8)).current;
+  const opacity = useRef(new Animated.Value(done ? 1 : 0.4)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, { toValue: done ? 1 : 0.8, useNativeDriver: true, friction: 6 }),
+      Animated.timing(opacity, { toValue: done ? 1 : 0.4, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, [done, scale, opacity]);
+
+  const lineAnim = useRef(new Animated.Value(done && index < total - 1 ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(lineAnim, {
+      toValue: done && index < total - 1 ? 1 : 0,
+      duration: 500,
+      delay: index * 100,
+      useNativeDriver: false,
+    }).start();
+  }, [done, index, lineAnim, total]);
+
+  return (
+    <View style={s.stepRow}>
+      <View style={s.stepLeft}>
+        <Animated.View style={[s.stepDot, done && s.stepDotOn, active && s.stepDotActive, { transform: [{ scale }], opacity }]}>
+          <Text style={s.stepIcon}>{done ? STEP_ICON[step] : ''}</Text>
+        </Animated.View>
+        {index < total - 1 && (
+          <View style={s.stepLine}>
+            <Animated.View style={[s.stepLineFill, { height: lineAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+          </View>
+        )}
+      </View>
+      <View style={[s.stepBody, index < total - 1 && { paddingBottom: 24 }]}>
+        <Text style={[s.stepLabel, done && s.stepLabelOn, active && s.stepLabelActive]}>{LABEL[step]}</Text>
+        {done && <Text style={s.stepSub}>{STEP_SUB[step]}</Text>}
+      </View>
+    </View>
+  );
+}
 
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -31,36 +98,89 @@ export default function OrderScreen() {
   const stepIndex = data ? STEPS.indexOf(data.status as (typeof STEPS)[number]) : -1;
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.replace('/(tabs)')}><Text style={styles.close}>Back to menu</Text></Pressable>
-        {!ready || isLoading ? <Text style={styles.muted}>Loading your order…</Text> : null}
-        {ready && !token && <Text style={styles.muted}>This order was not placed from this phone, so its status is not available here.</Text>}
-        {isError && <Text style={styles.muted}>We could not load this order. It will retry automatically.</Text>}
+    <View style={s.screen}>
+      <ScrollView contentContainerStyle={s.content}>
+        <Pressable onPress={() => router.replace('/(tabs)')} style={s.backBtn}>
+          <Text style={s.backText}>← Back to menu</Text>
+        </Pressable>
+
+        {(!ready || isLoading) && (
+          <View style={s.placeholder}>
+            <Text style={s.placeholderText}>Loading your order…</Text>
+          </View>
+        )}
+
+        {ready && !token && (
+          <View style={s.infoCard}>
+            <Text style={s.infoIcon}>📱</Text>
+            <Text style={s.infoTitle}>Not on this phone</Text>
+            <Text style={s.infoBody}>This order was not placed from this device, so live status is not available here.</Text>
+          </View>
+        )}
+
+        {isError && (
+          <View style={s.infoCard}>
+            <Text style={s.infoIcon}>⚠️</Text>
+            <Text style={s.infoTitle}>Retrying…</Text>
+            <Text style={s.infoBody}>We could not load this order right now. It will retry automatically.</Text>
+          </View>
+        )}
+
         {data && (
           <>
-            <Text style={styles.title}>Order #{data.order_no}</Text>
-            <Text style={styles.status}>{LABEL[data.status] ?? data.status}</Text>
+            <View style={s.header}>
+              <Text style={s.orderNo}>Order #{data.order_no}</Text>
+              <View style={[s.statusBadge, data.status === 'cancelled' && s.statusBadgeCancelled]}>
+                <Text style={[s.statusText, data.status === 'cancelled' && s.statusTextCancelled]}>
+                  {LABEL[data.status] ?? data.status}
+                </Text>
+              </View>
+            </View>
+
+            {data.pickup_at && (
+              <View style={s.timeCard}>
+                <Text style={s.timeIcon}>🕐</Text>
+                <View>
+                  <Text style={s.timeLabel}>Pickup time</Text>
+                  <Text style={s.timeValue}>
+                    {new Date(data.pickup_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {data.status !== 'cancelled' && (
-              <View style={styles.track}>
-                {STEPS.map((s, i) => (
-                  <View key={s} style={styles.trackRow}>
-                    <View style={[styles.dot, i <= stepIndex && styles.dotOn]} />
-                    <Text style={[styles.trackText, i <= stepIndex && styles.trackTextOn]}>{LABEL[s]}</Text>
-                  </View>
+              <View style={s.trackCard}>
+                <Text style={s.sectionLabel}>Order progress</Text>
+                {STEPS.map((step, i) => (
+                  <TrackStep key={step} step={step} index={i} stepIndex={stepIndex} total={STEPS.length} />
                 ))}
               </View>
             )}
-            {data.pickup_at && <Text style={styles.note}>Pickup time: {new Date(data.pickup_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>}
-            <Text style={styles.label}>Items</Text>
-            {data.items.map((i, idx) => (
-              <View key={idx} style={styles.item}>
-                <Text style={styles.itemName}>{i.qty} × {i.name}</Text>
-                {!!i.options?.choices?.length && <Text style={styles.itemSub}>{i.options.choices.map((c) => c.choice).join(' · ')}</Text>}
-                {!!i.options?.note && <Text style={styles.itemSub}>“{i.options.note}”</Text>}
+
+            <View style={s.itemsCard}>
+              <Text style={s.sectionLabel}>Items</Text>
+              {data.items.map((item, idx) => (
+                <View key={idx} style={[s.item, idx < data.items.length - 1 && s.itemBorder]}>
+                  <View style={s.itemQtyBox}>
+                    <Text style={s.itemQty}>{item.qty}</Text>
+                  </View>
+                  <View style={s.itemBody}>
+                    <Text style={s.itemName}>{item.name}</Text>
+                    {!!item.options?.choices?.length && (
+                      <Text style={s.itemSub}>{item.options.choices.map((c) => c.choice).join(' · ')}</Text>
+                    )}
+                    {!!item.options?.note && (
+                      <Text style={s.itemNote}>"{item.options.note}"</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+              <View style={s.totalRow}>
+                <Text style={s.totalLabel}>Total</Text>
+                <Text style={s.totalValue}>{money(data.total)}</Text>
               </View>
-            ))}
-            <Text style={styles.total}>Total {money(data.total)}</Text>
+            </View>
           </>
         )}
       </ScrollView>
@@ -68,23 +188,120 @@ export default function OrderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.cream },
   content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
-  close: { color: C.brown, fontWeight: '600', marginBottom: 12 },
-  title: { fontSize: 26, fontWeight: '600', color: C.navy },
-  status: { fontSize: 16, color: C.navy2, fontWeight: '600', marginTop: 4, marginBottom: 14 },
-  track: { gap: 12, marginBottom: 10 },
-  trackRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dot: { width: 14, height: 14, borderRadius: 7, backgroundColor: C.line },
-  dotOn: { backgroundColor: C.caramel },
-  trackText: { color: C.muted, fontSize: 15 },
-  trackTextOn: { color: C.navy, fontWeight: '600' },
-  note: { color: C.muted, marginTop: 6 },
-  label: { fontSize: 13, fontWeight: '700', color: C.navy2, textTransform: 'uppercase', letterSpacing: 1, marginTop: 20, marginBottom: 8 },
-  item: { backgroundColor: C.white, borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: C.line },
+  backBtn: { marginBottom: 16 },
+  backText: { color: C.brown, fontWeight: '600', fontSize: 15 },
+
+  placeholder: { alignItems: 'center', paddingTop: 40 },
+  placeholderText: { color: C.muted, fontSize: 15 },
+
+  infoCard: {
+    backgroundColor: C.white,
+    borderRadius: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: C.line,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  infoIcon: { fontSize: 36, marginBottom: 10 },
+  infoTitle: { fontSize: 17, fontWeight: '600', color: C.navy, marginBottom: 6 },
+  infoBody: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 21 },
+
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  orderNo: { fontSize: 26, fontWeight: '700', color: C.navy },
+  statusBadge: { backgroundColor: '#d1fae5', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
+  statusBadgeCancelled: { backgroundColor: '#fee2e2' },
+  statusText: { fontSize: 13, fontWeight: '700', color: '#065f46' },
+  statusTextCancelled: { color: '#991b1b' },
+
+  timeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: C.navy,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  timeIcon: { fontSize: 22 },
+  timeLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 1 },
+  timeValue: { fontSize: 20, fontWeight: '700', color: C.white, marginTop: 2 },
+
+  trackCard: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.brown,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 18,
+  },
+
+  stepRow: { flexDirection: 'row', gap: 14 },
+  stepLeft: { alignItems: 'center', width: 36 },
+  stepDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: C.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: C.line,
+  },
+  stepDotOn: { backgroundColor: C.caramel, borderColor: C.caramel },
+  stepDotActive: { backgroundColor: C.navy2, borderColor: C.navy2 },
+  stepIcon: { fontSize: 16 },
+  stepLine: { width: 2, flex: 1, backgroundColor: C.line, overflow: 'hidden', marginTop: 4 },
+  stepLineFill: { width: '100%', backgroundColor: C.caramel },
+  stepBody: { flex: 1, paddingTop: 6 },
+  stepLabel: { fontSize: 15, fontWeight: '600', color: C.muted },
+  stepLabelOn: { color: C.navy },
+  stepLabelActive: { color: C.navy2 },
+  stepSub: { fontSize: 12, color: C.muted, marginTop: 3 },
+
+  itemsCard: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  item: { flexDirection: 'row', gap: 12, paddingVertical: 10 },
+  itemBorder: { borderBottomWidth: 1, borderBottomColor: C.line },
+  itemQtyBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: C.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  itemQty: { fontSize: 13, fontWeight: '700', color: C.navy2 },
+  itemBody: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: '600', color: C.navy },
   itemSub: { fontSize: 13, color: C.muted, marginTop: 2 },
-  total: { fontSize: 18, fontWeight: '600', color: C.navy, marginTop: 14 },
-  muted: { color: C.muted, marginTop: 20, lineHeight: 21 },
+  itemNote: { fontSize: 13, color: C.muted, fontStyle: 'italic', marginTop: 2 },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 14,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: C.line,
+  },
+  totalLabel: { fontSize: 15, fontWeight: '700', color: C.navy, textTransform: 'uppercase', letterSpacing: 0.5 },
+  totalValue: { fontSize: 20, fontWeight: '700', color: C.navy2 },
 });
