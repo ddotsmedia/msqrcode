@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { getJson, money, type Branch } from '../src/api';
 import { useCart } from '../src/cart';
@@ -14,8 +14,72 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AnimatedEmptyState } from '../src/ui';
 import { C } from '../src/theme';
 
+const DELETE_THRESHOLD = 80;
+
+type CartLineProps = {
+  l: ReturnType<typeof useCart>['lines'][number];
+  onSetQty: (key: string, qty: number) => void;
+  onDelete: (key: string) => void;
+};
+
+function SwipeableCartLine({ l, onSetQty, onDelete }: CartLineProps) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const deleteOpacity = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 8 && Math.abs(gs.dy) < 12,
+      onPanResponderMove: (_, gs) => {
+        const x = Math.min(0, gs.dx); // only swipe left
+        translateX.setValue(x);
+        const pct = Math.min(1, Math.abs(x) / DELETE_THRESHOLD);
+        deleteOpacity.setValue(pct);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -DELETE_THRESHOLD) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+          Animated.timing(translateX, { toValue: -120, duration: 150, useNativeDriver: true }).start(() => {
+            onDelete(l.key);
+          });
+        } else {
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, friction: 8 }).start();
+          Animated.timing(deleteOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+        }
+      },
+    }),
+  ).current;
+
+  return (
+    <View style={s.swipeWrap}>
+      {/* Delete background */}
+      <Animated.View style={[s.deleteBg, { opacity: deleteOpacity }]}>
+        <Text style={s.deleteIcon}>🗑️</Text>
+        <Text style={s.deleteLabel}>Remove</Text>
+      </Animated.View>
+      {/* Foreground card */}
+      <Animated.View style={[s.line, { transform: [{ translateX }] }]} {...panResponder.panHandlers}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.lineName}>{l.name}</Text>
+          {!!l.choiceLabels.length && <Text style={s.lineSub}>{l.choiceLabels.join(' · ')}</Text>}
+          {!!l.note && <Text style={s.lineNote}>"{l.note}"</Text>}
+          <Text style={s.linePrice}>{money((l.base_price + l.adjustment) * l.qty)}</Text>
+        </View>
+        <View style={s.qty}>
+          <Pressable style={s.qtyBtnWrap} onPress={() => onSetQty(l.key, l.qty - 1)}>
+            <Text style={s.qtyBtn}>−</Text>
+          </Pressable>
+          <Text style={s.qtyNum}>{l.qty}</Text>
+          <Pressable style={s.qtyBtnWrap} onPress={() => onSetQty(l.key, l.qty + 1)}>
+            <Text style={s.qtyBtn}>+</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
 export default function CartScreen() {
-  const { lines, setQty, clear, subtotal } = useCart();
+  const { lines, setQty, remove, clear, subtotal } = useCart();
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => getJson<Branch[]>('/branches') });
   const pickup = (branches.data ?? []).filter((b) => b.pickup_enabled !== false);
   const [table, setTableState] = useState<TableSession | null>(null);
@@ -170,23 +234,7 @@ export default function CartScreen() {
         ) : (
           <>
             {lines.map((l) => (
-              <View key={l.key} style={s.line}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.lineName}>{l.name}</Text>
-                  {!!l.choiceLabels.length && <Text style={s.lineSub}>{l.choiceLabels.join(' · ')}</Text>}
-                  {!!l.note && <Text style={s.lineNote}>"{l.note}"</Text>}
-                  <Text style={s.linePrice}>{money((l.base_price + l.adjustment) * l.qty)}</Text>
-                </View>
-                <View style={s.qty}>
-                  <Pressable style={s.qtyBtnWrap} onPress={() => setQty(l.key, l.qty - 1)}>
-                    <Text style={s.qtyBtn}>−</Text>
-                  </Pressable>
-                  <Text style={s.qtyNum}>{l.qty}</Text>
-                  <Pressable style={s.qtyBtnWrap} onPress={() => setQty(l.key, l.qty + 1)}>
-                    <Text style={s.qtyBtn}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
+              <SwipeableCartLine key={l.key} l={l} onSetQty={setQty} onDelete={remove} />
             ))}
 
             {/* Subtotal bar */}
@@ -378,14 +426,32 @@ const s = StyleSheet.create({
   emptyBtn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 },
   emptyBtnText: { color: C.white, fontWeight: '600', fontSize: 15 },
 
-  // Cart lines
+  // Swipeable cart lines
+  swipeWrap: {
+    marginBottom: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  deleteBg: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 120,
+    backgroundColor: '#ef4444',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  deleteIcon: { fontSize: 20 },
+  deleteLabel: { color: C.white, fontWeight: '700', fontSize: 12 },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: C.white,
     borderRadius: 16,
     padding: 14,
-    marginBottom: 8,
     borderWidth: 1,
     borderColor: C.line,
     gap: 12,
