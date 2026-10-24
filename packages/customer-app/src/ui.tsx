@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -87,6 +88,7 @@ const emptyStyles = StyleSheet.create({
 /**
  * ErrorState — animated warning icon + message + retry button.
  * Wire into screens: if (error) return <Page ...><ErrorState onRetry={...} /></Page>
+ * Fires Medium haptic on retry press.
  */
 export function ErrorState({
   title = 'Something went wrong',
@@ -132,7 +134,15 @@ export function ErrorState({
         <Text style={errStyles.body}>{body}</Text>
         {!!onRetry && (
           <Animated.View style={{ transform: [{ scale: btnScale }] }}>
-            <Pressable style={errStyles.btn} onPress={onRetry} onPressIn={onBtnIn} onPressOut={onBtnOut}>
+            <Pressable
+              style={errStyles.btn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                onRetry();
+              }}
+              onPressIn={onBtnIn}
+              onPressOut={onBtnOut}
+            >
               <Text style={errStyles.btnText}>Retry</Text>
             </Pressable>
           </Animated.View>
