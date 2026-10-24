@@ -30,9 +30,12 @@ const post = async (path: string, body: object) => {
   return res.json().catch(() => ({}));
 };
 
-// Animated stamp dot
-function StampDot({ filled, index }: { filled: boolean; index: number }) {
+// Animated stamp dot — supports a "burst" pop when a new stamp arrives
+function StampDot({ filled, index, burst }: { filled: boolean; index: number; burst?: boolean }) {
   const scale = useRef(new Animated.Value(filled ? 1 : 0.8)).current;
+  const glow = useRef(new Animated.Value(1)).current;
+
+  // Mount/fill spring
   useEffect(() => {
     Animated.spring(scale, {
       toValue: filled ? 1 : 0.8,
@@ -41,8 +44,27 @@ function StampDot({ filled, index }: { filled: boolean; index: number }) {
       friction: 6,
     }).start();
   }, [filled, index, scale]);
+
+  // Burst pop: overshoot then settle when this dot is newly stamped
+  useEffect(() => {
+    if (!burst) return;
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 1.6, useNativeDriver: true, friction: 4, tension: 200 }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 5, tension: 80 }),
+    ]).start();
+    Animated.sequence([
+      Animated.timing(glow, { toValue: 2, duration: 180, useNativeDriver: true }),
+      Animated.timing(glow, { toValue: 1, duration: 300, useNativeDriver: true }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [burst]);
+
   return (
-    <Animated.View style={[s.dot, filled && s.dotOn, { transform: [{ scale }] }]} />
+    <Animated.View style={[
+      s.dot,
+      filled && s.dotOn,
+      { transform: [{ scale }], opacity: glow.interpolate({ inputRange: [1, 2], outputRange: [1, 1] }) },
+    ]} />
   );
 }
 
@@ -99,6 +121,21 @@ export default function RewardsScreen() {
   const d = card.data;
   const progress = d ? Math.min(1, d.stamps / d.target) : 0;
   const isReady = d ? d.stamps >= d.target : false;
+
+  // Track previous stamp count to detect newly-filled dot
+  const prevStampsRef = useRef<number | null>(null);
+  const [burstIndex, setBurstIndex] = useState<number | null>(null);
+  useEffect(() => {
+    if (!d) return;
+    const prev = prevStampsRef.current;
+    if (prev !== null && d.stamps > prev) {
+      // The dot that just filled is at index (new stamps - 1)
+      setBurstIndex(d.stamps - 1);
+      const t = setTimeout(() => setBurstIndex(null), 800);
+      return () => clearTimeout(t);
+    }
+    prevStampsRef.current = d.stamps;
+  }, [d?.stamps, d]);
 
   return (
     <ScrollView
@@ -158,7 +195,7 @@ export default function RewardsScreen() {
             {/* Animated dots grid */}
             <View style={s.dotsGrid}>
               {Array.from({ length: d.target }).map((_, i) => (
-                <StampDot key={i} filled={i < d.stamps} index={i} />
+                <StampDot key={i} filled={i < d.stamps} index={i} burst={burstIndex === i} />
               ))}
             </View>
           </View>

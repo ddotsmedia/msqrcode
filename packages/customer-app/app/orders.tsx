@@ -8,6 +8,7 @@ import { useCart } from '../src/cart';
 import { clearSavedOrders, getSavedOrders, trackOrder, type SavedOrder } from '../src/orders';
 import { planReorder } from '../src/reorder';
 import { SkeletonCard } from '../src/skeleton';
+import { AnimatedEmptyState } from '../src/ui';
 import { Page, ui } from '../src/ui';
 import { C } from '../src/theme';
 
@@ -93,13 +94,13 @@ export default function OrdersScreen() {
         </>
       ) : null}
       {!isLoading && !saved.length ? (
-        <View style={ui.card}>
-          <Text style={ui.name}>No orders yet</Text>
-          <Text style={ui.sub}>Orders you place from this phone appear here, with live status and one-tap reorder.</Text>
-          <Pressable style={[styles.btn, { marginTop: 12 }]} onPress={() => router.replace('/(tabs)')}>
-            <Text style={styles.btnText}>Browse the menu</Text>
-          </Pressable>
-        </View>
+        <AnimatedEmptyState
+          icon="📋"
+          title="No orders yet"
+          body="Orders you place from this phone appear here, with live status and one-tap reorder."
+          action="Browse the menu"
+          onAction={() => router.replace('/(tabs)')}
+        />
       ) : null}
       {saved.length > 0 ? (
         <View style={[ui.card, styles.stats]}>
