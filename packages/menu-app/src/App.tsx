@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLang } from './i18n';
 import axios from 'axios';
@@ -42,6 +42,8 @@ interface Branch {
   cover_image_url?: string;
   logo_image_url?: string;
   status: string;
+  wait_minutes?: number | null;    // Feature 13 - estimated wait time
+  story_photos?: string[];         // Feature 8  - branch story highlights
 }
 
 interface Category {
@@ -57,7 +59,9 @@ interface Product {
   id: string;
   sku: string;
   name: string;
+  name_ar?: string;
   description: string;
+  description_ar?: string;
   category_id: string;
   base_price: number;
   image_url?: string;
@@ -71,6 +75,7 @@ interface Product {
   allergens?: string[];
   variants?: ProductVariant[];
   option_groups?: ChoiceGroup[];
+  pairs_with?: string[]; // product IDs that pair well (Feature 7)
 }
 
 interface ProductVariant {
@@ -267,6 +272,143 @@ function nutritionOf(p: Product): [string, string][] {
   return rows.filter(([, v]) => typeof v === 'number').map(([label, v, unit]) => [label, `${v}${unit}`]);
 }
 
+// ── Feature 1: Image Lightbox ─────────────────────────────────────────────────
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  const [scale, setScale] = useState(1);
+  const startDist = useRef<number | null>(null);
+  const startScale = useRef(1);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      startDist.current = Math.hypot(dx, dy);
+      startScale.current = scale;
+    }
+  }, [scale]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && startDist.current !== null) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const next = Math.max(1, Math.min(4, startScale.current * (dist / startDist.current)));
+      setScale(next);
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => { startDist.current = null; }, []);
+
+  // Swipe down to close
+  const touchStartY = useRef<number | null>(null);
+  const handleSwipeStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1) touchStartY.current = e.touches[0].clientY;
+  }, []);
+  const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartY.current !== null && e.changedTouches.length === 1) {
+      if (e.changedTouches[0].clientY - touchStartY.current > 80 && scale <= 1) onClose();
+      touchStartY.current = null;
+    }
+  }, [onClose, scale]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black"
+      onClick={() => { if (scale <= 1) onClose(); }}
+      onTouchStart={(e) => { handleTouchStart(e); handleSwipeStart(e); }}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={(e) => { handleTouchEnd(); handleSwipeEnd(e); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Fullscreen view of ${alt}`}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/20 text-white text-2xl hover:bg-white/30"
+        aria-label="Close"
+      >
+        ×
+      </button>
+      {scale > 1 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setScale(1); }}
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-white/20 px-4 py-2 text-sm text-white"
+        >
+          Reset zoom
+        </button>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        draggable={false}
+        onClick={(e) => e.stopPropagation()}
+        style={{ transform: `scale(${scale})`, transformOrigin: 'center', transition: scale === 1 ? 'transform 0.2s' : 'none', maxWidth: '100vw', maxHeight: '100vh', objectFit: 'contain' }}
+      />
+    </div>,
+    document.body,
+  );
+}
+
+// ── Feature 5: Notify me when available ──────────────────────────────────────
+const NOTIFY_KEY = 'milestones_notify_products';
+function readNotifyList(): string[] {
+  try { return JSON.parse(localStorage.getItem(NOTIFY_KEY) ?? '[]'); } catch { return []; }
+}
+function toggleNotify(productId: string): string[] {
+  const list = readNotifyList();
+  const next = list.includes(productId) ? list.filter((x) => x !== productId) : [...list, productId];
+  try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(next)); } catch { /* noop */ }
+  return next;
+}
+
+// ── Feature 12: Print-friendly menu helper ───────────────────────────────────
+function PrintMenuButton({ products, branchName }: { products: Product[]; branchName: string }) {
+  const handlePrint = () => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${branchName} — Menu</title>
+<style>
+  body { font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 32px; color: #1a1a2e; }
+  h1 { font-size: 28px; border-bottom: 2px solid #c97a2f; padding-bottom: 8px; }
+  .item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #ddd; }
+  .item-name { font-weight: 600; }
+  .item-desc { font-size: 13px; color: #555; margin-top: 2px; }
+  .item-price { font-weight: 700; color: #c97a2f; white-space: nowrap; }
+  @media print { body { padding: 16px; } }
+</style></head><body>
+<h1>☕ ${branchName} — Menu</h1>
+<p style="color:#888;font-size:13px">Printed ${new Date().toLocaleDateString()}</p>
+${products.filter(p => p.status === 'active').map(p => `
+<div class="item">
+  <div><div class="item-name">${p.name}${p.name_ar ? ` · ${p.name_ar}` : ''}</div>
+  ${p.description ? `<div class="item-desc">${p.description}</div>` : ''}</div>
+  <div class="item-price">${Number(p.base_price).toFixed(2)} AED</div>
+</div>`).join('')}
+</body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 400);
+  };
+  return (
+    <button
+      type="button"
+      onClick={handlePrint}
+      className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-4 py-2 text-sm font-semibold text-brand-700 hover:border-brand-300 print:hidden"
+      title="Download / print menu"
+    >
+      🖨 Print menu
+    </button>
+  );
+}
+
 function ProductDetailsModal({
   product,
   onClose,
@@ -275,6 +417,8 @@ function ProductDetailsModal({
   onAdd,
   deal,
   loved,
+  relatedProducts,
+  lang,
 }: {
   product: Product;
   onClose: () => void;
@@ -283,7 +427,12 @@ function ProductDetailsModal({
   onAdd?: (line: Omit<CartLine, 'key'>) => void;
   deal?: { percent: number; title: string; until: string | null } | null;
   loved?: number; // % thumbs up, when the item is "Most loved"
+  relatedProducts?: Product[];
+  lang?: string;
 }) {
+  const [lightbox, setLightbox] = useState(false);
+  const [notifyList, setNotifyList] = useState(readNotifyList);
+  const [calcQty, setCalcQty] = useState(1);
   const { t } = useLang();
   // Count the product as viewed (feeds "Top products" in the admin Insights page).
   useEffect(() => {
@@ -299,17 +448,31 @@ function ProductDetailsModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg max-h-[90vh] overflow-y-auto">
         {product.image_url && (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="w-full h-64 object-cover"
-          />
+          <div className="relative">
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="w-full h-64 object-cover cursor-zoom-in"
+              onClick={() => setLightbox(true)}
+              title="Tap to zoom"
+            />
+            <span className="absolute bottom-2 right-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white">🔍 Tap to zoom</span>
+          </div>
+        )}
+        {lightbox && product.image_url && (
+          <ImageLightbox src={product.image_url} alt={product.name} onClose={() => setLightbox(false)} />
         )}
 
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">{product.name}</h2>
+              {/* Feature 14: bilingual name */}
+              <h2 className="text-2xl font-bold text-gray-900">
+                {lang === 'ar' && product.name_ar ? product.name_ar : product.name}
+              </h2>
+              {lang === 'ar' && product.name_ar && (
+                <p className="text-sm text-gray-400">{product.name}</p>
+              )}
               {product.is_new && (
                 <span className="inline-block mt-2 px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
                   New
@@ -339,7 +502,46 @@ function ProductDetailsModal({
             </button>
           </div>
 
-          <p className="text-gray-600 mb-4">{product.description}</p>
+          {/* Feature 14: bilingual description */}
+          <p className="text-gray-600 mb-2">
+            {lang === 'ar' && product.description_ar ? product.description_ar : product.description}
+          </p>
+          {lang === 'ar' && product.description_ar && product.description && (
+            <p className="text-xs text-gray-400 mb-4">{product.description}</p>
+          )}
+          {!(lang === 'ar' && product.description_ar) && <div className="mb-4" />}
+
+          {/* Feature 3: Share + Feature 5: Notify me */}
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {typeof navigator !== 'undefined' && 'share' in navigator && (
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.share({
+                    title: product.name,
+                    text: product.description,
+                    url: `${window.location.origin}${window.location.pathname}?product=${product.id}`,
+                  }).catch(() => {});
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+              >
+                <span>🔗</span> Share
+              </button>
+            )}
+            {!availability && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = toggleNotify(product.id);
+                  setNotifyList(next);
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${notifyList.includes(product.id) ? 'bg-brand-700 text-white' : 'bg-amber-100 text-amber-800 hover:bg-amber-200'}`}
+              >
+                <span>{notifyList.includes(product.id) ? '✅' : '🔔'}</span>
+                {notifyList.includes(product.id) ? "We'll notify you" : 'Notify me when available'}
+              </button>
+            )}
+          </div>
 
           {product.dietary_tags && product.dietary_tags.length > 0 && (
             <div className="mb-4">
@@ -372,6 +574,22 @@ function ProductDetailsModal({
             </dl>
           )}
 
+          {/* Feature 4: Calorie calculator — multiply servings to see total */}
+          {typeof product.nutritional_info?.calories === 'number' && (
+            <div className="mb-4 rounded-xl bg-green-50 border border-green-100 px-4 py-3">
+              <p className="text-xs font-semibold text-green-700 mb-2">🧮 Calorie calculator</p>
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => setCalcQty((q) => Math.max(1, q - 1))} className="grid h-7 w-7 place-items-center rounded-full bg-white border border-green-200 text-green-700 font-bold hover:bg-green-100">−</button>
+                <span className="w-5 text-center font-bold text-green-800">{calcQty}</span>
+                <button type="button" onClick={() => setCalcQty((q) => Math.min(10, q + 1))} className="grid h-7 w-7 place-items-center rounded-full bg-white border border-green-200 text-green-700 font-bold hover:bg-green-100">+</button>
+                <span className="ml-2 text-sm text-green-700">= <strong>{Math.round(product.nutritional_info!.calories * calcQty)} kcal</strong></span>
+                {typeof product.nutritional_info?.protein === 'number' && (
+                  <span className="text-xs text-green-600">· {(product.nutritional_info.protein * calcQty).toFixed(0)}g protein</span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="mb-6">
             {deal ? (
               <p className="text-3xl font-bold text-copper-700">
@@ -384,6 +602,27 @@ function ProductDetailsModal({
             )}
           </div>
 
+          {/* Feature 7: Related / pairs-with products in modal */}
+          {relatedProducts && relatedProducts.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">🤝 Pairs well with</p>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {relatedProducts.map((rp) => (
+                  <button
+                    key={rp.id}
+                    type="button"
+                    onClick={() => { onClose(); setTimeout(() => {/* parent sets selectedProduct */}, 0); }}
+                    className="flex-shrink-0 text-left rounded-xl border border-gray-100 bg-gray-50 p-2 w-28 hover:border-brand-200"
+                  >
+                    {rp.image_url && <img src={rp.image_url} alt={rp.name} className="w-full h-16 object-cover rounded-lg mb-1" />}
+                    <p className="text-[11px] font-semibold text-gray-800 line-clamp-2">{lang === 'ar' && rp.name_ar ? rp.name_ar : rp.name}</p>
+                    <p className="text-[11px] text-brand-600 font-bold">{Number(rp.base_price).toFixed(2)} AED</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             {onAdd ? (
               <AddToOrder
@@ -392,6 +631,12 @@ function ProductDetailsModal({
                 available={availability}
                 onAdd={(line) => {
                   onAdd(line);
+                  // Save to "order again" list
+                  try {
+                    const prev: string[] = JSON.parse(localStorage.getItem('milestones_order_again') ?? '[]');
+                    const next = [product.id, ...prev.filter((x) => x !== product.id)].slice(0, 5);
+                    localStorage.setItem('milestones_order_again', JSON.stringify(next));
+                  } catch { /* noop */ }
                   onClose();
                 }}
               />
@@ -901,6 +1146,130 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           );
         })()}
 
+        {/* Feature 2: Order-again banner */}
+        {(() => {
+          const raw = (() => { try { return JSON.parse(localStorage.getItem('milestones_order_again') ?? '[]'); } catch { return []; } })();
+          const items: Product[] = (Array.isArray(raw) ? raw as string[] : [])
+            .map((id: string) => products.find((p) => p.id === id && availability[p.id] !== false))
+            .filter(Boolean) as Product[];
+          if (!items.length) return null;
+          return (
+            <div className="mb-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">🔁 Order again</p>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {items.slice(0, 3).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedProduct(p)}
+                    className="flex-shrink-0 flex items-center gap-2 rounded-full border border-brand-100 bg-white px-3 py-1.5 text-sm font-medium text-brand-700 shadow-sm hover:border-brand-300"
+                  >
+                    {p.image_url && <img src={p.image_url} alt="" className="h-6 w-6 rounded-full object-cover" />}
+                    {lang === 'ar' && p.name_ar ? p.name_ar : p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Feature 6: Trending now */}
+        {(() => {
+          const trending = [...products]
+            .filter((p) => p.is_popular && availability[p.id] !== false)
+            .slice(0, 3);
+          if (!trending.length) return null;
+          return (
+            <div className="mb-6 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 p-4">
+              <p className="mb-3 text-sm font-bold text-orange-700">🔥 Trending now</p>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {trending.map((p, i) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedProduct(p)}
+                    className="flex-shrink-0 text-left rounded-xl bg-white shadow p-2 w-32"
+                  >
+                    {p.image_url && <img src={p.image_url} alt={p.name} className="w-full h-20 object-cover rounded-lg mb-1" />}
+                    <p className="text-xs font-semibold text-gray-800 line-clamp-2">{lang === 'ar' && p.name_ar ? p.name_ar : p.name}</p>
+                    <p className="text-[10px] text-orange-600 font-bold">#{i + 1} this week</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Feature 13: Estimated wait time */}
+        {branch && typeof branch.wait_minutes === 'number' && branch.wait_minutes !== null && (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">
+            ⏱ Est. wait: {branch.wait_minutes} min
+          </div>
+        )}
+
+        {/* Feature 8: Branch story highlights */}
+        {branch && (branch.story_photos ?? []).length > 0 && (
+          <div className="mb-6">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">📸 Branch highlights</p>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {branch.story_photos!.map((url, i) => (
+                <img key={i} src={url} alt={`Branch photo ${i + 1}`} className="h-24 w-24 flex-shrink-0 rounded-xl object-cover shadow" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Feature 10: Birthday countdown */}
+        {(() => {
+          const raw = (() => { try { return localStorage.getItem('milestones_birthday'); } catch { return null; } })();
+          if (!raw) return null;
+          const bd = new Date(raw);
+          if (isNaN(bd.getTime())) return null;
+          const today = new Date();
+          const thisYear = new Date(today.getFullYear(), bd.getMonth(), bd.getDate());
+          if (thisYear < today) thisYear.setFullYear(today.getFullYear() + 1);
+          const days = Math.ceil((thisYear.getTime() - today.getTime()) / 86400000);
+          if (days > 30) return null;
+          return (
+            <div className="mb-4 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-pink-100 to-rose-50 px-5 py-3 text-rose-700">
+              <span className="text-2xl">🎂</span>
+              <div>
+                <p className="font-semibold text-sm">{days === 0 ? '🎉 Happy birthday! Your bonus is active today.' : `Your birthday bonus activates in ${days} day${days === 1 ? '' : 's'}!`}</p>
+                <p className="text-xs text-rose-500">Show this to our team for your special treat.</p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Feature 9: Loyalty widget inline */}
+        {(() => {
+          const raw = (() => { try { return JSON.parse(localStorage.getItem('milestones_loyalty_snapshot') ?? 'null'); } catch { return null; } })();
+          if (!raw || typeof raw.stamps !== 'number') return null;
+          return (
+            <div className="mb-6 flex items-center gap-3 rounded-2xl border border-brand-100 bg-white px-4 py-3 shadow-sm">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-brand-700 mb-1">☕ Your loyalty stamps</p>
+                <div className="flex gap-1 flex-wrap">
+                  {Array.from({ length: Math.max(raw.stamps_target ?? 10, 10) }).map((_, i) => (
+                    <span key={i} className={`text-lg leading-none ${i < raw.stamps ? 'opacity-100' : 'opacity-20'}`}>☕</span>
+                  ))}
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold text-brand-700">{raw.stamps}</p>
+                <p className="text-[11px] text-gray-500">of {raw.stamps_target ?? 10}</p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Feature 12: Print menu */}
+        {products.length > 0 && (
+          <div className="mb-4 flex justify-end">
+            <PrintMenuButton products={products} branchName={branch?.name ?? 'Milestones Coffee'} />
+          </div>
+        )}
+
         {/* Products Grid */}
         {filteredProducts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -922,7 +1291,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h3 className="font-bold text-gray-900">
-                        {product.name}
+                        {/* Feature 14: bilingual card name */}
+                        {lang === 'ar' && product.name_ar ? product.name_ar : product.name}
                         {product.is_new && <span className="ml-2 align-middle rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-800">New</span>}
                         {product.is_seasonal && (
                           <span className="ml-2 align-middle rounded-full bg-copper-500 px-2 py-0.5 text-[11px] font-semibold text-white">Limited time</span>
@@ -933,20 +1303,52 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
                           </span>
                         )}
                       </h3>
-                      <button
-                        type="button"
-                        aria-label={favs.includes(product.id) ? 'Remove from favourites' : 'Add to favourites'}
-                        aria-pressed={favs.includes(product.id)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFavs(toggleFav(product.id));
-                        }}
-                        className="text-xl leading-none text-copper-700 px-1"
-                      >
-                        {favs.includes(product.id) ? '♥' : '♡'}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {/* Feature 3: Share on card */}
+                        {typeof navigator !== 'undefined' && 'share' in navigator && (
+                          <button
+                            type="button"
+                            aria-label="Share"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.share({ title: product.name, text: product.description, url: `${window.location.origin}${window.location.pathname}?product=${product.id}` }).catch(() => {});
+                            }}
+                            className="text-base leading-none text-gray-400 hover:text-brand-600 px-0.5"
+                          >
+                            🔗
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={favs.includes(product.id) ? 'Remove from favourites' : 'Add to favourites'}
+                          aria-pressed={favs.includes(product.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFavs(toggleFav(product.id));
+                          }}
+                          className="text-xl leading-none text-copper-700 px-1"
+                        >
+                          {favs.includes(product.id) ? '♥' : '♡'}
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{product.description}</p>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                      {lang === 'ar' && product.description_ar ? product.description_ar : product.description}
+                    </p>
+                    {/* Feature 7: Bundle/pairs-with chip */}
+                    {(product.pairs_with ?? []).length > 0 && (() => {
+                      const first = products.find((p) => p.id === product.pairs_with![0]);
+                      if (!first) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSelectedProduct(first); }}
+                          className="mb-2 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100"
+                        >
+                          🤝 Pairs well with {lang === 'ar' && first.name_ar ? first.name_ar : first.name} →
+                        </button>
+                      );
+                    })()}
                     {typeof product.nutritional_info?.calories === 'number' && (
                       <p className="-mt-2 mb-3 text-xs text-gray-500">{product.nutritional_info.calories} kcal</p>
                     )}
@@ -1030,6 +1432,8 @@ export function MenuPage({ branchId, table, onBack }: { branchId: string | null;
           deal={dealFor(selectedProduct)}
           loved={loved[selectedProduct.id]}
           onAdd={canOrder || canPickup ? cart.add : undefined}
+          relatedProducts={(selectedProduct.pairs_with ?? []).map((id) => products.find((p) => p.id === id)).filter(Boolean) as Product[]}
+          lang={lang}
         />
       )}
     </div>
@@ -1192,7 +1596,13 @@ export function LoyaltyCard() {
     if (!token) return;
     axios
       .get(`${API_BASE_URL}/loyalty/card/${token}`)
-      .then((r) => setCard(r.data))
+      .then((r) => {
+        setCard(r.data);
+        // Cache a snapshot for the inline loyalty widget on the menu page
+        try {
+          localStorage.setItem('milestones_loyalty_snapshot', JSON.stringify({ stamps: r.data.stamps, stamps_target: r.data.target }));
+        } catch { /* noop */ }
+      })
       .catch(() => {
         try {
           localStorage.removeItem(LOYALTY_KEY);
@@ -1288,23 +1698,43 @@ export function LoyaltyCard() {
           {t('loyaltyCardTitle')}{card.name ? ` · ${card.name}` : ''}
         </p>
         {card.tier && (
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                card.tier === 'gold' ? 'bg-amber-100 text-amber-800' : card.tier === 'silver' ? 'bg-slate-200 text-slate-700' : 'bg-orange-50 text-orange-800'
-              }`}
-            >
-              {t(card.tier === 'gold' ? 'tierGold' : card.tier === 'silver' ? 'tierSilver' : 'tierBronze')}
-            </span>
-            {card.tier_perk && <span className="text-xs text-gray-600">{card.tier_perk}</span>}
-            <span className="w-full text-xs text-gray-500">
-              {card.next_tier && card.next_tier_at != null
-                ? t('tierNext')
-                    .replace('{n}', String(Math.max(1, card.next_tier_at - (card.visits_year ?? 0))))
-                    .replace('{t}', t(card.next_tier === 'gold' ? 'tierGold' : 'tierSilver'))
-                : t('tierTopReached')}
-            </span>
-          </div>
+          <>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  card.tier === 'gold' ? 'bg-amber-100 text-amber-800' : card.tier === 'silver' ? 'bg-slate-200 text-slate-700' : 'bg-orange-50 text-orange-800'
+                }`}
+              >
+                {t(card.tier === 'gold' ? 'tierGold' : card.tier === 'silver' ? 'tierSilver' : 'tierBronze')}
+              </span>
+              {card.tier_perk && <span className="text-xs text-gray-600">{card.tier_perk}</span>}
+              <span className="w-full text-xs text-gray-500">
+                {card.next_tier && card.next_tier_at != null
+                  ? t('tierNext')
+                      .replace('{n}', String(Math.max(1, card.next_tier_at - (card.visits_year ?? 0))))
+                      .replace('{t}', t(card.next_tier === 'gold' ? 'tierGold' : 'tierSilver'))
+                  : t('tierTopReached')}
+              </span>
+            </div>
+            {/* Feature 11: Tier progress bar */}
+            {card.next_tier && card.next_tier_at != null && (
+              <div className="mb-3">
+                <div className="flex justify-between text-[11px] text-gray-500 mb-1">
+                  <span>{t(card.tier === 'silver' ? 'tierSilver' : 'tierBronze')}</span>
+                  <span>{t(card.next_tier === 'gold' ? 'tierGold' : 'tierSilver')}</span>
+                </div>
+                <div className="relative h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                  <div
+                    className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ${card.next_tier === 'gold' ? 'bg-amber-400' : 'bg-slate-400'}`}
+                    style={{ width: `${Math.min(100, ((card.visits_year ?? 0) / card.next_tier_at!) * 100).toFixed(1)}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-center text-[11px] text-gray-400">
+                  {card.visits_year ?? 0} / {card.next_tier_at} visits
+                </p>
+              </div>
+            )}
+          </>
         )}
         {card.challenge && (
           <div className="mb-3 rounded border border-brand-100 bg-brand-50 p-2">
