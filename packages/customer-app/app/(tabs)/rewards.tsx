@@ -7,7 +7,7 @@ import { API, getJson } from '../../src/api';
 import { clearCardToken, getCardToken, setCardToken } from '../../src/storage';
 import { registerForPush } from '../../src/push';
 import { SkeletonCard } from '../../src/skeleton';
-import { Page, ui } from '../../src/ui';
+import { ErrorState, Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
 
 export type CardData = {
@@ -160,10 +160,10 @@ export default function RewardsScreen() {
         </>
       )}
       {card.isError && (
-        <View style={s.errorCard}>
-          <Text style={s.errorIcon}>⚠️</Text>
-          <Text style={s.errorText}>We could not find this card. Check the code and try again.</Text>
-        </View>
+        <ErrorState
+          body="We could not load your card. Check your connection and try again."
+          onRetry={() => card.refetch()}
+        />
       )}
 
       {d && (
