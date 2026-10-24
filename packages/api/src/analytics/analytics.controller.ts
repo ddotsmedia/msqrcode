@@ -43,6 +43,14 @@ export class AnalyticsController {
     return this.menuService.menu(days, branchId);
   }
 
+  // Admin Menu tab: items marked sold out in the period, with event count and minutes sold out.
+  @Get('soldout')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  soldOut(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
+    return this.menuService.soldOut(days, branchId);
+  }
+
   // Admin Customers view: repeat-customer rate among loyalty-card holders.
   @Get('customers')
   @UseGuards(JwtAuthGuard, RolesGuard)

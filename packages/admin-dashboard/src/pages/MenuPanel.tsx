@@ -36,6 +36,50 @@ function ItemList({ title, items }: { title: string; items: Item[] }) {
   );
 }
 
+interface SoldOutData {
+  items: { name: string; sold_out_events: number; sold_out_minutes: number }[];
+}
+
+function SoldOutList({ token, days }: { token: string; days: number }) {
+  const [data, setData] = useState<SoldOutData | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    setError('');
+    api<SoldOutData>(`/analytics/soldout?days=${days}`, token)
+      .then((d) => live && setData(d))
+      .catch(() => live && setError('Could not load sold-out history.'));
+    return () => {
+      live = false;
+    };
+  }, [days, token]);
+
+  const duration = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+      <p className="mb-2 text-sm font-medium text-gray-700">Sold-out history</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {!data && !error && <p className="text-sm text-gray-500">Loading…</p>}
+      {data && data.items.length === 0 && <p className="text-sm text-gray-500">No items were marked sold out in this period.</p>}
+      {data && data.items.length > 0 && (
+        <ul className="divide-y divide-gray-100 text-sm">
+          {data.items.map((i) => (
+            <li key={i.name} className="flex justify-between gap-3 py-2">
+              <span className="truncate text-gray-800">{i.name}</span>
+              <span className="shrink-0 text-gray-600">
+                {i.sold_out_events} {i.sold_out_events === 1 ? 'time' : 'times'} · {duration(i.sold_out_minutes)} out
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-gray-500">Counted from changes logged since this feature shipped.</p>
+    </div>
+  );
+}
+
 export default function MenuPanel({ token }: { token: string }) {
   const [days, setDays] = useState<7 | 30 | 90>(30);
   const [data, setData] = useState<MenuData | null>(null);
@@ -82,6 +126,8 @@ export default function MenuPanel({ token }: { token: string }) {
             <ItemList title="Top sellers" items={data.top_sellers} />
             <ItemList title="Lowest sellers" items={data.bottom_sellers} />
           </div>
+
+          <SoldOutList token={token} days={days} />
 
           <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
             <p className="mb-2 text-sm font-medium text-gray-700">Category mix</p>

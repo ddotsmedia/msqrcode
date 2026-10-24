@@ -114,3 +114,17 @@ describe('CustomersService', () => {
     expect(r.kpis.current.card_share).toBe(0);
   });
 });
+
+describe('MenuService sold-out history', () => {
+  it('rounds sold-out minutes and drops items with no sold-out events', async () => {
+    const svc = new MenuService(
+      db(() => [
+        { key: 'a', name: 'Latte', sold_out_events: 2, sold_out_minutes: 91.4 },
+        { key: 'b', name: 'Cake', sold_out_events: 1, sold_out_minutes: 0.2 },
+      ]) as any,
+    );
+    const r = await svc.soldOut(30, undefined);
+    expect(r.items[0]).toEqual({ name: 'Latte', sold_out_events: 2, sold_out_minutes: 91 });
+    expect(r.items[1].sold_out_minutes).toBe(0);
+  });
+});

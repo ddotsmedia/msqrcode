@@ -73,4 +73,48 @@ export class MenuService {
       })),
     };
   }
+
+  // Sold-out history: how often each item was marked sold out and for how long, from logged changes.
+  // Intervals start at the first logged change inside the period, so sold-out time from before it is not counted.
+  async soldOut(daysRaw: unknown, branchRaw: unknown) {
+    const days = [7, 30, 90].includes(Number(daysRaw)) ? Number(daysRaw) : 30;
+    const branch = typeof branchRaw === 'string' && branchRaw ? branchRaw : null;
+    if (branch && !UUID.test(branch)) throw new BadRequestException('Unknown branch');
+
+    const now = new Date();
+    const dubaiMidnight = Math.floor((now.getTime() + 4 * 3600_000) / 864e5) * 864e5 - 4 * 3600_000;
+    const since = new Date(dubaiMidnight - (days - 1) * 864e5);
+
+    // $1 = from, $2 = to, $3 = branch (null = all branches)
+    const rows = await this.db.query(
+      `WITH changes AS (
+         SELECT branch_id, product_id, is_available, created_at,
+                LEAD(created_at) OVER (PARTITION BY branch_id, product_id ORDER BY created_at) AS next_at
+         FROM product_availability_log
+         WHERE created_at >= $1 AND created_at < $2
+           AND ($3::uuid IS NULL OR branch_id = $3::uuid)
+       )
+       SELECT COALESCE(p.id::text, c.product_id::text) AS key,
+              COALESCE(MAX(p.name), 'Unknown item') AS name,
+              COUNT(*) FILTER (WHERE NOT c.is_available)::int AS sold_out_events,
+              COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(c.next_at, $2::timestamptz) - c.created_at)) / 60)
+                FILTER (WHERE NOT c.is_available), 0)::float AS sold_out_minutes
+       FROM changes c
+       LEFT JOIN products p ON p.id = c.product_id
+       GROUP BY COALESCE(p.id::text, c.product_id::text), p.id
+       HAVING COUNT(*) FILTER (WHERE NOT c.is_available) > 0
+       ORDER BY sold_out_minutes DESC, sold_out_events DESC
+       LIMIT 20`,
+      [since, now, branch],
+    );
+
+    return {
+      days,
+      items: rows.map((r: Record<string, unknown>) => ({
+        name: r.name,
+        sold_out_events: n(r.sold_out_events),
+        sold_out_minutes: Math.round(n(r.sold_out_minutes)),
+      })),
+    };
+  }
 }

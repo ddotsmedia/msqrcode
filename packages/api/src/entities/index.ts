@@ -4,6 +4,7 @@ export { Product } from './product.entity';
 export { ProductVariant } from './product-variant.entity';
 export { OptionGroup } from './option-group.entity';
 export { ProductAvailability } from './product-availability.entity';
+export { ProductAvailabilityLog } from './product-availability-log.entity';
 export { BranchPricingOverride } from './branch-pricing-override.entity';
 export { User } from './user.entity';
 export { AnalyticsEvent } from './analytics-event.entity';
