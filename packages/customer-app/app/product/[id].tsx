@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money } from '../../src/api';
 import { useCart } from '../../src/cart';
+import { SkeletonCard } from '../../src/skeleton';
 import { C } from '../../src/theme';
 import type { OptionSet, ProductFull } from '../../src/types';
 
@@ -74,8 +75,10 @@ export default function ProductScreen() {
   if (isLoading || !p) {
     return (
       <View style={s.screen}>
-        <View style={s.loadingWrap}>
-          <Text style={s.loadingText}>Loading…</Text>
+        <View style={s.content}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       </View>
     );

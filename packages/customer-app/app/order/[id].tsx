@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { money } from '../../src/api';
 import { getSavedOrders, trackOrder } from '../../src/orders';
+import { SkeletonCard } from '../../src/skeleton';
 import { C } from '../../src/theme';
 
 const STEPS = ['placed', 'preparing', 'ready', 'completed'] as const;
@@ -162,8 +163,10 @@ export default function OrderScreen() {
         </Pressable>
 
         {(!ready || isLoading) && (
-          <View style={s.placeholder}>
-            <Text style={s.placeholderText}>Loading your order…</Text>
+          <View>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </View>
         )}
 
