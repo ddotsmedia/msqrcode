@@ -1,10 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect } from 'react';
 import { CartProvider } from '../src/cart';
 import { registerForPush } from '../src/push';
+import { ONBOARDED_KEY } from './onboarding';
 import { C } from '../src/theme';
 
 const client = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } });
@@ -12,6 +14,10 @@ const client = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000,
 export default function RootLayout() {
   useEffect(() => {
     registerForPush();
+    // Show onboarding on first launch
+    AsyncStorage.getItem(ONBOARDED_KEY).then((v) => {
+      if (!v) router.replace('/onboarding');
+    });
   }, []);
   return (
     <SafeAreaProvider>
@@ -19,7 +25,8 @@ export default function RootLayout() {
         <CartProvider>
           <StatusBar style="light" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.cream } }}>
-            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="(tabs)" />
             <Stack.Screen name="product/[id]" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="cart" options={{ presentation: 'modal', headerShown: false }} />
             <Stack.Screen name="order/[id]" options={{ headerShown: false }} />

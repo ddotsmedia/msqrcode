@@ -4,6 +4,7 @@ import { Animated, Pressable, RefreshControl, SectionList, StyleSheet, Text, Vie
 import { getJson, money, type Category } from '../../src/api';
 import { comboPrice, isLive, type Promo } from '../../src/deals';
 import { SkeletonCard } from '../../src/skeleton';
+import { AnimatedEmptyState } from '../../src/ui';
 import { C } from '../../src/theme';
 
 // Countdown timer for happy-hour end
@@ -195,11 +196,11 @@ export default function OffersScreen() {
       }}
       ListEmptyComponent={
         !isFirstLoad ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>🏷️</Text>
-            <Text style={styles.emptyTitle}>No offers right now</Text>
-            <Text style={styles.emptySub}>Pull down to refresh, or check back soon.</Text>
-          </View>
+          <AnimatedEmptyState
+            icon="🏷️"
+            title="No offers right now"
+            body="Pull down to refresh, or check back soon."
+          />
         ) : null
       }
     />

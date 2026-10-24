@@ -11,6 +11,7 @@ import { clearTable, getTable, type TableSession } from '../src/table';
 import { getBusinessToken } from '../src/business';
 import { LAST_BRANCH } from '../src/favs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AnimatedEmptyState } from '../src/ui';
 import { C } from '../src/theme';
 
 export default function CartScreen() {
@@ -158,14 +159,14 @@ export default function CartScreen() {
 
         {/* Cart lines */}
         {lines.length === 0 ? (
-          <View style={s.emptyCard}>
-            <Text style={s.emptyIcon}>🛒</Text>
-            <Text style={s.emptyTitle}>Your cart is empty</Text>
-            <Text style={s.emptySub}>Add something from the menu to get started.</Text>
-            <Pressable style={s.emptyBtn} onPress={() => router.replace('/(tabs)')}>
-              <Text style={s.emptyBtnText}>Browse the menu</Text>
-            </Pressable>
-          </View>
+          <AnimatedEmptyState
+            icon="🛒"
+            title="Your cart is empty"
+            body="Add something from the menu to get started."
+            action="Browse the menu"
+            onAction={() => router.replace('/(tabs)')}
+            style={s.emptyCard}
+          />
         ) : (
           <>
             {lines.map((l) => (
