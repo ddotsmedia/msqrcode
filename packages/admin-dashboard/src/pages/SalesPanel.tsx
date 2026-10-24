@@ -38,6 +38,29 @@ function Kpi({ label, value, cur, prev }: { label: string; value: string; cur: n
   );
 }
 
+function csvCell(v: unknown) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadSalesCsv(data: SalesData) {
+  const lines: string[] = [];
+  const add = (title: string, head: string[], rows: unknown[][]) => {
+    lines.push(title, head.join(','), ...rows.map((r) => r.map(csvCell).join(',')), '');
+  };
+  const k = data.kpis;
+  add(`Summary (last ${data.days} days vs previous ${data.days})`, ['Metric', 'This period', 'Previous'], Object.keys(k.current).map((m) => [m, k.current[m as keyof Kpi], k.previous[m as keyof Kpi]]));
+  add('Daily', ['Day', 'Orders', 'Revenue'], data.daily.map((d) => [d.day, d.orders, d.revenue]));
+  add('Branches', ['Branch', 'Orders', 'Revenue'], data.branches.map((b) => [b.name, b.orders, b.revenue]));
+  add('Order types', ['Type', 'Orders', 'Revenue'], data.types.map((t) => [TYPE_LABEL[t.type] ?? t.type, t.orders, t.revenue]));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `milestones-sales-${data.days}d-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function RevenueChart({ data }: { data: { day: string; revenue: number }[] }) {
   const width = 600;
   const height = 160;
@@ -83,6 +106,13 @@ export default function SalesPanel({ token }: { token: string }) {
         <h2 className="text-lg font-semibold text-gray-800">Sales</h2>
         <div className="flex items-center gap-2">
         <BranchSelect token={token} value={branch} onChange={setBranch} />
+        <button
+          onClick={() => data && downloadSalesCsv(data)}
+          disabled={!data}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50"
+        >
+          Export CSV
+        </button>
         <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
           {([7, 30, 90] as const).map((d) => (
             <button
