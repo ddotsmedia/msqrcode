@@ -1,5 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from 'react-native';
@@ -31,6 +32,7 @@ export default function ScanScreen() {
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ token, code }),
       }).then((x) => x.json().catch(() => ({})));
+      if (r.ok) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       Alert.alert(r.ok ? 'Stamp added' : 'Stamp not added', r.ok ? `You now have ${r.stamps} stamps.` : r.message || 'Please try again.', [
         { text: 'OK', onPress: () => router.replace('/(tabs)/rewards') },
       ]);

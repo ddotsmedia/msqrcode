@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { money } from '../../src/api';
@@ -151,6 +152,10 @@ export default function OrderScreen() {
         Animated.spring(celebScale, { toValue: 1, useNativeDriver: true, friction: 6 }),
         Animated.timing(celebOp, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
+    }
+    // Haptic on order confirmed (first time we see 'placed')
+    if (data?.status === 'placed' && prevStatus.current === null) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
     prevStatus.current = data?.status ?? null;
   }, [data?.status, celebOp, celebScale]);
