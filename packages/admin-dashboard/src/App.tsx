@@ -7,6 +7,7 @@ import BranchesPage from './pages/BranchesPage';
 import MenuImportPage from './pages/MenuImportPage';
 import DashboardPage from './pages/DashboardPage';
 import InsightsPage from './pages/InsightsPage';
+import SalesPanel from './pages/SalesPanel';
 import KitchenPage from './pages/KitchenPage';
 import PromotionsPage from './pages/PromotionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
@@ -288,6 +289,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
 
       {tab === 'dashboard' && can('dashboard') && (
         <main key="dashboard" className="page-enter max-w-6xl mx-auto p-4 space-y-6">
+          <SalesPanel token={token} />
           <InsightsPage token={token} />
           <div>
             <h2 className="text-lg font-semibold text-gray-800 mb-2">Branch status</h2>

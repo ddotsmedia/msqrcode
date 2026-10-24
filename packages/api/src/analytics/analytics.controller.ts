@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { InsightsService } from './insights.service';
+import { SalesService } from './sales.service';
 import { AnalyticsEvent } from '../entities/analytics-event.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -11,6 +12,7 @@ export class AnalyticsController {
   constructor(
     private analyticsService: AnalyticsService,
     private insightsService: InsightsService,
+    private salesService: SalesService,
   ) {}
 
   // Admin Insights page: KPIs, trends, busy hours, top items, loyalty and feedback.
@@ -19,6 +21,14 @@ export class AnalyticsController {
   @Roles('admin')
   insights(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
     return this.insightsService.insights(days, branchId);
+  }
+
+  // Admin Sales tab: revenue, order counts, daily trend, per-branch and per-type splits.
+  @Get('sales')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  sales(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
+    return this.salesService.sales(days, branchId);
   }
 
   @Post('events')
