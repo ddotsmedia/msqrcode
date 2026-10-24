@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { API, getJson, type Branch } from '../../src/api';
 import { Page, ui } from '../../src/ui';
 import { C } from '../../src/theme';
@@ -19,6 +19,55 @@ const PERKS = [
   { icon: '📍', text: 'Branches across Abu Dhabi' },
 ];
 
+// Animated role card — staggered slide-up + press scale
+function RoleCard({
+  r,
+  index,
+  selected,
+  onPress,
+}: {
+  r: typeof ROLES[number];
+  index: number;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    const delay = index * 60;
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, delay, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const scale = useRef(new Animated.Value(1)).current;
+  const onPressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, friction: 8 }).start();
+  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
+      <Pressable
+        style={[s.roleCard, selected && s.roleCardOn]}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+      >
+        <View style={[s.roleIconBox, selected && s.roleIconBoxOn]}>
+          <Text style={s.roleIcon}>{r.icon}</Text>
+        </View>
+        <View style={s.roleBody}>
+          <Text style={[s.roleTitle, selected && s.roleTitleOn]}>{r.title}</Text>
+          <Text style={s.roleSub}>{r.text}</Text>
+        </View>
+        {selected && <Text style={s.roleCheck}>✓</Text>}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function CareersScreen() {
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => getJson<Branch[]>('/branches') });
   const [f, setF] = useState({ role: 'barista', name: '', phone: '', email: '', experience_years: '0', branch_id: '', message: '' });
@@ -26,6 +75,36 @@ export default function CareersScreen() {
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const set = (k: keyof typeof f) => (v: string) => setF((prev) => ({ ...prev, [k]: v }));
+
+  // Perks strip entrance
+  const perksOpacity = useRef(new Animated.Value(0)).current;
+  const perksY = useRef(new Animated.Value(-10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(perksOpacity, { toValue: 1, duration: 240, useNativeDriver: true }),
+      Animated.spring(perksY, { toValue: 0, useNativeDriver: true, friction: 7 }),
+    ]).start();
+  }, [perksOpacity, perksY]);
+
+  // Form / success card entrance
+  const formOpacity = useRef(new Animated.Value(0)).current;
+  const formY = useRef(new Animated.Value(16)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(formOpacity, { toValue: 1, duration: 260, delay: 300, useNativeDriver: true }),
+      Animated.spring(formY, { toValue: 0, delay: 300, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  }, [formOpacity, formY]);
+
+  // Submit button scale
+  const btnScale = useRef(new Animated.Value(1)).current;
+  const handleSend = async () => {
+    Animated.sequence([
+      Animated.spring(btnScale, { toValue: 0.95, useNativeDriver: true, friction: 6 }),
+      Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+    ]).start();
+    await send();
+  };
 
   const send = async () => {
     setError('');
@@ -47,66 +126,63 @@ export default function CareersScreen() {
   return (
     <Page kicker="Join us" title="Careers">
 
-      {/* Perks strip */}
-      <View style={s.perksRow}>
+      {/* Perks strip — slides down from above */}
+      <Animated.View style={[s.perksRow, { opacity: perksOpacity, transform: [{ translateY: perksY }] }]}>
         {PERKS.map((p) => (
           <View key={p.text} style={s.perk}>
             <Text style={s.perkIcon}>{p.icon}</Text>
             <Text style={s.perkText}>{p.text}</Text>
           </View>
         ))}
-      </View>
+      </Animated.View>
 
-      {/* Open roles */}
+      {/* Open roles — staggered */}
       <Text style={[ui.label, { marginTop: 20 }]}>Open roles</Text>
-      {ROLES.map((r) => (
-        <Pressable
+      {ROLES.map((r, i) => (
+        <RoleCard
           key={r.id}
-          style={[s.roleCard, f.role === r.id && s.roleCardOn]}
+          r={r}
+          index={i}
+          selected={f.role === r.id}
           onPress={() => set('role')(r.id)}
-        >
-          <View style={[s.roleIconBox, f.role === r.id && s.roleIconBoxOn]}>
-            <Text style={s.roleIcon}>{r.icon}</Text>
-          </View>
-          <View style={s.roleBody}>
-            <Text style={[s.roleTitle, f.role === r.id && s.roleTitleOn]}>{r.title}</Text>
-            <Text style={s.roleSub}>{r.text}</Text>
-          </View>
-          {f.role === r.id && <Text style={s.roleCheck}>✓</Text>}
-        </Pressable>
+        />
       ))}
 
-      {/* Application form or success */}
-      {sent ? (
-        <View style={s.successCard}>
-          <Text style={s.successIcon}>🎉</Text>
-          <Text style={s.successTitle}>Application sent!</Text>
-          <Text style={s.successSub}>We have received your application and will be in touch.</Text>
-        </View>
-      ) : (
-        <>
-          <Text style={[ui.label, { marginTop: 20 }]}>Apply</Text>
-          <TextInput style={ui.input} placeholder="Full name" placeholderTextColor={C.muted} value={f.name} onChangeText={set('name')} />
-          <TextInput style={ui.input} placeholder="Mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={f.phone} onChangeText={set('phone')} />
-          <TextInput style={ui.input} placeholder="Email" placeholderTextColor={C.muted} autoCapitalize="none" keyboardType="email-address" value={f.email} onChangeText={set('email')} />
-          <TextInput style={ui.input} placeholder="Years of experience" placeholderTextColor={C.muted} keyboardType="number-pad" value={f.experience_years} onChangeText={set('experience_years')} />
-
-          <Text style={ui.label}>Preferred branch</Text>
-          <View style={ui.chips}>
-            {(branches.data ?? []).map((b) => (
-              <Pressable key={b.id} style={[ui.chip, f.branch_id === b.id && ui.chipOn]} onPress={() => set('branch_id')(f.branch_id === b.id ? '' : b.id)}>
-                <Text style={[ui.chipText, f.branch_id === b.id && ui.chipTextOn]}>{b.name}</Text>
-              </Pressable>
-            ))}
+      {/* Application form or success — fades in after roles */}
+      <Animated.View style={{ opacity: formOpacity, transform: [{ translateY: formY }] }}>
+        {sent ? (
+          <View style={s.successCard}>
+            <Text style={s.successIcon}>🎉</Text>
+            <Text style={s.successTitle}>Application sent!</Text>
+            <Text style={s.successSub}>We have received your application and will be in touch.</Text>
           </View>
+        ) : (
+          <>
+            <Text style={[ui.label, { marginTop: 20 }]}>Apply</Text>
+            <TextInput style={ui.input} placeholder="Full name" placeholderTextColor={C.muted} value={f.name} onChangeText={set('name')} />
+            <TextInput style={ui.input} placeholder="Mobile number" placeholderTextColor={C.muted} keyboardType="phone-pad" value={f.phone} onChangeText={set('phone')} />
+            <TextInput style={ui.input} placeholder="Email" placeholderTextColor={C.muted} autoCapitalize="none" keyboardType="email-address" value={f.email} onChangeText={set('email')} />
+            <TextInput style={ui.input} placeholder="Years of experience" placeholderTextColor={C.muted} keyboardType="number-pad" value={f.experience_years} onChangeText={set('experience_years')} />
 
-          <TextInput style={[ui.input, ui.area]} placeholder="Tell us about yourself (optional)" placeholderTextColor={C.muted} multiline value={f.message} onChangeText={set('message')} />
-          {!!error && <Text style={ui.error}>{error}</Text>}
-          <Pressable style={[ui.button, busy && { opacity: 0.6 }]} onPress={send} disabled={busy}>
-            <Text style={ui.btnText}>{busy ? 'Sending…' : 'Send application'}</Text>
-          </Pressable>
-        </>
-      )}
+            <Text style={ui.label}>Preferred branch</Text>
+            <View style={ui.chips}>
+              {(branches.data ?? []).map((b) => (
+                <Pressable key={b.id} style={[ui.chip, f.branch_id === b.id && ui.chipOn]} onPress={() => set('branch_id')(f.branch_id === b.id ? '' : b.id)}>
+                  <Text style={[ui.chipText, f.branch_id === b.id && ui.chipTextOn]}>{b.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput style={[ui.input, ui.area]} placeholder="Tell us about yourself (optional)" placeholderTextColor={C.muted} multiline value={f.message} onChangeText={set('message')} />
+            {!!error && <Text style={ui.error}>{error}</Text>}
+            <Animated.View style={{ transform: [{ scale: btnScale }] }}>
+              <Pressable style={[ui.button, busy && { opacity: 0.6 }]} onPress={handleSend} disabled={busy}>
+                <Text style={ui.btnText}>{busy ? 'Sending…' : 'Send application'}</Text>
+              </Pressable>
+            </Animated.View>
+          </>
+        )}
+      </Animated.View>
     </Page>
   );
 }
