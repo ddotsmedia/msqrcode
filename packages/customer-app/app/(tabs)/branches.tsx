@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, FlatList, Linking, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { getJson, type Branch } from '../../src/api';
@@ -135,6 +136,11 @@ function BranchCard({ item, index }: { item: Branch; index: number }) {
             <Text style={s.btnGhostText}>📞 Call</Text>
           </Pressable>
         )}
+        <Pressable
+          style={s.btnGhost}
+          onPress={() => router.push({ pathname: '/branch-analytics', params: { branchId: item.id, branchName: item.name } })}>
+          <Text style={s.btnGhostText}>📊 Stats</Text>
+        </Pressable>
       </View>
     </Animated.View>
   );
