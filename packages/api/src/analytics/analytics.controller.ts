@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { InsightsService } from './insights.service';
 import { SalesService } from './sales.service';
+import { MenuService } from './menu.service';
 import { AnalyticsEvent } from '../entities/analytics-event.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -13,6 +14,7 @@ export class AnalyticsController {
     private analyticsService: AnalyticsService,
     private insightsService: InsightsService,
     private salesService: SalesService,
+    private menuService: MenuService,
   ) {}
 
   // Admin Insights page: KPIs, trends, busy hours, top items, loyalty and feedback.
@@ -29,6 +31,14 @@ export class AnalyticsController {
   @Roles('admin')
   sales(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
     return this.salesService.sales(days, branchId);
+  }
+
+  // Admin Menu tab: units and revenue per item, category mix, top and bottom sellers.
+  @Get('menu')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  menu(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
+    return this.menuService.menu(days, branchId);
   }
 
   @Post('events')
