@@ -8,6 +8,7 @@ import { useCart } from '../../src/cart';
 import { bestDealFor, discounted, type Promo } from '../../src/deals';
 import { getFavs, getLastBranch, toggleFav } from '../../src/favs';
 import { SkeletonRow } from '../../src/skeleton';
+import { ErrorState } from '../../src/ui';
 import { getTable, clearTable, type TableSession } from '../../src/table';
 import { C } from '../../src/theme';
 import type { ProductFull } from '../../src/types';
@@ -72,6 +73,22 @@ export default function MenuScreen() {
     ]);
     setRefreshing(false);
   };
+
+  const hasError = categories.isError || products.isError;
+  const handleRetry = () => { categories.refetch(); products.refetch(); promos.refetch(); };
+
+  if (hasError && !categories.data && !products.data) {
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.content, { marginTop: 40 }]}>
+          <View style={[styles.headerRow, { marginTop: 0 }]}>
+            <Text style={styles.hero}>Menu</Text>
+          </View>
+          <ErrorState onRetry={handleRetry} />
+        </View>
+      </View>
+    );
+  }
 
   if (isFirstLoad) {
     return (

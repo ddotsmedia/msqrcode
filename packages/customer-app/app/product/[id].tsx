@@ -5,6 +5,7 @@ import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 import { getJson, money } from '../../src/api';
 import { useCart } from '../../src/cart';
 import { SkeletonCard } from '../../src/skeleton';
+import { ErrorState } from '../../src/ui';
 import { C } from '../../src/theme';
 import type { OptionSet, ProductFull } from '../../src/types';
 
@@ -36,7 +37,7 @@ function tagsFor(p: ProductFull): { label: string; color: string; bg: string }[]
 export default function ProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { add } = useCart();
-  const { data: p, isLoading } = useQuery({ queryKey: ['product', id], queryFn: () => getJson<ProductFull>(`/products/${id}`) });
+  const { data: p, isLoading, isError, refetch } = useQuery({ queryKey: ['product', id], queryFn: () => getJson<ProductFull>(`/products/${id}`) });
   const [qty, setQty] = useState(1);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [note, setNote] = useState('');
@@ -71,6 +72,19 @@ export default function ProductScreen() {
       Animated.spring(addScale, { toValue: 1, useNativeDriver: true, friction: 6 }),
     ]).start();
   };
+
+  if (isError && !p) {
+    return (
+      <View style={s.screen}>
+        <View style={s.content}>
+          <Pressable onPress={() => router.back()} style={s.backRow}>
+            <Text style={s.backText}>← Back</Text>
+          </Pressable>
+          <ErrorState onRetry={() => refetch()} />
+        </View>
+      </View>
+    );
+  }
 
   if (isLoading || !p) {
     return (

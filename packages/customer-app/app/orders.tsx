@@ -8,7 +8,7 @@ import { useCart } from '../src/cart';
 import { clearSavedOrders, getSavedOrders, trackOrder, type SavedOrder } from '../src/orders';
 import { planReorder } from '../src/reorder';
 import { SkeletonCard } from '../src/skeleton';
-import { AnimatedEmptyState } from '../src/ui';
+import { AnimatedEmptyState, ErrorState } from '../src/ui';
 import { Page, ui } from '../src/ui';
 import { C } from '../src/theme';
 
@@ -34,7 +34,7 @@ export default function OrdersScreen() {
   const { add } = useCart();
   const [busy, setBusy] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const { data: saved = [], isLoading, refetch } = useQuery({ queryKey: ['saved-orders'], queryFn: getSavedOrders });
+  const { data: saved = [], isLoading, isError, refetch } = useQuery({ queryKey: ['saved-orders'], queryFn: getSavedOrders });
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -86,6 +86,9 @@ export default function OrdersScreen() {
 
   return (
     <Page kicker="Account" title="Order history" onRefresh={onRefresh} refreshing={refreshing}>
+      {isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : null}
       {isLoading ? (
         <>
           <SkeletonCard />

@@ -4,7 +4,7 @@ import { Animated, Pressable, RefreshControl, SectionList, StyleSheet, Text, Vie
 import { getJson, money, type Category } from '../../src/api';
 import { comboPrice, isLive, type Promo } from '../../src/deals';
 import { SkeletonCard } from '../../src/skeleton';
-import { AnimatedEmptyState } from '../../src/ui';
+import { AnimatedEmptyState, ErrorState } from '../../src/ui';
 import { C } from '../../src/theme';
 
 // Countdown timer for happy-hour end
@@ -161,6 +161,8 @@ export default function OffersScreen() {
   ].filter((sec) => sec.data.length);
 
   const isFirstLoad = promos.isLoading && !promos.data;
+  const hasError = promos.isError && !promos.data;
+  const handleRetry = () => { promos.refetch(); products.refetch(); categories.refetch(); };
 
   // Track global item index for staggered entrance
   let itemIdx = 0;
@@ -183,6 +185,7 @@ export default function OffersScreen() {
               <SkeletonCard />
             </>
           )}
+          {hasError && <ErrorState onRetry={handleRetry} />}
         </View>
       }
       renderSectionHeader={({ section }) => <Text style={styles.section}>{section.title}</Text>}
