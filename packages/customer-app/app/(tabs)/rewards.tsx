@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { API, getJson } from '../../src/api';
@@ -130,8 +131,15 @@ export default function RewardsScreen() {
     const prev = prevStampsRef.current;
     if (prev !== null && d.stamps > prev) {
       // The dot that just filled is at index (new stamps - 1)
-      setBurstIndex(d.stamps - 1);
+      const newIndex = d.stamps - 1;
+      setBurstIndex(newIndex);
       const t = setTimeout(() => setBurstIndex(null), 800);
+      // Haptic: burst (card full) vs regular new stamp
+      if (d.stamps >= d.target) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      }
       return () => clearTimeout(t);
     }
     prevStampsRef.current = d.stamps;

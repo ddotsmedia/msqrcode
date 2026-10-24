@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -81,6 +82,35 @@ const emptyStyles = StyleSheet.create({
   body: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 21, marginBottom: 16 },
   btn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28 },
   btnText: { color: C.white, fontWeight: '600', fontSize: 15 },
+});
+
+/** Error state with a retry button — fires Medium haptic on retry press. */
+export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
+  return (
+    <View style={errStyles.card}>
+      <Text style={errStyles.icon}>⚠️</Text>
+      <Text style={errStyles.msg}>{message ?? 'Something went wrong.'}</Text>
+      {!!onRetry && (
+        <Pressable
+          style={errStyles.btn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            onRetry();
+          }}
+        >
+          <Text style={errStyles.btnText}>Try again</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+const errStyles = StyleSheet.create({
+  card: { backgroundColor: C.white, borderRadius: 18, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: C.line, marginTop: 8 },
+  icon: { fontSize: 36, marginBottom: 10 },
+  msg: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20, marginBottom: 14 },
+  btn: { backgroundColor: C.navy2, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 24 },
+  btnText: { color: C.white, fontWeight: '600', fontSize: 14 },
 });
 
 // Shared page frame for the secondary screens (back link, kicker, title).

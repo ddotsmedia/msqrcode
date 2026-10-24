@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money } from '../../src/api';
@@ -189,6 +190,7 @@ export default function ProductScreen() {
             style={s.addBtn}
             onPress={() => {
               flashAdd();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               add(p, qty, picked, note.trim());
               router.back();
             }}>
