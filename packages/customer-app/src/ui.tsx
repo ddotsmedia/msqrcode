@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
@@ -172,21 +173,38 @@ const errStyles = StyleSheet.create({
 // Shared page frame for the secondary screens (back link, kicker, title).
 export function Page({ title, kicker, children, onRefresh, refreshing }: { title: string; kicker?: string; children: ReactNode; onRefresh?: () => void; refreshing?: boolean }) {
   return (
-    <ScrollView
-      style={ui.screen}
-      contentContainerStyle={ui.content}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.navy2} /> : undefined}
-    >
-      <Pressable onPress={() => router.back()} hitSlop={10}>
-        <Text style={ui.back}>‹ Back</Text>
-      </Pressable>
-      {kicker ? <Text style={ui.kicker}>{kicker}</Text> : null}
-      <Text style={ui.title}>{title}</Text>
-      {children}
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: C.cream }}>
+      {/* Gradient header band */}
+      <LinearGradient
+        colors={['#0b1a33', '#13284b', '#faf6f0']}
+        locations={[0, 0.55, 1]}
+        style={pageStyles.gradientHeader}
+      >
+        <Pressable onPress={() => router.back()} hitSlop={10}>
+          <Text style={pageStyles.back}>‹ Back</Text>
+        </Pressable>
+        {kicker ? <Text style={pageStyles.kicker}>{kicker}</Text> : null}
+        <Text style={pageStyles.title}>{title}</Text>
+      </LinearGradient>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={pageStyles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={C.navy2} /> : undefined}
+      >
+        {children}
+      </ScrollView>
+    </View>
   );
 }
+
+const pageStyles = StyleSheet.create({
+  gradientHeader: { paddingTop: 56, paddingBottom: 24, paddingHorizontal: 20 },
+  back: { color: C.gold, fontWeight: '600', marginBottom: 10, fontSize: 16 },
+  kicker: { fontSize: 12, fontWeight: '700', color: C.gold, textTransform: 'uppercase', letterSpacing: 1.2 },
+  title: { fontSize: 28, fontWeight: '600', color: C.white, marginBottom: 4 },
+  content: { padding: 20, paddingBottom: 40 },
+});
 
 export const ui = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.cream },

@@ -1,5 +1,6 @@
+import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Platform, StyleSheet, Text } from 'react-native';
 import { C } from '../../src/theme';
 
 function Icon({ glyph, color }: { glyph: string; color: string }) {
@@ -13,7 +14,12 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: C.navy2,
         tabBarInactiveTintColor: C.muted,
-        tabBarStyle: { backgroundColor: C.white, borderTopColor: C.line },
+        tabBarStyle: Platform.OS === 'ios'
+          ? { position: 'absolute', borderTopWidth: 0, backgroundColor: 'transparent' }
+          : { backgroundColor: C.white, borderTopColor: C.line },
+        tabBarBackground: Platform.OS === 'ios'
+          ? () => <BlurView tint="light" intensity={80} style={StyleSheet.absoluteFill} />
+          : undefined,
       }}
     >
       <Tabs.Screen name="index" options={{ title: 'Menu', tabBarIcon: ({ color }) => <Icon glyph="☕" color={color} /> }} />
