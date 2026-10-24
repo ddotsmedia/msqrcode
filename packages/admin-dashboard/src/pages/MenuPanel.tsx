@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import BranchSelect from './BranchSelect';
 
 interface Item {
   name: string;
@@ -38,24 +39,27 @@ function ItemList({ title, items }: { title: string; items: Item[] }) {
 
 export default function MenuPanel({ token }: { token: string }) {
   const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [branch, setBranch] = useState('');
   const [data, setData] = useState<MenuData | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let live = true;
     setError('');
-    api<MenuData>(`/analytics/menu?days=${days}`, token)
+    api<MenuData>(`/analytics/menu?days=${days}${branch ? `&branch_id=${branch}` : ''}`, token)
       .then((d) => live && setData(d))
       .catch(() => live && setError('Could not load menu performance.'));
     return () => {
       live = false;
     };
-  }, [days, token]);
+  }, [days, branch, token]);
 
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">Menu performance</h2>
+        <div className="flex items-center gap-2">
+        <BranchSelect token={token} value={branch} onChange={setBranch} />
         <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
           {([7, 30, 90] as const).map((d) => (
             <button
@@ -66,6 +70,7 @@ export default function MenuPanel({ token }: { token: string }) {
               {d}d
             </button>
           ))}
+        </div>
         </div>
       </div>
 

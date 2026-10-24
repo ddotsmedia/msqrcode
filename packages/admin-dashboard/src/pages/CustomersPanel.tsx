@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import BranchSelect from './BranchSelect';
 
 interface Shape {
   customers: number;
@@ -37,19 +38,20 @@ function Kpi({ label, value, cur, prev, isRate }: { label: string; value: string
 
 export default function CustomersPanel({ token }: { token: string }) {
   const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [branch, setBranch] = useState('');
   const [data, setData] = useState<CustomersData | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let live = true;
     setError('');
-    api<CustomersData>(`/analytics/customers?days=${days}`, token)
+    api<CustomersData>(`/analytics/customers?days=${days}${branch ? `&branch_id=${branch}` : ''}`, token)
       .then((d) => live && setData(d))
       .catch(() => live && setError('Could not load customer stats.'));
     return () => {
       live = false;
     };
-  }, [days, token]);
+  }, [days, branch, token]);
 
   const c = data?.kpis.current;
   const p = data?.kpis.previous;
@@ -58,6 +60,8 @@ export default function CustomersPanel({ token }: { token: string }) {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-800">Repeat customers</h2>
+        <div className="flex items-center gap-2">
+        <BranchSelect token={token} value={branch} onChange={setBranch} />
         <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
           {([7, 30, 90] as const).map((d) => (
             <button
@@ -68,6 +72,7 @@ export default function CustomersPanel({ token }: { token: string }) {
               {d}d
             </button>
           ))}
+        </div>
         </div>
       </div>
 
