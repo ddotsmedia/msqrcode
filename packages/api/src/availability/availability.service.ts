@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProductAvailability } from '../entities/product-availability.entity';
+import { ProductAvailabilityLog } from '../entities/product-availability-log.entity';
 
 @Injectable()
 export class AvailabilityService {
   constructor(
     @InjectRepository(ProductAvailability)
     private availabilityRepository: Repository<ProductAvailability>,
+    @InjectRepository(ProductAvailabilityLog)
+    private logRepository: Repository<ProductAvailabilityLog>,
   ) {}
 
   async getByBranch(branchId: string): Promise<ProductAvailability[]> {
@@ -49,12 +52,28 @@ export class AvailabilityService {
         is_available: isAvailable,
         updated_by_user_id: userId,
       });
-      return this.availabilityRepository.save(newRecord);
+      const saved = await this.availabilityRepository.save(newRecord);
+      await this.logChange(branchId, productId, isAvailable, userId);
+      return saved;
     }
 
+    const changed = availability.is_available !== isAvailable;
     availability.is_available = isAvailable;
     availability.updated_by_user_id = userId ?? null;
-    return this.availabilityRepository.save(availability);
+    const saved = await this.availabilityRepository.save(availability);
+    if (changed) await this.logChange(branchId, productId, isAvailable, userId);
+    return saved;
+  }
+
+  private async logChange(branchId: string, productId: string, isAvailable: boolean, userId?: string) {
+    await this.logRepository.save(
+      this.logRepository.create({
+        branch_id: branchId,
+        product_id: productId,
+        is_available: isAvailable,
+        changed_by_user_id: userId ?? null,
+      }),
+    );
   }
 
   async initializeForBranch(branchId: string, productIds: string[]): Promise<void> {
