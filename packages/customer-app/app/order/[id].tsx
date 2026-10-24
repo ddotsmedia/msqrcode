@@ -3,6 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import LottieView from 'lottie-react-native';
+import successCheck from '../../assets/lottie/success-check.json';
 import { money } from '../../src/api';
 import { getSavedOrders, trackOrder } from '../../src/orders';
 import { SkeletonCard } from '../../src/skeleton';
@@ -234,6 +236,13 @@ export default function OrderScreen() {
 
         {data && (
           <>
+            {/* Order received: tick draws in once */}
+            {data.status === 'placed' && (
+              <View style={s.checkWrap}>
+                <LottieView source={successCheck} autoPlay loop={false} style={s.check} />
+              </View>
+            )}
+
             {/* Header */}
             <View style={s.header}>
               <Text style={s.orderNo}>Order #{data.order_no}</Text>
@@ -323,6 +332,8 @@ export default function OrderScreen() {
 }
 
 const s = StyleSheet.create({
+  checkWrap: { alignItems: 'center', marginBottom: 4 },
+  check: { width: 120, height: 120 },
   screen: { flex: 1, backgroundColor: C.cream },
   content: { padding: 20, paddingTop: 50, paddingBottom: 40 },
   backRow: { marginBottom: 16 },
