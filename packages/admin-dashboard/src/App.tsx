@@ -287,7 +287,7 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
       </header>
 
       {tab === 'dashboard' && can('dashboard') && (
-        <main className="max-w-6xl mx-auto p-4 space-y-6">
+        <main key="dashboard" className="page-enter max-w-6xl mx-auto p-4 space-y-6">
           <InsightsPage token={token} />
           <div>
             <h2 className="text-lg font-semibold text-gray-800 mb-2">Branch status</h2>
@@ -296,44 +296,46 @@ function Dashboard({ token, me, onLogout }: { token: string; me: Me; onLogout: (
         </main>
       )}
       {tab === 'promotions' && can('promotions') && (
-        <PromotionsPage token={token} admin={me.role === 'admin'} />
+        <div key="promotions" className="page-enter"><PromotionsPage token={token} admin={me.role === 'admin'} /></div>
       )}
-      {tab === 'catering' && can('catering') && <CateringRequestsPage token={token} />}
-      {tab === 'careers' && can('careers') && <CareersPage token={token} />}
-      {tab === 'gifts' && can('gifts') && <GiftCardsPage token={token} role={me.role} />}
-      {tab === 'business' && can('business') && <CorporatePage token={token} />}
-      {tab === 'users' && can('users') && <UsersPage token={token} me={me} />}
+      {tab === 'catering' && can('catering') && <div key="catering" className="page-enter"><CateringRequestsPage token={token} /></div>}
+      {tab === 'careers' && can('careers') && <div key="careers" className="page-enter"><CareersPage token={token} /></div>}
+      {tab === 'gifts' && can('gifts') && <div key="gifts" className="page-enter"><GiftCardsPage token={token} role={me.role} /></div>}
+      {tab === 'business' && can('business') && <div key="business" className="page-enter"><CorporatePage token={token} /></div>}
+      {tab === 'users' && can('users') && <div key="users" className="page-enter"><UsersPage token={token} me={me} /></div>}
       {tab === 'loyalty' && can('loyalty') && (
-        <LoyaltyPage token={token} role={me.role} branchId={me.assigned_branch_id} />
+        <div key="loyalty" className="page-enter">
+          <LoyaltyPage token={token} role={me.role} branchId={me.assigned_branch_id} />
+        </div>
       )}
       {tab === 'menu-import' && can('menu-import') && (
-        <main className="max-w-3xl mx-auto p-4"><MenuImportPage token={token} /></main>
+        <main key="menu-import" className="page-enter max-w-3xl mx-auto p-4"><MenuImportPage token={token} /></main>
       )}
       {tab === 'products' && can('products') && (
-        <main className="max-w-3xl mx-auto p-4"><ProductsPage token={token} /></main>
+        <main key="products" className="page-enter max-w-3xl mx-auto p-4"><ProductsPage token={token} /></main>
       )}
       {tab === 'categories' && can('categories') && (
-        <main className="max-w-3xl mx-auto p-4"><CategoriesPage token={token} /></main>
+        <main key="categories" className="page-enter max-w-3xl mx-auto p-4"><CategoriesPage token={token} /></main>
       )}
       {tab === 'qr' && can('qr') && (
-        <main className="max-w-3xl mx-auto p-4"><QrCodesPage token={token} /></main>
+        <main key="qr" className="page-enter max-w-3xl mx-auto p-4"><QrCodesPage token={token} /></main>
       )}
       {tab === 'branches' && can('branches') && (
-        <main className="max-w-3xl mx-auto p-4">
+        <main key="branches" className="page-enter max-w-3xl mx-auto p-4">
           <BranchesPage token={token} onQrCreated={() => undefined} />
         </main>
       )}
 
       {tab === 'requests' && can('requests') && (
-        <main className="max-w-3xl mx-auto p-4"><RequestsPage token={token} data={requests} branches={branches} branchId={branchId} onBranch={setBranchId} /></main>
+        <main key="requests" className="page-enter max-w-3xl mx-auto p-4"><RequestsPage token={token} data={requests} branches={branches} branchId={branchId} onBranch={setBranchId} /></main>
       )}
 
       {tab === 'kitchen' && can('kitchen') && branchId && (
-        <main className="max-w-6xl mx-auto"><KitchenPage token={token} branchId={branchId} branches={branches} onBranch={setBranchId} /></main>
+        <main key="kitchen" className="page-enter max-w-6xl mx-auto"><KitchenPage token={token} branchId={branchId} branches={branches} onBranch={setBranchId} /></main>
       )}
 
       {tab === 'availability' && can('availability') && (
-      <main className="max-w-3xl mx-auto p-4 space-y-4">
+      <main key="availability" className="page-enter max-w-3xl mx-auto p-4 space-y-4">
         <section className="bg-white rounded-lg shadow-sm p-4">
           <label className="block text-sm font-semibold text-gray-700 mb-2" htmlFor="branch">
             Branch

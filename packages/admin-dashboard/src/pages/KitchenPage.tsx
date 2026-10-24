@@ -170,7 +170,7 @@ export default function KitchenPage({
                 {list.map((o) => (
                   <article
                     key={o.id}
-                    className={`rounded-lg bg-white p-3 shadow-sm ${o.arrived_at ? 'ring-2 ring-green-600' : col.status === 'placed' ? 'ring-2 ring-amber-400' : ''}`}
+                    className={`animate-fade-slide-up rounded-lg bg-white p-3 shadow-sm ${o.arrived_at ? 'ring-2 ring-green-600' : col.status === 'placed' ? 'ring-2 ring-amber-400' : ''}`}
                   >
                     {o.arrived_at && (
                       <p className="-mx-3 -mt-3 mb-2 rounded-t-lg bg-green-600 px-3 py-1.5 text-sm font-bold text-white">

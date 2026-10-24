@@ -99,9 +99,10 @@ function Delta({ now, before, invert = false }: { now: number; before: number; i
   );
 }
 
-function Kpi({ label, value, before, suffix, decimals }: { label: string; value: number | null; before: number | null; suffix?: string; decimals?: number }) {
+function Kpi({ label, value, before, suffix, decimals, idx = 0 }: { label: string; value: number | null; before: number | null; suffix?: string; decimals?: number; idx?: number }) {
+  const staggerClass = `stagger-${Math.min(idx + 1, 6)}`;
   return (
-    <div className="bg-white rounded-xl border shadow-sm p-4">
+    <div className={`animate-fade-slide-up ${staggerClass} bg-white rounded-xl border shadow-sm p-4`}>
       <p className="text-xs text-gray-500">{label}</p>
       <p className="text-2xl font-semibold text-gray-900 mt-1 tabular-nums">
         {value === null ? '–' : decimals ? value.toFixed(decimals) : fmt(value)}
@@ -360,14 +361,14 @@ export default function InsightsPage({ token }: { token: string }) {
       {data && cur && prev && f && (
         <div className={`space-y-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Kpi label="Menu views" value={cur.views} before={prev.views} />
-            <Kpi label="Stamps (visits)" value={cur.stamps} before={prev.stamps} />
-            <Kpi label="New members" value={branch ? null : cur.new_members} before={branch ? null : prev.new_members} />
-            <Kpi label="Rewards redeemed" value={cur.redemptions} before={prev.redemptions} />
-            <Kpi label="Drink views" value={cur.product_views} before={prev.product_views} />
-            <Kpi label="Table requests" value={cur.table_requests} before={prev.table_requests} />
-            <Kpi label="Average rating" value={cur.rating} before={prev.rating} suffix="/ 5" decimals={1} />
-            <Kpi label="Reviews" value={cur.reviews} before={prev.reviews} />
+            <Kpi idx={0} label="Menu views" value={cur.views} before={prev.views} />
+            <Kpi idx={1} label="Stamps (visits)" value={cur.stamps} before={prev.stamps} />
+            <Kpi idx={2} label="New members" value={branch ? null : cur.new_members} before={branch ? null : prev.new_members} />
+            <Kpi idx={3} label="Rewards redeemed" value={cur.redemptions} before={prev.redemptions} />
+            <Kpi idx={4} label="Drink views" value={cur.product_views} before={prev.product_views} />
+            <Kpi idx={5} label="Table requests" value={cur.table_requests} before={prev.table_requests} />
+            <Kpi idx={0} label="Average rating" value={cur.rating} before={prev.rating} suffix="/ 5" decimals={1} />
+            <Kpi idx={1} label="Reviews" value={cur.reviews} before={prev.reviews} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
