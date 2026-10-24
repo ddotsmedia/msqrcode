@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money } from '../../src/api';
 import { useCart } from '../../src/cart';
 import { SkeletonCard } from '../../src/skeleton';
@@ -119,7 +120,7 @@ export default function ProductScreen() {
         {/* Hero image with animated entrance */}
         {!!p.image_url && (
           <Animated.View style={[s.heroWrap, { opacity: heroOp, transform: [{ scale: heroScale }] }]}>
-            <Image source={{ uri: p.image_url }} style={s.hero} resizeMode="cover" />
+            <Image source={{ uri: p.image_url }} style={s.hero} contentFit="cover" transition={200} cachePolicy="memory-disk" />
           </Animated.View>
         )}
 
