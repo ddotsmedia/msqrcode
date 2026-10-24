@@ -3,6 +3,7 @@ import { AnalyticsService } from './analytics.service';
 import { InsightsService } from './insights.service';
 import { SalesService } from './sales.service';
 import { MenuService } from './menu.service';
+import { CustomersService } from './customers.service';
 import { AnalyticsEvent } from '../entities/analytics-event.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -15,6 +16,7 @@ export class AnalyticsController {
     private insightsService: InsightsService,
     private salesService: SalesService,
     private menuService: MenuService,
+    private customersService: CustomersService,
   ) {}
 
   // Admin Insights page: KPIs, trends, busy hours, top items, loyalty and feedback.
@@ -39,6 +41,14 @@ export class AnalyticsController {
   @Roles('admin')
   menu(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
     return this.menuService.menu(days, branchId);
+  }
+
+  // Admin Customers view: repeat-customer rate among loyalty-card holders.
+  @Get('customers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  customers(@Query('days') days?: string, @Query('branch_id') branchId?: string) {
+    return this.customersService.customers(days, branchId);
   }
 
   @Post('events')
