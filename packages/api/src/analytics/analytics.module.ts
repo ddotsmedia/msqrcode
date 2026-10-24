@@ -6,12 +6,13 @@ import { AnalyticsService } from './analytics.service';
 import { InsightsService } from './insights.service';
 import { SalesService } from './sales.service';
 import { MenuService } from './menu.service';
+import { CustomersService } from './customers.service';
 import { AnalyticsController } from './analytics.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AnalyticsEvent, Branch])],
   controllers: [AnalyticsController],
-  providers: [AnalyticsService, InsightsService, SalesService, MenuService],
+  providers: [AnalyticsService, InsightsService, SalesService, MenuService, CustomersService],
   exports: [AnalyticsService],
 })
 export class AnalyticsModule {}
