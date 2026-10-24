@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from 'react-native';
 import { API } from '../src/api';
 import { getCardToken } from '../src/storage';
@@ -60,13 +60,52 @@ export default function ScanScreen() {
     router.replace('/(tabs)');
   };
 
+  // Permission screen: button + link fade/slide in
+  const permOpacity = useRef(new Animated.Value(0)).current;
+  const permY = useRef(new Animated.Value(14)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(permOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
+      Animated.spring(permY, { toValue: 0, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  }, [permOpacity, permY]);
+
+  // Overlay message fades in from below on the camera screen
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const overlayY = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(overlayOpacity, { toValue: 1, duration: 300, delay: 200, useNativeDriver: true }),
+      Animated.spring(overlayY, { toValue: 0, delay: 200, useNativeDriver: true, friction: 7, tension: 80 }),
+    ]).start();
+  }, [overlayOpacity, overlayY]);
+
+  // Cancel button spring on press
+  const cancelScale = useRef(new Animated.Value(1)).current;
+  const onCancelPressIn = () => Animated.spring(cancelScale, { toValue: 0.95, useNativeDriver: true, friction: 8 }).start();
+  const onCancelPressOut = () => Animated.spring(cancelScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+
   if (!permission) return <View style={styles.screen} />;
+
   if (!permission.granted) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.text}>Allow the camera to scan your table code.</Text>
-        <Pressable style={styles.btn} onPress={requestPermission}><Text style={styles.btnText}>Allow camera</Text></Pressable>
-        <Pressable onPress={() => router.back()}><Text style={styles.link}>Not now</Text></Pressable>
+        <Animated.View style={[styles.permContent, { opacity: permOpacity, transform: [{ translateY: permY }] }]}>
+          <Text style={styles.text}>Allow the camera to scan your table code.</Text>
+          <Animated.View style={{ transform: [{ scale: cancelScale }] }}>
+            <Pressable
+              style={styles.btn}
+              onPress={requestPermission}
+              onPressIn={onCancelPressIn}
+              onPressOut={onCancelPressOut}
+            >
+              <Text style={styles.btnText}>Allow camera</Text>
+            </Pressable>
+          </Animated.View>
+          <Pressable onPress={() => router.back()}>
+            <Text style={styles.link}>Not now</Text>
+          </Pressable>
+        </Animated.View>
       </View>
     );
   }
@@ -74,16 +113,26 @@ export default function ScanScreen() {
   return (
     <View style={styles.screen}>
       <CameraView style={StyleSheet.absoluteFill} barcodeScannerSettings={{ barcodeTypes: ['qr'] }} onBarcodeScanned={onScanned} />
-      <View style={styles.overlay}>
+      <Animated.View style={[styles.overlay, { opacity: overlayOpacity, transform: [{ translateY: overlayY }] }]}>
         <Text style={styles.msg}>{message}</Text>
-        <Pressable onPress={() => router.back()} style={styles.btn}><Text style={styles.btnText}>Cancel</Text></Pressable>
-      </View>
+        <Animated.View style={{ transform: [{ scale: cancelScale }] }}>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.btn}
+            onPressIn={onCancelPressIn}
+            onPressOut={onCancelPressOut}
+          >
+            <Text style={styles.btnText}>Cancel</Text>
+          </Pressable>
+        </Animated.View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.navy, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  permContent: { alignItems: 'center', width: '100%' },
   text: { color: C.white, fontSize: 16, textAlign: 'center', marginBottom: 16 },
   overlay: { position: 'absolute', bottom: 60, left: 20, right: 20, alignItems: 'center', gap: 14 },
   msg: { color: C.white, backgroundColor: 'rgba(11,26,51,0.8)', padding: 12, borderRadius: 12, textAlign: 'center' },
