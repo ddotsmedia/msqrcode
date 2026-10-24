@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, FlatList, Image, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Animated, Dimensions, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SITE } from '../../src/api';
 import { SkeletonCard } from '../../src/skeleton';
 import { C } from '../../src/theme';
@@ -37,7 +38,9 @@ function GalleryCell({ item, index }: { item: Item; index: number }) {
         source={{ uri: url(item.src) }}
         accessibilityLabel={item.alt}
         style={s.img}
-        resizeMode="cover"
+        contentFit="cover"
+        transition={200}
+        cachePolicy="memory-disk"
       />
       {!!item.caption && <Text style={s.caption} numberOfLines={2}>{item.caption}</Text>}
     </Animated.View>

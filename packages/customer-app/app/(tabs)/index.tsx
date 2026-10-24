@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
+import { Image } from 'expo-image';
 import { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money, type Category } from '../../src/api';
 import { cachedJson } from '../../src/cache';
 import { useCart } from '../../src/cart';
@@ -152,7 +153,7 @@ export default function MenuScreen() {
         const isFav = favs.includes(item.id);
         return (
           <Pressable style={[styles.row, isOut && { opacity: 0.55 }]} onPress={() => router.push(`/product/${item.id}`)}>
-            {item.image_url ? <Image source={{ uri: item.image_url }} style={styles.thumb} /> : <View style={styles.thumb} />}
+            {item.image_url ? <Image source={{ uri: item.image_url }} style={styles.thumb} contentFit="cover" transition={200} cachePolicy="memory-disk" /> : <View style={styles.thumb} />}
             <View style={styles.body}>
               <Text style={styles.name}>{item.name}</Text>
               {isOut ? <Text style={styles.soldOut}>Sold out at this branch</Text> : null}
