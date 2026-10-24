@@ -4,12 +4,13 @@ import { AnalyticsEvent } from '../entities/analytics-event.entity';
 import { Branch } from '../entities/branch.entity';
 import { AnalyticsService } from './analytics.service';
 import { InsightsService } from './insights.service';
+import { SalesService } from './sales.service';
 import { AnalyticsController } from './analytics.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AnalyticsEvent, Branch])],
   controllers: [AnalyticsController],
-  providers: [AnalyticsService, InsightsService],
+  providers: [AnalyticsService, InsightsService, SalesService],
   exports: [AnalyticsService],
 })
 export class AnalyticsModule {}
