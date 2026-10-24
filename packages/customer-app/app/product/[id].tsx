@@ -3,6 +3,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { Image } from 'expo-image';
+import LottieView from 'lottie-react-native';
+import bounceCup from '../../assets/lottie/bounce-cup.json';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { getJson, money } from '../../src/api';
 import { useCart } from '../../src/cart';
@@ -43,6 +45,7 @@ export default function ProductScreen() {
   const [qty, setQty] = useState(1);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [note, setNote] = useState('');
+  const [added, setAdded] = useState(false);
 
   // Footer spring-in
   const footerY = useRef(new Animated.Value(80)).current;
@@ -203,12 +206,17 @@ export default function ProductScreen() {
         <Animated.View style={[{ flex: 1 }, { transform: [{ scale: addScale }] }]}>
           <Pressable
             style={s.addBtn}
+            disabled={added}
             onPress={() => {
+              if (added) return;
+              setAdded(true);
               flashAdd();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               add(p, qty, picked, note.trim());
-              router.back();
+              // Let the cup play once inside the button, then return to the menu.
+              setTimeout(() => router.back(), 450);
             }}>
+            {added && <LottieView source={bounceCup} autoPlay loop={false} style={s.addIcon} />}
             <Text style={s.addText}>Add to cart · {money(unit * qty)}</Text>
           </Pressable>
         </Animated.View>
@@ -283,5 +291,6 @@ const s = StyleSheet.create({
   qtyBtn: { fontSize: 22, color: C.navy2, fontWeight: '600', lineHeight: 26 },
   qtyNum: { fontSize: 16, fontWeight: '700', minWidth: 28, textAlign: 'center', color: C.navy },
   addBtn: { backgroundColor: C.navy2, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
+  addIcon: { width: 32, height: 32, marginBottom: 2 },
   addText: { color: C.white, fontWeight: '700', fontSize: 16 },
 });
