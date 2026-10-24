@@ -3,6 +3,26 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      animation: {
+        'fade-slide-up': 'fadeSlideUp 0.35s ease both',
+        'fade-in': 'fadeIn 0.25s ease both',
+        'slide-in-top': 'slideInTop 0.3s ease both',
+        'count-up': 'fadeIn 0.6s ease both',
+      },
+      keyframes: {
+        fadeSlideUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideInTop: {
+          '0%': { opacity: '0', transform: 'translateY(-16px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
       colors: {
         brand: {
           50: '#eef2f8',

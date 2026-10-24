@@ -73,19 +73,19 @@ export default function DashboardPage({ token }: { token: string }) {
       {data && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="animate-fade-slide-up stagger-1 bg-white rounded-lg shadow-sm p-4">
               <p className="text-sm text-gray-600">Total branches</p>
               <p className="text-2xl font-bold text-gray-800">{data.total}</p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="animate-fade-slide-up stagger-2 bg-white rounded-lg shadow-sm p-4">
               <p className="text-sm text-gray-600">Active</p>
               <p className="text-2xl font-bold text-green-600">{data.active}</p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="animate-fade-slide-up stagger-3 bg-white rounded-lg shadow-sm p-4">
               <p className="text-sm text-gray-600">Paused</p>
               <p className="text-2xl font-bold text-yellow-600">{data.paused}</p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="animate-fade-slide-up stagger-4 bg-white rounded-lg shadow-sm p-4">
               <p className="text-sm text-gray-600">Scans today</p>
               <p className="text-2xl font-bold text-blue-600">{data.scans_today}</p>
             </div>
