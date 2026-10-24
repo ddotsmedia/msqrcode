@@ -120,6 +120,36 @@ function TrackStep({ step, index, stepIndex, total }: {
   );
 }
 
+// Pulsing live dot shown while order is active
+function LiveDot() {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1.6, duration: 600, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 600, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 1, duration: 0, useNativeDriver: true }),
+        ]),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [scale, opacity]);
+  return (
+    <View style={s.liveDotWrap}>
+      <Animated.View style={[s.liveDotRing, { transform: [{ scale }], opacity }]} />
+      <View style={s.liveDotCore} />
+    </View>
+  );
+}
+
+const ACTIVE_STATUSES = new Set(['placed', 'preparing']);
+
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [token, setToken] = useState<string | null>(null);
@@ -136,8 +166,15 @@ export default function OrderScreen() {
     queryKey: ['order', id, token],
     enabled: !!token,
     queryFn: () => trackOrder(String(id), token!),
-    refetchInterval: 20_000,
+    // Poll every 15s while active; stop when done/cancelled
+    refetchInterval: (query) => {
+      const status = (query.state.data as { status?: string } | undefined)?.status;
+      if (!status || !ACTIVE_STATUSES.has(status)) return false;
+      return 15_000;
+    },
   });
+
+  const isLive = !!data && ACTIVE_STATUSES.has(data.status);
 
   const stepIndex = data ? STEPS.indexOf(data.status as (typeof STEPS)[number]) : -1;
   const countdown = useCountdownTo(data?.pickup_at);
@@ -153,9 +190,13 @@ export default function OrderScreen() {
         Animated.timing(celebOp, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     }
-    // Haptic on order confirmed (first time we see 'placed')
-    if (data?.status === 'placed' && prevStatus.current === null) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // Haptic on every status change
+    if (data?.status && data.status !== prevStatus.current) {
+      if (data.status === 'ready' || data.status === 'completed') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } else if (prevStatus.current !== null) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      }
     }
     prevStatus.current = data?.status ?? null;
   }, [data?.status, celebOp, celebScale]);
@@ -196,10 +237,18 @@ export default function OrderScreen() {
             {/* Header */}
             <View style={s.header}>
               <Text style={s.orderNo}>Order #{data.order_no}</Text>
-              <View style={[s.statusBadge, data.status === 'cancelled' && s.statusBadgeCancelled]}>
-                <Text style={[s.statusText, data.status === 'cancelled' && s.statusTextCancelled]}>
-                  {LABEL[data.status] ?? data.status}
-                </Text>
+              <View style={s.headerRight}>
+                {isLive && (
+                  <View style={s.liveChip}>
+                    <LiveDot />
+                    <Text style={s.liveChipText}>Live</Text>
+                  </View>
+                )}
+                <View style={[s.statusBadge, data.status === 'cancelled' && s.statusBadgeCancelled]}>
+                  <Text style={[s.statusText, data.status === 'cancelled' && s.statusTextCancelled]}>
+                    {LABEL[data.status] ?? data.status}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -291,7 +340,15 @@ const s = StyleSheet.create({
   infoBody: { fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 21 },
 
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   orderNo: { fontSize: 26, fontWeight: '700', color: C.navy },
+
+  liveChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#dcfce7', borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 },
+  liveChipText: { fontSize: 12, fontWeight: '700', color: '#15803d' },
+  liveDotWrap: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
+  liveDotCore: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16a34a', position: 'absolute' },
+  liveDotRing: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a', position: 'absolute' },
+
   statusBadge: { backgroundColor: '#d1fae5', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14 },
   statusBadgeCancelled: { backgroundColor: '#fee2e2' },
   statusText: { fontSize: 13, fontWeight: '700', color: '#065f46' },
