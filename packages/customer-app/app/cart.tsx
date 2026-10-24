@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Alert, Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { getJson, money, type Branch } from '../src/api';
@@ -238,12 +239,17 @@ export default function CartScreen() {
             ))}
 
             {/* Subtotal bar */}
-            <View style={s.subtotalRow}>
-              <Text style={s.subtotalLabel}>Subtotal</Text>
-              <Animated.Text style={[s.subtotalValue, { transform: [{ scale: subtotalScale }] }]}>
+            <LinearGradient
+              colors={['#0b1a33', '#13284b']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.subtotalRow}
+            >
+              <Text style={[s.subtotalLabel, { color: C.gold }]}>Subtotal</Text>
+              <Animated.Text style={[s.subtotalValue, { color: C.white, transform: [{ scale: subtotalScale }] }]}>
                 {money(subtotal)}
               </Animated.Text>
-            </View>
+            </LinearGradient>
           </>
         )}
 

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { API, getJson } from '../../src/api';
@@ -169,7 +170,12 @@ export default function RewardsScreen() {
       {d && (
         <>
           {/* Main loyalty card */}
-          <View style={s.card}>
+          <LinearGradient
+            colors={['#0b1a33', '#13284b', '#1e3a5f']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={s.card}
+          >
             {/* Banners */}
             {d.double_now && (
               <View style={s.bannerRow}>
@@ -206,7 +212,7 @@ export default function RewardsScreen() {
                 <StampDot key={i} filled={i < d.stamps} index={i} burst={burstIndex === i} />
               ))}
             </View>
-          </View>
+          </LinearGradient>
 
           {/* Action buttons */}
           <Pressable style={s.primaryBtn} onPress={() => router.push('/scan')}>
@@ -419,7 +425,6 @@ const s = StyleSheet.create({
 
   // Loyalty card
   card: {
-    backgroundColor: C.navy,
     borderRadius: 24,
     padding: 20,
     marginBottom: 14,
