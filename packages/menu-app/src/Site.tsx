@@ -1139,7 +1139,6 @@ function ContactPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Contact us</h1>
-      <p className="text-sm text-gray-600">General email: TODO (owner to confirm)</p>
       <ul className="grid md:grid-cols-2 gap-4">
         {(branches ?? []).map((b) => (
           <li key={b.id} className="bg-white rounded-xl p-4 shadow-sm space-y-2">
