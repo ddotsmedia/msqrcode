@@ -328,7 +328,7 @@ export default function CartScreen() {
               </Text>
             </Pressable>
 
-            <Pressable onPress={() => Alert.alert('Clear cart?', '', [{ text: 'Cancel' }, { text: 'Clear', style: 'destructive', onPress: clear }])}>
+            <Pressable onPress={() => Alert.alert('Clear cart?', 'All items will be removed from your cart.', [{ text: 'Cancel' }, { text: 'Clear', style: 'destructive', onPress: clear }])}>
               <Text style={s.clearBtn}>Clear cart</Text>
             </Pressable>
           </>
